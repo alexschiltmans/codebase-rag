@@ -183,7 +183,6 @@ coverage.xml
 .scannerwork/
 .sonar-token
 sonar-report.md
-sonar*
 
 # Milvus and vector database files
 *.db

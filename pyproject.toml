@@ -30,6 +30,7 @@ dev = [
     "ruff>=0.15",
     "pytest>=7.4.3,<9",
     "pytest-cov>=4.1.0,<6",
+    "types-requests>=2.31",
 ]
 
 [build-system]

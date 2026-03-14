@@ -153,7 +153,7 @@ sonar-start: ## Start SonarQube, create project, generate token
 
 .PHONY: sonar-scan
 sonar-scan: ## Run sonar-scanner (reads token from .sonar-token)
-	docker run --rm --network host \
+	docker run --rm --network host --platform linux/amd64 \
 		-e SONAR_HOST_URL="http://localhost:9000" \
 		-e SONAR_TOKEN="$(SONAR_TOKEN)" \
 		-v "$$(pwd):/usr/src" \
