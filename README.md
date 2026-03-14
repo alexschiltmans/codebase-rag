@@ -1,6 +1,6 @@
 # Codebase RAG
 
-A local RAG system for asking questions about codebases. Point it at a GitHub repo, ask about the code, and get answers traced back to actual source files, with citations and hybrid search.
+A local RAG system for asking questions about codebases. Point it at a local folder or GitHub repo, ask about the code, and get answers traced back to actual source files, with citations and hybrid search.
 
 **No API keys. No cloud services. One command to start.**
 

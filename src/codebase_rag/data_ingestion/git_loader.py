@@ -30,12 +30,17 @@ class GitLoader:
         self.local_path = local_path or config.repo_local_path
         self.repo: git.Repo | None = None
 
-    def clone_or_pull(self) -> git.Repo:
+    def clone_or_pull(self) -> git.Repo | None:
         """Clone the repository or pull the latest changes if it already exists.
 
         Returns:
-            git.Repo: The Git repository object.
+            The Git repository object, or None for non-git local directories.
         """
+        # Local directory without git, used for local folder ingestion
+        if self.repo_url is None and self.local_path.exists() and not (self.local_path / ".git").exists():
+            logger.info("Using local directory (non-git) at %s", self.local_path)
+            return None
+
         # For testing purposes, we may have a local repo without a remote
         if self.repo_url is None and self.local_path.exists() and (self.local_path / ".git").exists():
             logger.info("Using existing local repository without remote at %s", self.local_path)
@@ -44,29 +49,38 @@ class GitLoader:
 
         # Normal case, repo with remote
         if self.local_path.exists() and (self.local_path / ".git").exists():
-            logger.info("Repository exists at %s, attempting to pull latest changes", self.local_path)
-            self.repo = git.Repo(self.local_path)
-
-            if "origin" in [remote.name for remote in self.repo.remotes]:
-                try:
-                    self.repo.remotes.origin.pull()
-                    logger.info("Successfully pulled latest changes")
-                except Exception as e:
-                    logger.warning("Failed to pull from origin: %s", e)
-            else:
-                logger.warning("Repository does not have an 'origin' remote, skipping pull")
+            self._pull_existing_repo()
         else:
-            if self.repo_url is None:
-                raise ValueError("Cannot clone repository: no repo_url provided")
-
-            if self.local_path.exists():
-                logger.info("Cleaning existing directory at %s", self.local_path)
-                shutil.rmtree(self.local_path)
-
-            logger.info("Cloning repository from %s to %s", self.repo_url, self.local_path)
-            self.repo = git.Repo.clone_from(self.repo_url, self.local_path)
+            self._clone_new_repo()
 
         return self.repo
+
+    def _pull_existing_repo(self) -> None:
+        """Pull latest changes for an existing local repository."""
+        logger.info("Repository exists at %s, attempting to pull latest changes", self.local_path)
+        self.repo = git.Repo(self.local_path)
+
+        if "origin" not in [remote.name for remote in self.repo.remotes]:
+            logger.warning("Repository does not have an 'origin' remote, skipping pull")
+            return
+
+        try:
+            self.repo.remotes.origin.pull()
+            logger.info("Successfully pulled latest changes")
+        except Exception as e:
+            logger.warning("Failed to pull from origin: %s", e)
+
+    def _clone_new_repo(self) -> None:
+        """Clone a repository from the remote URL."""
+        if self.repo_url is None:
+            raise ValueError("Cannot clone repository: no repo_url provided")
+
+        if self.local_path.exists():
+            logger.info("Cleaning existing directory at %s", self.local_path)
+            shutil.rmtree(self.local_path)
+
+        logger.info("Cloning repository from %s to %s", self.repo_url, self.local_path)
+        self.repo = git.Repo.clone_from(self.repo_url, self.local_path)
 
     def get_file_paths(
         self,
@@ -84,7 +98,7 @@ class GitLoader:
         Returns:
             List[Path]: List of file paths to process.
         """
-        if self.repo is None:
+        if self.repo is None and not self.local_path.exists():
             self.clone_or_pull()
 
         if included_dirs is None:
