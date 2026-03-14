@@ -206,40 +206,34 @@ class IngestPipeline:
         """Process documents from a single repository.
 
         Args:
-            repo_url: GitHub repository URL.
+            repo_url: GitHub repository URL or local folder path.
 
         Returns:
             List of processed document chunks.
         """
-        repo_name = self._repo_name_from_url(repo_url)
+        repo_name, local_path, git_loader, is_local_folder = self._resolve_repo_source(repo_url)
         cache_path = self._cache_path_for_repo(repo_name)
-
-        local_path = self.config.repo_local_path / repo_name
-        git_loader = GitLoader(repo_url=repo_url, local_path=local_path)
 
         # Always clone/pull first so we can compare HEAD against the cache
         git_loader.clone_or_pull()
         head_sha = self._get_head_sha(git_loader)
 
-        if self.use_cache and self._is_cache_fresh(repo_name, head_sha):
-            cached_docs = load_documents_cache(cache_path)
-            if cached_docs:
-                self.logger.info(
-                    "Cache is fresh for %s (SHA %s), loaded %d documents",
-                    repo_name,
-                    head_sha,
-                    len(cached_docs),
-                )
-                for doc in cached_docs:
-                    doc.metadata.setdefault("repo", repo_name)
-                return cached_docs
+        cached = self._try_load_cache(repo_name, cache_path, head_sha)
+        if cached is not None:
+            return cached
 
         self.logger.info("Processing repo: %s (local path: %s)", repo_url, local_path)
+
+        # For local folders, scan all subdirectories instead of only docs/src/tests
+        if is_local_folder:
+            included_dirs = [d.name for d in local_path.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        else:
+            included_dirs = self.included_dirs
 
         document_processor = DocumentProcessor(git_loader=git_loader)
         start_time = time.time()
         documents = document_processor.process(
-            included_dirs=self.included_dirs,
+            included_dirs=included_dirs,
             included_files=self.included_files,
         )
         processing_time = time.time() - start_time
@@ -255,6 +249,32 @@ class IngestPipeline:
                 self._save_cache_meta(repo_name, head_sha)
 
         return documents
+
+    def _resolve_repo_source(self, repo_url: str) -> tuple[str, Path, GitLoader, bool]:
+        """Determine repo name, local path, and GitLoader for a source."""
+        source_path = Path(repo_url).resolve()
+        if source_path.is_dir():
+            return source_path.name, source_path, GitLoader(repo_url=None, local_path=source_path), True
+        repo_name = self._repo_name_from_url(repo_url)
+        local_path = self.config.repo_local_path / repo_name
+        return repo_name, local_path, GitLoader(repo_url=repo_url, local_path=local_path), False
+
+    def _try_load_cache(self, repo_name: str, cache_path: Path, head_sha: str | None) -> list | None:
+        """Return cached documents if the cache is fresh, otherwise None."""
+        if not (self.use_cache and self._is_cache_fresh(repo_name, head_sha)):
+            return None
+        cached_docs = load_documents_cache(cache_path)
+        if not cached_docs:
+            return None
+        self.logger.info(
+            "Cache is fresh for %s (SHA %s), loaded %d documents",
+            repo_name,
+            head_sha,
+            len(cached_docs),
+        )
+        for doc in cached_docs:
+            doc.metadata.setdefault("repo", repo_name)
+        return cached_docs
 
     def process_documents(self) -> list:
         """Process documents from all configured repositories.

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -328,17 +331,104 @@ def _display_repo_management() -> None:
     ingestion_running = bool(_get_ingestion_status().get("running"))
 
     with st.expander("Add Repository"):
-        new_repo_url = st.text_input(
-            "GitHub URL",
-            placeholder="https://github.com/owner/repo",
-            key="new_repo_url",
-        )
-        if st.button("Ingest", key="btn_ingest_repo", disabled=bool(not new_repo_url or ingestion_running)):
-            if new_repo_url and new_repo_url.startswith("https://github.com/"):
-                _run_ingestion(new_repo_url)
+        tab_github, tab_local = st.tabs(["GitHub URL", "Local Folder"])
+
+        with tab_github:
+            _display_github_tab(ingestion_running)
+
+        with tab_local:
+            _display_local_folder_tab(ingestion_running)
+
+
+def _display_github_tab(ingestion_running: bool) -> None:
+    """Render the GitHub URL input tab."""
+    new_repo_url = st.text_input(
+        "GitHub URL",
+        placeholder="https://github.com/owner/repo",
+        key="new_repo_url",
+    )
+    if st.button("Ingest", key="btn_ingest_repo", disabled=bool(not new_repo_url or ingestion_running)):
+        if new_repo_url and new_repo_url.startswith("https://github.com/"):
+            _run_ingestion(new_repo_url)
+            st.rerun()
+        elif new_repo_url:
+            st.error("Please enter a valid GitHub URL")
+
+
+def _display_local_folder_tab(ingestion_running: bool) -> None:
+    """Render the local folder picker tab."""
+    if "selected_folder" not in st.session_state:
+        st.session_state.selected_folder = ""
+
+    if st.button("Browse…", key="btn_browse_folder", disabled=ingestion_running):
+        folder = _open_folder_dialog()
+        if folder:
+            st.session_state.selected_folder = folder
+
+    if st.session_state.selected_folder:
+        st.markdown(f"📂 `{st.session_state.selected_folder}`")
+        if st.button("Ingest", key="btn_ingest_local", disabled=ingestion_running):
+            resolved = Path(st.session_state.selected_folder).resolve()
+            if resolved.is_dir():
+                st.session_state.selected_folder = ""
+                _run_ingestion(str(resolved))
                 st.rerun()
-            elif new_repo_url:
-                st.error("Please enter a valid GitHub URL")
+            else:
+                st.error("Directory does not exist")
+
+
+def _open_folder_dialog() -> str | None:
+    """Open a native OS folder-picker dialog and return the selected path.
+
+    Uses AppleScript on macOS, PowerShell on Windows, and zenity/kdialog on Linux.
+    """
+    try:
+        if sys.platform == "darwin":
+            result = subprocess.run(
+                ["osascript", "-e", 'POSIX path of (choose folder with prompt "Select a codebase folder")'],  # noqa: S607
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        elif sys.platform == "win32":
+            ps_script = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+                "$d.Description = 'Select a codebase folder'; "
+                "if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath } else { '' }"
+            )
+            result = subprocess.run(  # noqa: S603
+                ["powershell", "-NoProfile", "-Command", ps_script],  # noqa: S607
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        elif shutil.which("zenity"):
+            result = subprocess.run(
+                ["zenity", "--file-selection", "--directory", "--title=Select a codebase folder"],  # noqa: S607
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        elif shutil.which("kdialog"):
+            result = subprocess.run(
+                ["kdialog", "--getexistingdirectory", "."],  # noqa: S607
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        else:
+            logger.warning("No folder dialog tool available (install zenity or kdialog)")
+            return None
+        path = result.stdout.strip().rstrip("/\\")
+        return path if path else None
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("Folder dialog failed: %s", exc)
+        return None
 
 
 def _display_ingestion_status() -> None:
