@@ -1,8 +1,8 @@
 # Evaluation Results: Large Model (qwen3-coder:30b)
 
-**Test set:** 16 questions against the PowerGridModel repository  
-**LLM:** qwen3-coder:30b (via local Ollama, not Docker, using macOS GPU)  
-**Retriever:** Vector search (Qdrant, sentence-transformers/all-mpnet-base-v2)  
+**Test set:** 16 questions against the PowerGridModel repository
+**LLM:** qwen3-coder:30b (via local Ollama, not Docker, using macOS GPU)
+**Retriever:** Vector search (Qdrant, sentence-transformers/all-mpnet-base-v2)
 **Top-k:** 5 documents per query
 
 ---

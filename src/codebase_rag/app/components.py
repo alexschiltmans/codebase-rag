@@ -507,7 +507,7 @@ def display_sidebar() -> None:
         Codebase RAG is a Retrieval-Augmented Generation application for exploring and understanding codebases locally.
 
         It helps users understand code by providing answers based on ingested documentation and source code.
-        
+
         This application uses:
         - A local LLM via Ollama (**{config.llm_model_name}**)
         - Hybrid search combining vector and BM25

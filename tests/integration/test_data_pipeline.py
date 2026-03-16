@@ -62,15 +62,15 @@ grid = mypackage.load_network()
     code_file.write_text("""
 def load_network():
     \"\"\"Load a power grid network.
-    
+
     Returns:
         Network: A power grid network object.
     \"\"\"
     return Network()
-    
+
 class Network:
     \"\"\"Represents a power grid network.\"\"\"
-    
+
     def __init__(self):
         self.components = []
     """)

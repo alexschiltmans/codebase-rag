@@ -319,9 +319,9 @@ def generate_results_markdown(results: list[dict], custom_metrics: dict, ragas_s
 
     for i, r in enumerate(results):
         if r.get("error"):
-            exp_fail = r.get('expected_failure', False)
-            diff = r.get('difficulty', '')
-            cat = r.get('category', '')
+            exp_fail = r.get("expected_failure", False)
+            diff = r.get("difficulty", "")
+            cat = r.get("category", "")
             lines.append(f"| {i + 1} | {diff} | {cat} | ERROR | - | - | {exp_fail} |")
             continue
         keywords = r.get("keywords", [])
@@ -329,9 +329,9 @@ def generate_results_markdown(results: list[dict], custom_metrics: dict, ragas_s
         kr = sum(1 for kw in keywords if kw.lower() in answer_lower) / len(keywords) if keywords else 0
         docs = len(r.get("contexts", []))
         lat = r.get("elapsed", 0)
-        exp_fail = r.get('expected_failure', False)
-        diff = r.get('difficulty', '')
-        cat = r.get('category', '')
+        exp_fail = r.get("expected_failure", False)
+        diff = r.get("difficulty", "")
+        cat = r.get("category", "")
         lines.append(f"| {i + 1} | {diff} | {cat} | {kr:.2f} | {docs} | {lat:.1f}s | {exp_fail} |")
 
     # Failure cases
