@@ -1,6 +1,7 @@
 """Embedding models for converting text to vector representations."""
 
 import logging
+from typing import cast
 
 from sentence_transformers import SentenceTransformer
 
@@ -35,9 +36,9 @@ class EmbeddingManager:
     def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for a list of texts."""
         embeddings = self.model.encode(texts, normalize_embeddings=True)
-        return embeddings.tolist()  # type: ignore[no-any-return]
+        return cast(list[list[float]], embeddings.tolist())
 
     def get_query_embedding(self, text: str) -> list[float]:
         """Get embedding for a query text."""
         embedding = self.model.encode(text, normalize_embeddings=True)
-        return embedding.tolist()
+        return cast(list[float], embedding.tolist())

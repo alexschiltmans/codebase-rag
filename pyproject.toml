@@ -1,6 +1,6 @@
 [project]
 name = "codebase-rag"
-version = "0.1.0"
+version = "0.1.1"
 description = "LLM-RAG application for exploring and understanding codebases"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -26,11 +26,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "mypy>=1.19",
-    "ruff>=0.15",
+    "mypy>=1.19.1",
+    "ruff>=0.15.4",
     "pytest>=7.4.3,<9",
     "pytest-cov>=4.1.0,<6",
+    "pytest-randomly>=3.15",
     "types-requests>=2.31",
+    "pre-commit>=4.0",
 ]
 
 [build-system]
@@ -82,6 +84,9 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 relative_files = true
+
+[tool.coverage.report]
+fail_under = 80
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

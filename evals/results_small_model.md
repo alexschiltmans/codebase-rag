@@ -1,8 +1,8 @@
 # Evaluation Results
 
-**Test set:** 16 questions against the PowerGridModel repository  
-**LLM:** sam860/LFM2:350m (via Ollama)  
-**Retriever:** Vector search (Qdrant, sentence-transformers/all-mpnet-base-v2)  
+**Test set:** 16 questions against the PowerGridModel repository
+**LLM:** sam860/LFM2:350m (via Ollama)
+**Retriever:** Vector search (Qdrant, sentence-transformers/all-mpnet-base-v2)
 **Top-k:** 5 documents per query
 
 ---

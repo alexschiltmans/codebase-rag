@@ -79,7 +79,7 @@ services-clean: ## Remove all containers and volumes (destructive)
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 .PHONY: setup
-setup: venv ## Initial dev setup: venv + .env file
+setup: venv pre-commit-install ## Initial dev setup: venv + .env file + pre-commit hooks
 	@mkdir -p docker
 	@if [ ! -f .env ]; then \
 		printf "$(BLUE)Creating .env from .env.example…$(NC)\n"; \
@@ -143,6 +143,18 @@ format: venv ## Auto-format with ruff
 .PHONY: typecheck
 typecheck: venv ## Run mypy
 	$(PYTHON) -m mypy src/
+
+.PHONY: check
+check: lint typecheck test-unit ## Run lint, typecheck, and unit tests
+
+# ── Pre-commit ───────────────────────────────────────────────────────────────
+.PHONY: pre-commit-install
+pre-commit-install: venv ## Install pre-commit hooks
+	$(VENV)/bin/pre-commit install
+
+.PHONY: pre-commit-run
+pre-commit-run: venv ## Run all pre-commit hooks on all files
+	$(VENV)/bin/pre-commit run --all-files
 
 # ── SonarQube ────────────────────────────────────────────────────────────────
 SONAR_TOKEN ?= $(shell cat .sonar-token 2>/dev/null)

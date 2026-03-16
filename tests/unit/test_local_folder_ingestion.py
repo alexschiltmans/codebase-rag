@@ -85,9 +85,7 @@ class TestPipelineResolveRepoSource:
 
         pipeline = IngestPipeline(repo_url="https://github.com/owner/my-repo")
 
-        repo_name, local_path, git_loader, is_local = pipeline._resolve_repo_source(
-            "https://github.com/owner/my-repo"
-        )
+        repo_name, local_path, git_loader, is_local = pipeline._resolve_repo_source("https://github.com/owner/my-repo")
 
         assert repo_name == "my-repo"
         assert local_path == Path("/tmp/repos/my-repo")
@@ -129,9 +127,7 @@ class TestOpenFolderDialog:
     @patch("codebase_rag.app.components.shutil.which", return_value="/usr/bin/zenity")
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
-    def test_linux_zenity_dialog(
-        self, mock_sys: MagicMock, mock_run: MagicMock, mock_which: MagicMock
-    ) -> None:
+    def test_linux_zenity_dialog(self, mock_sys: MagicMock, mock_run: MagicMock, mock_which: MagicMock) -> None:
         from codebase_rag.app.components import _open_folder_dialog
 
         mock_sys.platform = "linux"

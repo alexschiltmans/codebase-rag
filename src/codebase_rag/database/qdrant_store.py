@@ -297,7 +297,7 @@ class QdrantStore:
                 points_selector=Filter(must=[FieldCondition(key="repo", match=MatchValue(value=repo_name))]),
             )
             logger.info("Deleted %d points for repo '%s'", count_before, repo_name)
-            return count_before
+            return int(count_before)
         except Exception as e:
             logger.error("Error deleting repo '%s': %s", repo_name, e)
             return 0
