@@ -102,11 +102,11 @@ class DocumentChunker:
         strategy = strategy or ChunkingStrategy.DEFAULT
 
         if strategy == ChunkingStrategy.CODE:
-            chunks = self.code_splitter.create_documents([content], [metadata])
+            chunks: list[Document] = list(self.code_splitter.create_documents([content], [metadata]))
         elif strategy == ChunkingStrategy.MARKDOWN:
             chunks = self._chunk_markdown(content, metadata)
         else:
-            chunks = self.default_splitter.create_documents([content], [metadata])
+            chunks = list(self.default_splitter.create_documents([content], [metadata]))
 
         for i, chunk in enumerate(chunks):
             chunk.metadata["chunk_index"] = i
