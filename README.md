@@ -1,10 +1,21 @@
-# Codebase RAG
+<p align="center">
+  <img src="src/codebase_rag/app/logo.png" alt="Codebase RAG" width="200">
+</p>
 
-A local RAG system for asking questions about codebases. Point it at a local folder or GitHub repo, ask about the code, and get answers traced back to actual source files, with citations and hybrid search.
+<h1 align="center">Codebase RAG</h1>
 
-**No API keys. No cloud services. One command to start.**
+<p align="center">
+  <strong>Ask questions about any codebase. Runs entirely on your machine.</strong><br>
+  Built with LangChain · Qdrant · Ollama · Streamlit
+</p>
 
-Built with LangChain, Qdrant, Ollama, and Streamlit.
+<p align="center">
+  <a href="https://github.com/aschiltmansnavara/codebase-rag/actions/workflows/ci.yml"><img src="https://github.com/aschiltmansnavara/codebase-rag/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/coverage-83%25-brightgreen.svg" alt="Coverage: 83%">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
 ## Why This Project?
 
