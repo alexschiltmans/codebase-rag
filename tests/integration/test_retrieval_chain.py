@@ -1,6 +1,5 @@
 """Integration tests for the retrieval and LLM chain."""
 
-import pickle
 import shutil
 import tempfile
 from pathlib import Path
@@ -63,12 +62,10 @@ def test_bm25_retrieval(test_documents, temp_cache_dir) -> None:
     assert "install" in results[0][0].page_content.lower()
 
     # Save and load the retriever
-    bm25_path = temp_cache_dir / "bm25_retriever.pkl"
-    with open(bm25_path, "wb") as f:
-        pickle.dump(retriever, f)
+    bm25_path = temp_cache_dir / "bm25_retriever.json"
+    retriever.save_json(bm25_path)
 
-    with open(bm25_path, "rb") as f:
-        loaded_retriever = pickle.load(f)
+    loaded_retriever = BM25Retriever.load_json(bm25_path)
 
     loaded_results = loaded_retriever.search("how to install mypackage", k=1)
     assert len(loaded_results) == 1

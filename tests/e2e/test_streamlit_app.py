@@ -44,7 +44,7 @@ def test_app_initialization(
             patch("codebase_rag.retrieval.hybrid_search.HybridRetriever"),
             patch("codebase_rag.retrieval.vector_search.VectorRetriever"),
             patch("codebase_rag.retrieval.bm25_search.BM25Retriever"),
-            patch("pickle.load"),
+            patch("codebase_rag.app.main.BM25Retriever.load_json"),
         ):
             try:
                 components = initialize_app_components()

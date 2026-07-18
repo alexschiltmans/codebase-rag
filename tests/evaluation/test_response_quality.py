@@ -63,7 +63,7 @@ def evaluate_response(response: str, expected_keywords: list[str], question: str
 @pytest.mark.evaluation
 def test_rag_response_quality() -> None:
     """Evaluate RAG chain response quality on the test dataset."""
-    bm25_path = Path("./data/cache/bm25_retriever.pkl")
+    bm25_path = Path("./data/cache/bm25_retriever.json")
     if not bm25_path.exists():
         pytest.skip(f"BM25 retriever file {bm25_path} not found")
 

@@ -18,7 +18,7 @@ from codebase_rag.config import Config
 from codebase_rag.data_ingestion.document_processor import DocumentProcessor
 from codebase_rag.data_ingestion.git_loader import GitLoader
 from codebase_rag.database.qdrant_store import QdrantStore
-from codebase_rag.retrieval.bm25_search import BM25Retriever
+from codebase_rag.retrieval.bm25_search import BM25Retriever, rebuild_bm25_index
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
 from codebase_rag.retrieval.vector_search import VectorRetriever
 
@@ -332,24 +332,38 @@ class IngestPipeline:
         self.logger.info(f"Indexed {len(documents)} chunks in {indexing_time:.2f} seconds")
 
     def save_bm25_index(self, documents: list) -> None:
-        """Create and save BM25 index for hybrid search.
+        """Update this run's repo(s) in the BM25 corpus and rebuild the combined index.
+
+        Each repo's documents are persisted as their own JSON corpus file under
+        `data/cache/bm25_corpus/`, so accumulating repos never overwrite each
+        other. The combined index is then rebuilt from every corpus file on
+        disk (not just the documents from this run) and persisted as JSON.
 
         Args:
-            documents: List of processed documents.
+            documents: List of processed documents from this ingest run.
         """
-        self.logger.info("Creating BM25 index...")
+        self.logger.info("Updating BM25 corpus...")
         start_time = time.time()
 
-        bm25_retriever = BM25Retriever(documents)
+        corpus_dir = self.cache_dir / "bm25_corpus"
+        corpus_dir.mkdir(parents=True, exist_ok=True)
 
-        bm25_cache_path = self.cache_dir / "bm25_retriever.pkl"
-        with open(bm25_cache_path, "wb") as f:
-            pickle.dump(bm25_retriever, f)
+        repos = {doc.metadata.get("repo") for doc in documents if doc.metadata.get("repo")}
+        for repo_name in repos:
+            repo_docs = [doc for doc in documents if doc.metadata.get("repo") == repo_name]
+            BM25Retriever(repo_docs).save_json(corpus_dir / f"{repo_name}.json")
+
+        bm25_retriever = rebuild_bm25_index(self.cache_dir)
 
         bm25_time = time.time() - start_time
         self.stats["elapsed_time"] += bm25_time
 
-        self.logger.info(f"Created BM25 index in {bm25_time:.2f} seconds")
+        self.logger.info(
+            "Rebuilt BM25 index with %d documents across %d repo(s) in %.2f seconds",
+            len(bm25_retriever.documents),
+            len(repos),
+            bm25_time,
+        )
 
     def verify_hybrid_search(self, query: str = "How to use this codebase?") -> None:
         """Verify that hybrid search is working correctly.
@@ -360,9 +374,8 @@ class IngestPipeline:
         self.logger.info("Verifying hybrid search...")
 
         try:
-            bm25_cache_path = self.cache_dir / "bm25_retriever.pkl"
-            with open(bm25_cache_path, "rb") as f:
-                bm25_retriever = pickle.load(f)  # noqa: S301
+            bm25_cache_path = self.cache_dir / "bm25_retriever.json"
+            bm25_retriever = BM25Retriever.load_json(bm25_cache_path)
 
             vector_retriever = VectorRetriever(self.vector_store)
 
