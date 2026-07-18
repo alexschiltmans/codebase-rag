@@ -25,6 +25,12 @@ logger = logging.getLogger(__name__)
 _ingestion_status: dict[str, object] = {}
 _ingestion_lock = threading.Lock()
 
+# Module-level dict for the folder dialog result — the background thread
+# writes the selected path here, and the main thread polls it on each
+# fragment refresh so the UI never blocks.
+_folder_dialog_result: dict[str, object] = {}
+_folder_dialog_lock = threading.Lock()
+
 # Tracks whether auto-ingestion of the default repo has already been
 # attempted in this process lifetime (prevents re-triggering).
 _auto_ingest_attempted = False
@@ -360,10 +366,14 @@ def _display_local_folder_tab(ingestion_running: bool) -> None:
     if "selected_folder" not in st.session_state:
         st.session_state.selected_folder = ""
 
+    # Poll for a result from the background folder-dialog thread.
+    with _folder_dialog_lock:
+        if _folder_dialog_result.get("path"):
+            st.session_state.selected_folder = _folder_dialog_result["path"]
+            _folder_dialog_result.clear()
+
     if st.button("Browse…", key="btn_browse_folder", disabled=ingestion_running):
-        folder = _open_folder_dialog()
-        if folder:
-            st.session_state.selected_folder = folder
+        _open_folder_dialog()
 
     if st.session_state.selected_folder:
         st.markdown(f"📂 `{st.session_state.selected_folder}`")
@@ -377,11 +387,25 @@ def _display_local_folder_tab(ingestion_running: bool) -> None:
                 st.error("Directory does not exist")
 
 
-def _open_folder_dialog() -> str | None:
-    """Open a native OS folder-picker dialog and return the selected path.
+def _open_folder_dialog() -> None:
+    """Launch a native OS folder-picker dialog in a background thread.
 
-    Uses AppleScript on macOS, PowerShell on Windows, and zenity/kdialog on Linux.
+    The dialog runs in a separate thread so Streamlit's main thread
+    never blocks. The result is written to ``_folder_dialog_result`` and
+    picked up by the main thread on the next fragment refresh.
     """
+
+    def _run_dialog() -> None:
+        path = _pick_folder_path()
+        with _folder_dialog_lock:
+            _folder_dialog_result["path"] = path
+
+    thread = threading.Thread(target=_run_dialog, daemon=True)
+    thread.start()
+
+
+def _pick_folder_path() -> str | None:
+    """Return the path selected by the user, or None on failure/cancel."""
     try:
         if sys.platform == "darwin":
             result = subprocess.run(

@@ -99,12 +99,12 @@ class TestOpenFolderDialog:
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
     def test_macos_dialog(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
-        from codebase_rag.app.components import _open_folder_dialog
+        from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "darwin"
         mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="/Users/test/project/\n")
 
-        result = _open_folder_dialog()
+        result = _pick_folder_path()
 
         assert result == "/Users/test/project"
         mock_run.assert_called_once()
@@ -113,12 +113,12 @@ class TestOpenFolderDialog:
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
     def test_windows_dialog(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
-        from codebase_rag.app.components import _open_folder_dialog
+        from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "win32"
         mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="C:\\Users\\test\\project\\\n")
 
-        result = _open_folder_dialog()
+        result = _pick_folder_path()
 
         assert result == "C:\\Users\\test\\project"
         mock_run.assert_called_once()
@@ -128,12 +128,12 @@ class TestOpenFolderDialog:
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
     def test_linux_zenity_dialog(self, mock_sys: MagicMock, mock_run: MagicMock, mock_which: MagicMock) -> None:
-        from codebase_rag.app.components import _open_folder_dialog
+        from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "linux"
         mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="/home/test/project\n")
 
-        result = _open_folder_dialog()
+        result = _pick_folder_path()
 
         assert result == "/home/test/project"
 
