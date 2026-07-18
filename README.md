@@ -20,7 +20,7 @@
 ## Why This Project?
 
 - **Fully local.** Runs entirely on your machine. Your code never leaves your hardware.
-- **Hybrid retrieval.** Dense vector search + BM25 keyword search, with better recall than either on its own.
+- **Hybrid retrieval.** Dense vector search + BM25 keyword search. The eval framework runs the same test set through hybrid, vector-only, and BM25-only retrieval, so the combination's effect on recall is measured rather than assumed. See the [retrieval ablation](evals/ablation.md).
 - **Evaluated, not just vibes.** Ships with a reproducible evaluation framework (16 questions, two model sizes, detailed metrics). See [Evaluation Results](docs/evaluation-results.md).
 - **Observable.** Optional Langfuse integration traces every retrieval and generation step, so you can debug quality issues instead of guessing.
 - **Documented decisions.** Architecture Decision Records explain *why* each technology was chosen, not just *what* was used. See the [ADR index](docs/adr-index.md).
