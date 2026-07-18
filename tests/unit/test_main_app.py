@@ -1,6 +1,5 @@
 """Unit tests for app/main.py functions."""
 
-import pickle
 import tempfile
 import time
 from pathlib import Path
@@ -80,9 +79,8 @@ class TestLoadOrCreateBm25Retriever:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "cache"
             cache_dir.mkdir()
-            bm25_file = cache_dir / "bm25_retriever.pkl"
-            with open(bm25_file, "wb") as f:
-                pickle.dump(cached_retriever, f)
+            bm25_file = cache_dir / "bm25_retriever.json"
+            cached_retriever.save_json(bm25_file)
 
             with patch("codebase_rag.app.main.Path", return_value=cache_dir):
                 result = load_or_create_bm25_retriever()

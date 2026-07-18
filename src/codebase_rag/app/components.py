@@ -488,6 +488,16 @@ def _load_repo_list() -> list[str]:
         return []
 
 
+def _remove_repo_from_bm25_index(repo_name: str) -> None:
+    """Drop a repo's BM25 corpus and rebuild the combined index so deleted
+    content stops being retrievable via keyword search."""
+    from codebase_rag.retrieval.bm25_search import delete_bm25_corpus, rebuild_bm25_index
+
+    cache_dir = Path("data/cache")
+    delete_bm25_corpus(cache_dir / "bm25_corpus", repo_name)
+    rebuild_bm25_index(cache_dir)
+
+
 def _display_repo_list(repos: list[str]) -> None:
     """Render the list of ingested repositories with delete buttons."""
     if not repos:
@@ -501,6 +511,7 @@ def _display_repo_list(repos: list[str]) -> None:
         if cols[1].button("✕", key=f"del_repo_{repo_name}", help=f"Remove {repo_name}"):
             with st.spinner(f"Removing {repo_name}..."):
                 deleted = store.delete_by_repo(repo_name)
+                _remove_repo_from_bm25_index(repo_name)
                 st.success(f"Removed {repo_name} ({deleted} chunks)")
                 st.cache_resource.clear()
                 st.session_state.initialized = False

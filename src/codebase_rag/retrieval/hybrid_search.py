@@ -3,13 +3,15 @@
 This module implements a hybrid search approach that combines the strengths of
 vector similarity search and traditional keyword search (BM25) for optimal retrieval.
 
-Decision: Keep BM25-based hybrid search with pickled index rather than migrating to
-Qdrant sparse vectors. Rationale:
-- At the scale of a few repositories, the BM25 pickle file is small and fast to rebuild
+Decision: Keep BM25-based hybrid search with a JSON-persisted index rather than
+migrating to Qdrant sparse vectors. Rationale:
+- At the scale of a few repositories, the BM25 corpus is small and fast to rebuild
 - Qdrant sparse vector migration adds complexity for marginal benefit at this scale
 - Hybrid search (vector + keyword) demonstrably improves codebase Q&A, especially for
   exact symbol/function name lookups where BM25 excels
-- The pickle file is rebuilt during each ingest run, keeping it in sync with the vector store
+- Each repo's documents are persisted as their own JSON corpus file, and the
+  combined index is rebuilt from all of them on every ingest and on repo
+  deletion, keeping it in sync with the vector store across every repo
 """
 
 import logging

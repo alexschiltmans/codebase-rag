@@ -181,7 +181,7 @@ class TestIngestPipeline:
 
             pipeline.save_bm25_index(docs)
 
-            bm25_path = Path(tmpdir) / "bm25_retriever.pkl"
+            bm25_path = Path(tmpdir) / "bm25_retriever.json"
             assert bm25_path.exists()
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
@@ -326,9 +326,8 @@ class TestIngestPipeline:
             # Create a mock BM25 cache
 
             bm25 = BM25Retriever([Document(page_content="test doc", metadata={"source": "x.py"})])
-            bm25_path = Path(tmpdir) / "bm25_retriever.pkl"
-            with open(bm25_path, "wb") as f:
-                pickle.dump(bm25, f)
+            bm25_path = Path(tmpdir) / "bm25_retriever.json"
+            bm25.save_json(bm25_path)
 
             with patch("codebase_rag.data_ingestion.pipeline.VectorRetriever") as mock_vr_cls:
                 mock_vr = MagicMock()
@@ -360,9 +359,8 @@ class TestIngestPipeline:
             pipeline.cache_dir = Path(tmpdir)
 
             bm25 = BM25Retriever([Document(page_content="test", metadata={"source": "x.py"})])
-            bm25_path = Path(tmpdir) / "bm25_retriever.pkl"
-            with open(bm25_path, "wb") as f:
-                pickle.dump(bm25, f)
+            bm25_path = Path(tmpdir) / "bm25_retriever.json"
+            bm25.save_json(bm25_path)
 
             with (
                 patch("codebase_rag.data_ingestion.pipeline.VectorRetriever"),

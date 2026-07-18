@@ -1,7 +1,6 @@
 """Main Streamlit application for the Codebase RAG interface."""
 
 import logging
-import pickle
 import time
 from pathlib import Path
 from typing import Any
@@ -62,13 +61,12 @@ def load_or_create_bm25_retriever() -> BM25Retriever:
     """Load BM25 retriever from cache or create a new one."""
     cache_dir = Path("data/cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
-    bm25_file = cache_dir / "bm25_retriever.pkl"
+    bm25_file = cache_dir / "bm25_retriever.json"
 
     if bm25_file.exists():
-        with open(bm25_file, "rb") as f:
-            retriever = pickle.load(f)  # noqa: S301 # Safe: we control this file
+        retriever = BM25Retriever.load_json(bm25_file)
         logger.info("Loaded BM25 retriever from cache")
-        return retriever  # type: ignore[no-any-return]
+        return retriever
 
     sample_docs = [
         Document(
@@ -85,13 +83,8 @@ def load_or_create_bm25_retriever() -> BM25Retriever:
         ),
     ]
 
-    retriever = BM25Retriever(sample_docs)
-
-    with open(bm25_file, "wb") as f:
-        pickle.dump(retriever, f)
-
-    logger.info("Created and cached a sample BM25 retriever")
-    return retriever
+    logger.info("No BM25 cache found; using an in-memory sample retriever until the first ingest")
+    return BM25Retriever(sample_docs)
 
 
 def initialize_vector_store(config: Config) -> QdrantStore:
