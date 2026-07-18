@@ -184,6 +184,9 @@ coverage.xml
 .sonar-token
 sonar-report.md
 
+# Local review notes (not part of the project)
+REVIEW.md
+
 # Milvus and vector database files
 *.db
 *.index

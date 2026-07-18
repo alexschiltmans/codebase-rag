@@ -184,5 +184,6 @@ sonar-stop: ## Stop and remove SonarQube container
 .PHONY: clean
 clean: ## Remove build artifacts, caches, coverage files
 	rm -rf .mypy_cache .pytest_cache .ruff_cache htmlcov coverage.xml test_results
-	rm -f data/cache/bm25_retriever.pkl data/cache/ingest_stats.json data/cache/processed_documents.pkl
+	rm -f data/cache/bm25_retriever.json data/cache/ingest_stats.json data/cache/processed_documents.pkl
+	rm -rf data/cache/bm25_corpus
 	find . -type d -name __pycache__ -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
