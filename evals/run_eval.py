@@ -13,6 +13,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
@@ -33,6 +34,9 @@ from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.llm.ollama_client import OllamaClient
 from codebase_rag.llm.rag_chain import RAGChain
+from codebase_rag.retrieval.bm25_search import BM25Retriever as Bm25Index
+from codebase_rag.retrieval.bm25_search import load_bm25_corpus
+from codebase_rag.retrieval.hybrid_search import HybridRetriever
 from codebase_rag.retrieval.vector_search import VectorRetriever
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -40,7 +44,8 @@ logger = logging.getLogger(__name__)
 
 EVALS_DIR = Path(__file__).parent
 TESTSET_PATH = EVALS_DIR / "testset.json"
-RESULTS_PATH = EVALS_DIR / "results.json"
+
+RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
 
 
 def load_testset() -> list[dict]:
@@ -49,8 +54,39 @@ def load_testset() -> list[dict]:
         return json.load(f)
 
 
-def build_rag_chain() -> RAGChain:
-    """Initialize the RAG chain with live services."""
+def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
+    """Build the requested retriever (vector-only, BM25-only, or hybrid).
+
+    Args:
+        retriever_type: One of "vector", "bm25", "hybrid".
+        qdrant_store: The Qdrant store backing vector search.
+
+    Returns:
+        A retriever exposing a `search(query, k)` method.
+    """
+    vector_retriever = VectorRetriever(qdrant_store)
+    if retriever_type == "vector":
+        return vector_retriever
+
+    cache_dir = Path("data/cache")
+    corpus = load_bm25_corpus(cache_dir / "bm25_corpus")
+    if not corpus:
+        raise RuntimeError("No BM25 corpus found in data/cache/bm25_corpus. Run ingestion first.")
+    bm25_retriever = Bm25Index(corpus)
+    if retriever_type == "bm25":
+        return bm25_retriever
+    if retriever_type == "hybrid":
+        return HybridRetriever(vector_retriever, bm25_retriever)
+    raise ValueError(f"Unknown retriever type: {retriever_type}")
+
+
+def build_rag_chain(retriever_type: str = "hybrid") -> RAGChain:
+    """Initialize the RAG chain with live services.
+
+    Args:
+        retriever_type: One of "vector", "bm25", "hybrid" — which retriever
+            backs the chain. Defaults to "hybrid", matching the shipped app.
+    """
     config = Config.get_instance()
 
     qdrant_store = QdrantStore(
@@ -61,7 +97,7 @@ def build_rag_chain() -> RAGChain:
     if not qdrant_store.collection_exists():
         raise RuntimeError("Qdrant collection does not exist. Run ingestion first.")
 
-    vector_retriever = VectorRetriever(qdrant_store)
+    retriever = build_retriever(retriever_type, qdrant_store)
 
     llm = OllamaClient(
         model_name=config.llm_model_name,
@@ -77,7 +113,7 @@ def build_rag_chain() -> RAGChain:
         raise RuntimeError(f"Cannot connect to Ollama: {status['message']}")
 
     return RAGChain(
-        retriever=vector_retriever,
+        retriever=retriever,
         llm=llm,
         top_k=5,
         use_conversation_memory=False,
@@ -349,66 +385,106 @@ def generate_results_markdown(results: list[dict], custom_metrics: dict, ragas_s
     return "\n".join(lines)
 
 
+def generate_ablation_markdown(all_metrics: dict[str, dict]) -> str:
+    """Generate a markdown ablation report comparing retriever configurations.
+
+    Args:
+        all_metrics: Mapping of retriever type ("vector", "bm25", "hybrid") to
+            its custom_metrics dict from `compute_custom_metrics`.
+    """
+    lines = ["# Retrieval Ablation\n"]
+    lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
+    lines.append(
+        "Same test set (`evals/testset.json`), same LLM, same top_k — only the retriever "
+        "feeding the RAG chain changes. Full per-question detail for each configuration is "
+        "in `results_<retriever>.md`.\n"
+    )
+    lines.append("| Retriever | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
+    lines.append("|-----------|----------------|-------------------|----------|--------|-------------|")
+    for retriever_type in RETRIEVER_TYPES:
+        m = all_metrics[retriever_type]
+        lines.append(
+            f"| {retriever_type} | {m['avg_keyword_recall']:.4f} | {m['avg_source_precision']:.4f} | "
+            f"{m['questions_answered']} | {m['questions_failed']} | {m['avg_latency_s']:.1f}s |"
+        )
+    return "\n".join(lines)
+
+
 def main() -> None:
-    """Run the full evaluation pipeline."""
+    """Run the full evaluation pipeline across every retriever configuration.
+
+    Runs the test set once per retriever ("vector", "bm25", "hybrid") so the
+    hybrid retriever the app actually ships can be compared against its two
+    components, and writes a combined ablation report.
+    """
     use_langfuse = "--langfuse" in sys.argv
 
     logger.info("Loading test set from %s", TESTSET_PATH)
     testset = load_testset()
     logger.info("Loaded %d test questions", len(testset))
 
-    logger.info("Initializing RAG chain...")
-    rag_chain = build_rag_chain()
+    all_custom_metrics: dict[str, dict] = {}
 
-    logger.info("Running RAG on test set...")
-    results = run_rag_on_testset(rag_chain, testset)
+    for retriever_type in RETRIEVER_TYPES:
+        logger.info("=== Retriever: %s ===", retriever_type)
+        rag_chain = build_rag_chain(retriever_type)
 
-    logger.info("Computing custom metrics...")
-    custom_metrics = compute_custom_metrics(results)
-    logger.info("Custom metrics: %s", custom_metrics)
+        logger.info("Running RAG on test set...")
+        results = run_rag_on_testset(rag_chain, testset)
 
-    logger.info("Running ragas evaluation...")
-    ragas_scores = run_ragas_evaluation(results)
+        logger.info("Computing custom metrics...")
+        custom_metrics = compute_custom_metrics(results)
+        logger.info("Custom metrics: %s", custom_metrics)
+        all_custom_metrics[retriever_type] = custom_metrics
 
-    # Save raw results
-    with open(RESULTS_PATH, "w") as f:
-        json.dump(
-            {
-                "results": results,
-                "custom_metrics": custom_metrics,
-                "ragas_scores": ragas_scores,
-            },
-            f,
-            indent=2,
-            default=str,
-        )
-    logger.info("Raw results saved to %s", RESULTS_PATH)
+        logger.info("Running ragas evaluation...")
+        ragas_scores = run_ragas_evaluation(results)
 
-    # Generate markdown report
-    md = generate_results_markdown(results, custom_metrics, ragas_scores)
-    md_path = EVALS_DIR / "results.md"
-    with open(md_path, "w") as f:
-        f.write(md)
-    logger.info("Markdown report saved to %s", md_path)
+        results_path = EVALS_DIR / f"results_{retriever_type}.json"
+        with open(results_path, "w") as f:
+            json.dump(
+                {
+                    "retriever": retriever_type,
+                    "results": results,
+                    "custom_metrics": custom_metrics,
+                    "ragas_scores": ragas_scores,
+                },
+                f,
+                indent=2,
+                default=str,
+            )
+        logger.info("Raw results saved to %s", results_path)
 
-    if use_langfuse:
-        log_to_langfuse(results, custom_metrics, ragas_scores)
+        md = generate_results_markdown(results, custom_metrics, ragas_scores)
+        md_path = EVALS_DIR / f"results_{retriever_type}.md"
+        with open(md_path, "w") as f:
+            f.write(md)
+        logger.info("Markdown report saved to %s", md_path)
 
-    # Print summary
-    print("\n" + "=" * 60)
-    print("EVALUATION SUMMARY")
-    print("=" * 60)
-    print(f"Questions: {len(results)}")
-    print(f"Answered:  {custom_metrics['questions_answered']}")
-    print(f"Failed:    {custom_metrics['questions_failed']}")
-    print(f"Avg keyword recall:   {custom_metrics['avg_keyword_recall']:.4f}")
-    print(f"Avg source precision: {custom_metrics['avg_source_precision']:.4f}")
-    print(f"Avg latency:          {custom_metrics['avg_latency_s']:.1f}s")
-    if ragas_scores and "ragas_error" not in ragas_scores:
-        print("\nRAGAS scores:")
-        for k, v in ragas_scores.items():
-            print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
-    print("=" * 60)
+        if use_langfuse:
+            log_to_langfuse(results, custom_metrics, ragas_scores)
+
+        print("\n" + "=" * 60)
+        print(f"EVALUATION SUMMARY — {retriever_type}")
+        print("=" * 60)
+        print(f"Questions: {len(results)}")
+        print(f"Answered:  {custom_metrics['questions_answered']}")
+        print(f"Failed:    {custom_metrics['questions_failed']}")
+        print(f"Avg keyword recall:   {custom_metrics['avg_keyword_recall']:.4f}")
+        print(f"Avg source precision: {custom_metrics['avg_source_precision']:.4f}")
+        print(f"Avg latency:          {custom_metrics['avg_latency_s']:.1f}s")
+        if ragas_scores and "ragas_error" not in ragas_scores:
+            print("\nRAGAS scores:")
+            for k, v in ragas_scores.items():
+                print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
+        print("=" * 60)
+
+    ablation_md = generate_ablation_markdown(all_custom_metrics)
+    ablation_path = EVALS_DIR / "ablation.md"
+    with open(ablation_path, "w") as f:
+        f.write(ablation_md)
+    logger.info("Ablation report saved to %s", ablation_path)
+    print("\n" + ablation_md)
 
 
 if __name__ == "__main__":
