@@ -24,7 +24,7 @@ from codebase_rag.llm.ollama_client import OllamaClient
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
-from codebase_rag.retrieval.vector_search import VectorRetriever
+from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
 from codebase_rag.services.folder_picker import FolderPicker
 
 logger = logging.getLogger(__name__)
@@ -181,14 +181,13 @@ class AppRuntime:
                 config.collection_name,
             )
 
-        self.vector_retriever = VectorRetriever(self.qdrant_store)
+        self.vector_retriever = VectorRetriever(self.qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
         self.bm25_retriever = _load_or_create_bm25_retriever()
         self.hybrid_retriever = HybridRetriever(
             vector_retriever=self.vector_retriever,
             bm25_retriever=self.bm25_retriever,
             vector_weight=0.7,
             bm25_weight=0.3,
-            min_score_threshold=0.1,
         )
 
         self.llm = OllamaClient(

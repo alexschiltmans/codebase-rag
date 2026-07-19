@@ -38,7 +38,6 @@ class HybridRetriever:
         bm25_retriever: Any = None,
         vector_weight: float = 0.7,
         bm25_weight: float = 0.3,
-        min_score_threshold: float = 0.1,
         top_k: int = 5,
         rrf_k: int = 60,
     ) -> None:
@@ -49,7 +48,6 @@ class HybridRetriever:
             bm25_retriever: The BM25 retriever. If None, only vector search is used.
             vector_weight: Weight for the vector ranker's contribution (default: 0.7).
             bm25_weight: Weight for the BM25 ranker's contribution (default: 0.3).
-            min_score_threshold: Minimum normalized score for results to be returned (default: 0.1).
             top_k: Default number of results to return (default: 5).
             rrf_k: Reciprocal Rank Fusion constant (default: 60, the standard value used
                 by Elasticsearch and the original RRF paper — it dampens the influence of
@@ -59,7 +57,6 @@ class HybridRetriever:
         self.bm25_retriever = bm25_retriever
         self.vector_weight = vector_weight
         self.bm25_weight = bm25_weight
-        self.min_score_threshold = min_score_threshold
         self.top_k = top_k
         self.rrf_k = rrf_k
 
@@ -69,7 +66,12 @@ class HybridRetriever:
         Each ranker's result list is combined by rank rather than by raw score, so the
         two lists never need to be on comparable scales (avoids weak keyword matches
         getting an inflated score purely from per-query max-normalization). Fused scores
-        are then rescaled to [0, 1] so `min_score_threshold` stays meaningful.
+        are rescaled to [0, 1] and returned for display, but are not used to filter
+        results here: after RRF a document ranked #1 by even one ranker always scores
+        well above zero, so a fixed cutoff on the fused score can't distinguish
+        relevant from irrelevant — relevance filtering happens upstream, on the
+        vector retriever's raw cosine score (see `VectorRetriever.search`). Returns
+        an empty list when both component retrievers return nothing.
 
         Args:
             query: The search query.
@@ -110,11 +112,10 @@ class HybridRetriever:
         if self.bm25_retriever:
             max_possible_score += self.bm25_weight / (self.rrf_k + 1)
 
-        results = []
-        for entry in doc_to_score.values():
-            normalized_score = entry["rrf_score"] / max_possible_score if max_possible_score > 0 else 0.0
-            if normalized_score >= self.min_score_threshold:
-                results.append((entry["doc"], normalized_score))
+        results = [
+            (entry["doc"], entry["rrf_score"] / max_possible_score if max_possible_score > 0 else 0.0)
+            for entry in doc_to_score.values()
+        ]
 
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:k_value]

@@ -63,7 +63,6 @@ class RAGChain:
         top_k: int = 5,
         use_conversation_memory: bool = True,
         max_conversation_history: int = 5,
-        min_relevance_score: float = 0.15,
     ) -> None:
         """Initialize the RAG chain.
 
@@ -74,7 +73,6 @@ class RAGChain:
             top_k: Number of documents to retrieve.
             use_conversation_memory: Whether to use conversation memory.
             max_conversation_history: Maximum number of conversation turns to keep.
-            min_relevance_score: Minimum relevance score for retrieved documents.
         """
         self.retriever = retriever
         self.llm = llm
@@ -82,7 +80,6 @@ class RAGChain:
         self.use_conversation_memory = use_conversation_memory
         self.conversation_history: list[dict[str, Any]] = []
         self.max_conversation_history = max_conversation_history
-        self.min_relevance_score = min_relevance_score
         # Populated by stream() once its generator is fully consumed, since
         # st.write_stream() only returns the concatenated text — callers that
         # need sources/metrics read them from here afterward.
@@ -273,13 +270,15 @@ class RAGChain:
             return self._do_retrieve(query)
 
     def _do_retrieve(self, query: str, top_k: int | None = None) -> list[Document]:
-        """Execute retrieval, dispatching based on retriever capabilities."""
+        """Execute retrieval, dispatching based on retriever capabilities.
+
+        Relevance filtering happens inside the retriever itself (see
+        `VectorRetriever.search`), not here — after RRF fusion, a fused
+        score can no longer distinguish relevant from irrelevant results.
+        """
         if hasattr(self.retriever, "search"):
             args = (query, top_k) if top_k is not None else (query,)
             documents_and_scores = self.retriever.search(*args)
-            documents_and_scores = [
-                (doc, score) for doc, score in documents_and_scores if score >= self.min_relevance_score
-            ]
             return [doc for doc, _ in documents_and_scores]
         return self.retriever.get_relevant_documents(query)  # type: ignore[no-any-return]
 
