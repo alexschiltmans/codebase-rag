@@ -37,9 +37,16 @@ def _display_header() -> None:
 
 
 def _restore_saved_chats(state: SessionState) -> None:
-    """Load any previously persisted chats into this session, once."""
-    if state.chat_histories:
+    """Load any previously persisted chats into this session, once.
+
+    Guarded by a dedicated session flag rather than ``state.chat_histories``
+    being non-empty, since a user with zero saved chats would otherwise
+    never set that flag and pay a storage scan on every rerun.
+    """
+    if st.session_state.get("_chats_restored"):
         return
+    st.session_state["_chats_restored"] = True
+
     try:
         chat_manager = get_chat_history_manager()
         chat_list = chat_manager.list_chat_histories()

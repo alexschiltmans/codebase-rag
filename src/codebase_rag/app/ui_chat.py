@@ -7,7 +7,7 @@ from typing import Any
 
 import streamlit as st
 
-from codebase_rag.app.runtime import AppRuntime
+from codebase_rag.app.runtime import MAX_CONVERSATION_HISTORY, AppRuntime, list_chat_metadata
 from codebase_rag.app.state import QueryLifecycle, SessionState
 from codebase_rag.database.chat_storage import get_chat_history_manager
 
@@ -56,6 +56,7 @@ def append_message(state: SessionState, role: str, content: str, sources: list[d
     try:
         chat_manager = get_chat_history_manager()
         chat_manager.save_chat_history(chat_id, state.chat_history_for(chat_id))
+        list_chat_metadata.clear()  # type: ignore[attr-defined]
     except (OSError, RuntimeError, ValueError) as e:
         logger.error("Failed to save chat history: %s", e)
 
@@ -67,7 +68,8 @@ def _apply_conversation_history(rag_chain: Any, state: SessionState) -> None:
     ``rag_chain.stream()`` adds it itself via ``add_user_message``.
     """
     rag_chain.conversation_history = []
-    for msg in state.messages[:-1]:
+    tail = state.messages[-(2 * MAX_CONVERSATION_HISTORY + 1) : -1]
+    for msg in tail:
         if msg["role"] == "user":
             rag_chain.add_user_message(msg["content"])
         elif msg["role"] == "assistant":
