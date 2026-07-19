@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import codebase_rag.app.components as comp
 from codebase_rag.app.components import (
     _delete_chat,
@@ -426,11 +428,14 @@ class TestDisplayIngestionStatus:
     @patch("codebase_rag.app.components.st")
     def test_no_status(self, mock_st: MagicMock) -> None:
 
+        mock_st.session_state = {}
         original = dict(comp._ingestion_status)
         comp._ingestion_status.clear()
         try:
             comp._display_ingestion_status()
             mock_st.info.assert_not_called()
+            mock_st.error.assert_not_called()
+            mock_st.success.assert_not_called()
         finally:
             comp._ingestion_status.update(original)
 
@@ -438,6 +443,7 @@ class TestDisplayIngestionStatus:
     @patch("codebase_rag.app.components.st")
     def test_running_status(self, mock_st: MagicMock, mock_time: MagicMock) -> None:
 
+        mock_st.session_state = {}
         mock_time.time.return_value = 110.0
         original = dict(comp._ingestion_status)
         comp._ingestion_status.update(running=True, repo="test-repo", start_time=100.0)
@@ -446,6 +452,7 @@ class TestDisplayIngestionStatus:
             mock_st.info.assert_called_once()
             call_arg = mock_st.info.call_args[0][0]
             assert "test-repo" in call_arg
+            mock_st.success.assert_not_called()
         finally:
             comp._ingestion_status.clear()
             comp._ingestion_status.update(original)
@@ -453,11 +460,15 @@ class TestDisplayIngestionStatus:
     @patch("codebase_rag.app.components.st")
     def test_error_status(self, mock_st: MagicMock) -> None:
 
+        mock_st.session_state = {}
+        mock_st.button.return_value = False
         original = dict(comp._ingestion_status)
         comp._ingestion_status.update(running=False, error="timeout")
         try:
             comp._display_ingestion_status()
             mock_st.error.assert_called_once()
+            assert mock_st.session_state["ingestion_outcome"]["error"] == "timeout"
+            assert comp._ingestion_status == {}
         finally:
             comp._ingestion_status.clear()
             comp._ingestion_status.update(original)
@@ -465,15 +476,49 @@ class TestDisplayIngestionStatus:
     @patch("codebase_rag.app.components.st")
     def test_success_status(self, mock_st: MagicMock) -> None:
 
+        class SessionState(dict):
+            def __getattr__(self, name: str) -> object:
+                return self[name]
+
+            def __setattr__(self, name: str, value: object) -> None:
+                self[name] = value
+
+        mock_st.session_state = SessionState()
+        mock_st.rerun.side_effect = RuntimeError("stop")
         original = dict(comp._ingestion_status)
         comp._ingestion_status.update(running=False, repo="test-repo", error=None)
         mock_st.cache_resource = MagicMock()
-        mock_st.session_state = MagicMock()
+        try:
+            # The success path clears/reinitializes state and forces a full
+            # app rerun, so it raises (via the mocked st.rerun) before
+            # reaching the render-from-session-state code below.
+            with pytest.raises(RuntimeError):
+                comp._display_ingestion_status()
+            assert mock_st.session_state["ingestion_outcome"]["repo"] == "test-repo"
+            assert mock_st.session_state["initialized"] is False
+            mock_st.cache_resource.clear.assert_called_once()
+            mock_st.rerun.assert_called_once_with(scope="app")
+        finally:
+            comp._ingestion_status.clear()
+            comp._ingestion_status.update(original)
+
+    @patch("codebase_rag.app.components.st")
+    def test_outcome_persists_and_can_be_dismissed(self, mock_st: MagicMock) -> None:
+
+        mock_st.session_state = {"ingestion_outcome": {"repo": "old-repo", "error": None}}
+        mock_st.button.return_value = False
+        original = dict(comp._ingestion_status)
+        comp._ingestion_status.clear()
         try:
             comp._display_ingestion_status()
             mock_st.success.assert_called_once()
+            assert "old-repo" in mock_st.success.call_args[0][0]
+            assert "ingestion_outcome" in mock_st.session_state
+
+            mock_st.button.return_value = True
+            comp._display_ingestion_status()
+            assert "ingestion_outcome" not in mock_st.session_state
         finally:
-            comp._ingestion_status.clear()
             comp._ingestion_status.update(original)
 
 

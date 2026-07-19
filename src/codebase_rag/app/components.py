@@ -381,10 +381,17 @@ def _display_github_tab(ingestion_running: bool) -> None:
     )
     if st.button("Ingest", key="btn_ingest_repo", disabled=bool(not new_repo_url or ingestion_running)):
         if new_repo_url and new_repo_url.startswith("https://github.com/"):
+            st.session_state.pop("github_url_error", None)
             _run_ingestion(new_repo_url, kind="manual")
             st.rerun()
         elif new_repo_url:
-            st.error("Please enter a valid GitHub URL")
+            st.session_state["github_url_error"] = "Please enter a valid GitHub URL"
+
+    if st.session_state.get("github_url_error"):
+        st.error(st.session_state["github_url_error"])
+        if st.button("Dismiss", key="btn_dismiss_github_url_error"):
+            del st.session_state["github_url_error"]
+            st.rerun()
 
 
 def _display_local_folder_tab(ingestion_running: bool) -> None:
@@ -514,25 +521,37 @@ def _pick_folder_path() -> str | None:
 
 
 def _display_ingestion_status() -> None:
-    """Show ingestion progress/result banner in the sidebar."""
+    """Show ingestion progress in the sidebar, and keep the most recent
+    outcome banner (success or failure) visible until the user dismisses
+    it, instead of it disappearing on the next 5-second fragment tick.
+    """
     ingestion = _get_ingestion_status()
-    if not ingestion:
-        return
 
     if ingestion.get("running"):
         elapsed = int(time.time() - ingestion.get("start_time", time.time()))  # type: ignore[operator]
         st.info(f"⏳ Ingesting {ingestion['repo']}… ({elapsed}s elapsed)")
-    elif ingestion.get("error"):
-        st.error(f"Ingestion failed: {ingestion['error']}")
+    elif ingestion.get("error") or "repo" in ingestion:
+        st.session_state["ingestion_outcome"] = dict(ingestion)
         _clear_ingestion_status()
-    elif "repo" in ingestion:
-        st.success(f"✅ Ingested **{ingestion['repo']}** successfully!")
-        _clear_ingestion_status()
-        st.cache_resource.clear()
-        st.session_state.initialized = False
-        st.session_state.initializing = False
-        # Force a full app rerun so the main page picks up the new state
-        st.rerun(scope="app")
+        if "repo" in ingestion and not ingestion.get("error"):
+            st.cache_resource.clear()
+            st.session_state.initialized = False
+            st.session_state.initializing = False
+            # Force a full app rerun so the main page picks up the new
+            # index; the banner itself survives the rerun via session_state.
+            st.rerun(scope="app")
+
+    outcome = st.session_state.get("ingestion_outcome")
+    if not outcome:
+        return
+
+    if outcome.get("error"):
+        st.error(f"Ingestion failed: {outcome['error']}")
+    else:
+        st.success(f"✅ Ingested **{outcome['repo']}** successfully!")
+    if st.button("Dismiss", key="btn_dismiss_ingestion_outcome"):
+        del st.session_state["ingestion_outcome"]
+        st.rerun()
 
 
 def _load_repo_list() -> list[str]:
