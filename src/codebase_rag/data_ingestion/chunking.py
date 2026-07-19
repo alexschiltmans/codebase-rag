@@ -61,7 +61,8 @@ class DocumentChunker:
                 ("####", "header_4"),
                 ("#####", "header_5"),
                 ("######", "header_6"),
-            ]
+            ],
+            strip_headers=False,
         )
 
         self.default_splitter = RecursiveCharacterTextSplitter(
