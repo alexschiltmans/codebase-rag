@@ -13,21 +13,26 @@ logger = logging.getLogger(__name__)
 class EmbeddingManager:
     """Manager class for text embedding models.
 
-    Uses the singleton pattern to ensure only one instance of the embedding model
-    is loaded in memory at any time.
+    Caches one instance per model name so repeated construction with the same
+    model reuses the already-loaded `SentenceTransformer`, while a different
+    model name gets its own instance instead of silently reusing the wrong one.
     """
 
-    _instance = None
+    _instances: dict[str, "EmbeddingManager"] = {}
 
     def __new__(cls, model_name: str | None = None) -> "EmbeddingManager":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialize(model_name)
-        return cls._instance
-
-    def _initialize(self, model_name: str | None = None) -> None:
         config = Config.get_instance()
-        self.model_name = model_name or config.embedding_model
+        resolved_model_name = model_name or config.embedding_model
+
+        if resolved_model_name not in cls._instances:
+            instance = super().__new__(cls)
+            instance._initialize(resolved_model_name)
+            cls._instances[resolved_model_name] = instance
+
+        return cls._instances[resolved_model_name]
+
+    def _initialize(self, model_name: str) -> None:
+        self.model_name = model_name
 
         logger.info("Initializing embedding model: %s", self.model_name)
         self.model = SentenceTransformer(self.model_name)
