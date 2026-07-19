@@ -78,6 +78,38 @@ class TestChunkDocument:
         assert len(chunks) > 1
 
 
+class TestLineRanges:
+    """Tests for start_line/end_line metadata on chunks."""
+
+    def test_code_chunks_get_exact_line_ranges(self) -> None:
+        chunker = DocumentChunker(chunk_size=1000, chunk_overlap=0)
+        content = "def foo():\n    return 1\n\n\ndef bar():\n    return 2\n"
+        chunks = chunker.chunk_document(content, {"source": "foo.py"}, ChunkingStrategy.CODE)
+
+        assert chunks[0].metadata["start_line"] == 1
+        assert chunks[0].metadata["end_line"] >= chunks[0].metadata["start_line"]
+
+    def test_markdown_chunk_with_indented_content_locates_its_header_line(self) -> None:
+        # MarkdownHeaderTextSplitter strips per-line whitespace, so the chunk
+        # text won't appear verbatim in the original; the first-line fallback
+        # must still find the section header instead of collapsing to line 1.
+        chunker = DocumentChunker(chunk_size=1000, chunk_overlap=0)
+        content = "# Title\n\nintro text\n\n## Section\n\n    indented code\n    more indented\n"
+        chunks = chunker.chunk_document(content, {"source": "doc.md"}, ChunkingStrategy.MARKDOWN)
+
+        section_chunk = next(c for c in chunks if "Section" in c.page_content)
+        assert section_chunk.metadata["start_line"] == 5
+        assert section_chunk.metadata["end_line"] >= 5
+
+    def test_every_chunk_carries_line_metadata(self) -> None:
+        chunker = DocumentChunker(chunk_size=50, chunk_overlap=0)
+        chunks = chunker.chunk_document("a" * 120, {"source": "test.txt"})
+
+        for chunk in chunks:
+            assert chunk.metadata["start_line"] >= 1
+            assert chunk.metadata["end_line"] >= chunk.metadata["start_line"]
+
+
 class TestProcessFile:
     """Tests for DocumentChunker.process_file."""
 

@@ -51,7 +51,7 @@ class QdrantStore:
         self.embedding_model = embedding_model
         self.recreate_collection = recreate_collection
 
-        self._embedding_manager = EmbeddingManager(model_name=embedding_model)
+        self.embedding_manager = EmbeddingManager(model_name=embedding_model)
 
         self.client = QdrantClient(host=host, port=port)
 
@@ -96,7 +96,7 @@ class QdrantStore:
         try:
             # Generate embeddings for all documents
             texts = [doc.page_content for doc in documents]
-            embeddings = self._embedding_manager.get_embeddings(texts)
+            embeddings = self.embedding_manager.get_embeddings(texts)
 
             self._ensure_collection(vector_size=len(embeddings[0]))
 
@@ -185,7 +185,7 @@ class QdrantStore:
             return []
 
         try:
-            query_embedding = self._embedding_manager.get_query_embedding(query)
+            query_embedding = self.embedding_manager.get_query_embedding(query)
 
             query_filter = None
             if filter_query:

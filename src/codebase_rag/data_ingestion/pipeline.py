@@ -7,20 +7,24 @@ Handles the full data ingestion workflow:
 4. Initialize BM25 index for hybrid search
 """
 
+import hashlib
 import json
 import logging
 import pickle
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from codebase_rag.config import Config
+from codebase_rag.data_ingestion.chunking import DocumentChunker
 from codebase_rag.data_ingestion.document_processor import DocumentProcessor
 from codebase_rag.data_ingestion.git_loader import GitLoader
 from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.retrieval.bm25_search import BM25Retriever, rebuild_bm25_index
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
 from codebase_rag.retrieval.vector_search import VectorRetriever
+from codebase_rag.services import repo_service
 
 # Top-level directory names skipped during auto-discovery (see
 # discover_included_dirs). These are dependency/build/cache directories
@@ -155,6 +159,16 @@ def display_progress(current: int, total: int, prefix: str = "", length: int = 5
         sys.stdout.write("\n")
 
 
+@dataclass
+class IncrementalIngestResult:
+    repo_name: str
+    files_changed: int
+    files_deleted: int
+    files_unchanged: int
+    chunks_indexed: int
+    head_sha: str | None
+
+
 class IngestPipeline:
     """Pipeline for ingesting documents from one or more repositories into the vector database.
 
@@ -220,6 +234,10 @@ class IngestPipeline:
             "elapsed_time": 0.0,
         }
 
+        # HEAD SHA per repo processed this run, recorded so run() can persist
+        # freshness metadata for GET /repos after indexing succeeds.
+        self._ingest_head_shas: dict[str, str | None] = {}
+
     def _repo_name_from_url(self, url: str) -> str:
         """Derive a short repo name from a URL."""
         return url.rstrip("/").split("/")[-1].removesuffix(".git")
@@ -278,6 +296,7 @@ class IngestPipeline:
         # so local_path exists on disk for directory discovery below.
         git_loader.clone_or_pull()
         head_sha = self._get_head_sha(git_loader)
+        self._ingest_head_shas[repo_name] = head_sha
 
         cached = self._try_load_cache(repo_name, cache_path, head_sha)
         if cached is not None:
@@ -353,6 +372,92 @@ class IngestPipeline:
         for doc in cached_docs:
             doc.metadata.setdefault("repo", repo_name)
         return cached_docs
+
+    def _file_hashes_path_for_repo(self, repo_name: str) -> Path:
+        """Return the per-file content-hash manifest path for a specific repo."""
+        return self.cache_dir / f"{repo_name}_file_hashes.json"
+
+    def _bm25_corpus_path_for_repo(self, repo_name: str) -> Path:
+        return self.cache_dir / "bm25_corpus" / f"{repo_name}.json"
+
+    def process_repo_incremental(self, source: str) -> IncrementalIngestResult:
+        """Ingest a single source (git URL or local path), re-embedding only
+        files whose content changed since the last ingest.
+
+        Diffs by content hash against a per-repo manifest. Unchanged files are
+        left untouched in both Qdrant and the BM25 corpus; changed or deleted
+        files have their existing chunks removed (by source path) before any
+        new chunks for changed files are indexed.
+        """
+        repo_name, local_path, git_loader, _is_local_folder = self._resolve_repo_source(source)
+        git_loader.clone_or_pull()
+        head_sha = self._get_head_sha(git_loader)
+
+        included_dirs = self._discover_included_dirs(local_path)
+        file_paths = git_loader.get_file_paths(included_dirs=included_dirs, included_files=self.included_files)
+
+        current_hashes = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in file_paths}
+
+        manifest_path = self._file_hashes_path_for_repo(repo_name)
+        previous_hashes: dict[str, str] = {}
+        if manifest_path.exists():
+            try:
+                previous_hashes = json.loads(manifest_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                previous_hashes = {}
+
+        changed_paths = [p for p in file_paths if current_hashes[str(p)] != previous_hashes.get(str(p))]
+        deleted_sources = [path for path in previous_hashes if path not in current_hashes]
+        unchanged_count = len(file_paths) - len(changed_paths)
+
+        chunker = DocumentChunker()
+        new_documents = []
+        for path in changed_paths:
+            docs = chunker.process_file(path)
+            for doc in docs:
+                doc.metadata["repo"] = repo_name
+            new_documents.extend(docs)
+
+        stale_sources = [str(p) for p in changed_paths] + deleted_sources
+        for source_path in stale_sources:
+            self.vector_store.delete_by_source(source_path)
+        if new_documents:
+            self.vector_store.add_documents(new_documents)
+
+        self._update_bm25_corpus_incremental(repo_name, stale_sources, new_documents)
+
+        manifest = {path: current_hashes[path] for path in current_hashes}
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest, indent=2))
+
+        repo_service.save_freshness(self.cache_dir, repo_name, head_sha)
+
+        return IncrementalIngestResult(
+            repo_name=repo_name,
+            files_changed=len(changed_paths),
+            files_deleted=len(deleted_sources),
+            files_unchanged=unchanged_count,
+            chunks_indexed=len(new_documents),
+            head_sha=head_sha,
+        )
+
+    def _update_bm25_corpus_incremental(self, repo_name: str, stale_sources: list[str], new_documents: list) -> None:
+        """Update this repo's BM25 corpus in place: drop chunks belonging to
+        `stale_sources`, add `new_documents`, then rebuild the combined index.
+        """
+        if not stale_sources and not new_documents:
+            return
+
+        corpus_path = self._bm25_corpus_path_for_repo(repo_name)
+        existing_docs = BM25Retriever.load_json(corpus_path).documents if corpus_path.exists() else []
+
+        stale_set = set(stale_sources)
+        kept_docs = [doc for doc in existing_docs if str(doc.metadata.get("source", "")) not in stale_set]
+        kept_docs.extend(new_documents)
+
+        corpus_path.parent.mkdir(parents=True, exist_ok=True)
+        BM25Retriever(kept_docs).save_json(corpus_path)
+        rebuild_bm25_index(self.cache_dir)
 
     def process_documents(self) -> list:
         """Process documents from all configured repositories.
@@ -493,6 +598,8 @@ class IngestPipeline:
             documents = self.process_documents()
             self.index_documents(documents)
             self.save_bm25_index(documents)
+            for repo_name, head_sha in self._ingest_head_shas.items():
+                repo_service.save_freshness(self.cache_dir, repo_name, head_sha)
             self.verify_hybrid_search()
             self.stats["elapsed_time"] = time.time() - total_start_time
             self.save_stats()

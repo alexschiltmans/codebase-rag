@@ -92,6 +92,37 @@ services:
     networks:
       - codebase_rag_network
 
+  api:
+    container_name: codebase-rag-api
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["python", "-m", "codebase_rag.api"]
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-sam860/LFM2:350m}
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
+      LANGFUSE_HOST: http://langfuse:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    ports:
+      # Loopback only on the host: the API has no auth (see README).
+      # API_HOST=0.0.0.0 above is container-internal, required for the
+      # port mapping to reach uvicorn at all.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - codebase_rag_app_data:/app/data
+      - codebase_rag_app_cache:/app/cache
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - codebase_rag_network
+
 networks:
   codebase_rag_network:
     name: codebase_rag_network
