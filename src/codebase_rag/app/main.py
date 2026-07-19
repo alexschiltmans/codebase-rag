@@ -212,16 +212,20 @@ def process_user_query(query: str) -> None:
 
     st.session_state.processing_query = True
 
-    rag_chain = _get_rag_chain()
+    try:
+        rag_chain = _get_rag_chain()
 
-    if rag_chain:
-        _run_rag_query(rag_chain, query)
-    else:
-        add_message("assistant", "I'm having trouble connecting to the knowledge base. Please try again later.")
-
-    st.session_state.processing_query = False
-    st.session_state.thinking = False
-    st.session_state.query_to_process = None
+        if rag_chain:
+            _run_rag_query(rag_chain, query)
+        else:
+            add_message("assistant", "I'm having trouble connecting to the knowledge base. Please try again later.")
+    except Exception as e:
+        logger.error("Unhandled error while processing query: %s", e)
+        add_message("assistant", f"I encountered an error while processing your question: {e}")
+    finally:
+        st.session_state.processing_query = False
+        st.session_state.thinking = False
+        st.session_state.query_to_process = None
 
 
 def _get_rag_chain() -> Any:
@@ -251,7 +255,7 @@ def _run_rag_query(rag_chain: Any, query: str) -> None:
             answer = "".join(str(part) for part in answer)
         sources = (rag_chain.last_result or {}).get("sources", [])
         add_message("assistant", answer, sources)
-    except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
+    except Exception as e:
         logger.error("Error generating response: %s", e)
         add_message("assistant", f"I encountered an error while processing your question: {e}")
 
@@ -296,7 +300,7 @@ def _try_initialize_components() -> None:
             else:
                 st.session_state.initializing = False
                 st.error("Failed to initialize essential components")
-        except (ConnectionError, ValueError, RuntimeError, ImportError) as e:
+        except Exception as e:
             st.session_state.initializing = False
             st.session_state.initialization_error = str(e)
             logger.error("Initialization failed: %s", e)
