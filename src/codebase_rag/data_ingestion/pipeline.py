@@ -120,7 +120,10 @@ class IngestPipeline:
         """Initialize the ingestion pipeline.
 
         Args:
-            included_dirs: List of directories to include.
+            included_dirs: List of directories to include. If omitted, all
+                top-level, non-hidden directories of the ingested repo are
+                discovered automatically (both for local folders and cloned
+                GitHub repos), instead of being limited to docs/src/tests.
             included_files: List of specific files to include.
             drop_existing: Whether to drop existing collections.
             use_cache: Whether to use document cache.
@@ -132,6 +135,7 @@ class IngestPipeline:
         self.logger = setup_logging(log_level)
 
         self.config = Config.get_instance()
+        self._explicit_included_dirs = included_dirs
         self.included_dirs = included_dirs or ["docs", "src", "tests"]
         self.included_files = included_files or ["README.md", "pyproject.toml"]
         self.drop_existing = drop_existing
@@ -211,10 +215,11 @@ class IngestPipeline:
         Returns:
             List of processed document chunks.
         """
-        repo_name, local_path, git_loader, is_local_folder = self._resolve_repo_source(repo_url)
+        repo_name, local_path, git_loader, _is_local_folder = self._resolve_repo_source(repo_url)
         cache_path = self._cache_path_for_repo(repo_name)
 
-        # Always clone/pull first so we can compare HEAD against the cache
+        # Always clone/pull first so we can compare HEAD against the cache, and
+        # so local_path exists on disk for directory discovery below.
         git_loader.clone_or_pull()
         head_sha = self._get_head_sha(git_loader)
 
@@ -224,11 +229,7 @@ class IngestPipeline:
 
         self.logger.info("Processing repo: %s (local path: %s)", repo_url, local_path)
 
-        # For local folders, scan all subdirectories instead of only docs/src/tests
-        if is_local_folder:
-            included_dirs = [d.name for d in local_path.iterdir() if d.is_dir() and not d.name.startswith(".")]
-        else:
-            included_dirs = self.included_dirs
+        included_dirs = self._discover_included_dirs(local_path)
 
         document_processor = DocumentProcessor(git_loader=git_loader)
         start_time = time.time()
@@ -237,7 +238,13 @@ class IngestPipeline:
             included_files=self.included_files,
         )
         processing_time = time.time() - start_time
-        self.logger.info("Processed %d chunks from %s in %.2f seconds", len(documents), repo_name, processing_time)
+        self.logger.info(
+            "Processed %d chunks from %s in %.2f seconds (scanned dirs: %s)",
+            len(documents),
+            repo_name,
+            processing_time,
+            included_dirs,
+        )
 
         # Tag every chunk with the repo name so list_repos() can find them
         for doc in documents:
@@ -249,6 +256,21 @@ class IngestPipeline:
                 self._save_cache_meta(repo_name, head_sha)
 
         return documents
+
+    def _discover_included_dirs(self, local_path: Path) -> list[str]:
+        """Determine which top-level directories to scan for a repo.
+
+        If the caller explicitly requested a fixed set of directories, honor
+        it. Otherwise auto-discover every non-hidden top-level directory on
+        disk, so cloned GitHub repos get the same treatment as local-folder
+        ingestion instead of being limited to docs/src/tests (which yields a
+        near-empty index for repos that don't follow that layout).
+        """
+        if self._explicit_included_dirs is not None:
+            return self._explicit_included_dirs
+        if not local_path.is_dir():
+            return self.included_dirs
+        return [d.name for d in local_path.iterdir() if d.is_dir() and not d.name.startswith(".")]
 
     def _resolve_repo_source(self, repo_url: str) -> tuple[str, Path, GitLoader, bool]:
         """Determine repo name, local path, and GitLoader for a source."""
