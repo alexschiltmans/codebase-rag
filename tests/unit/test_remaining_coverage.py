@@ -95,7 +95,6 @@ class TestRAGChainConversationMemory:
             [(Document(page_content="doc", metadata={}), 0.9)],
         ]
         chain.retriever = mock_retriever
-        chain.min_relevance_score = 0.1
 
         result = chain._retrieve_documents("query", 5)
         assert len(result) == 1
@@ -116,6 +115,20 @@ class TestRAGChainConversationMemory:
         sources = chain._format_sources(docs)
         assert len(sources) == 1
         assert "[MYREPO]" in sources[0]["file_name"]
+
+    def test_empty_retrieval_returns_refusal_answer(self) -> None:
+        """Regression test for AI-1: an out-of-scope query, for which the
+        retriever returns no documents, must reach the refusal answer and
+        cite no sources — not a hallucinated answer from stale context."""
+        chain = self._make_chain()
+        chain.retriever.search.return_value = []
+
+        result = chain.run("what's a good lasagna recipe?")
+
+        assert result["documents"] == []
+        assert result["sources"] == []
+        assert "couldn't find any relevant information" in result["answer"]
+        chain.llm.invoke.assert_not_called()
 
 
 class TestHybridRetrieverExtra:
@@ -165,6 +178,37 @@ class TestHybridRetrieverExtra:
         docs = retriever.aget_relevant_documents("test")
         assert len(docs) == 1
 
+    def test_both_components_empty_returns_empty(self) -> None:
+        """Regression test: HybridRetriever no longer filters on fused score,
+        so the only way to get [] back is both components returning nothing —
+        which is what should happen for an out-of-scope query once the
+        vector retriever's own similarity threshold has done its job."""
+        mock_vector = MagicMock()
+        mock_vector.search.return_value = []
+        mock_bm25 = MagicMock()
+        mock_bm25.search.return_value = []
+
+        retriever = HybridRetriever(vector_retriever=mock_vector, bm25_retriever=mock_bm25)
+        results = retriever.search("off topic query")
+
+        assert results == []
+
+    def test_low_rank_results_are_not_filtered_by_fused_score(self) -> None:
+        """A document found only by BM25 at a low rank still comes back:
+        fused scores are no longer used for relevance filtering."""
+        mock_vector = MagicMock()
+        mock_vector.search.return_value = []
+        mock_bm25 = MagicMock()
+        mock_bm25.search.return_value = [
+            (Document(page_content=f"doc{i}", metadata={"source": f"{i}.py", "chunk_index": 0}), 1.0 / (i + 1))
+            for i in range(5)
+        ]
+
+        retriever = HybridRetriever(vector_retriever=mock_vector, bm25_retriever=mock_bm25, top_k=5)
+        results = retriever.search("keyword query")
+
+        assert len(results) == 5
+
 
 class TestVectorRetrieverExtra:
     """Additional tests for VectorRetriever."""
@@ -198,6 +242,31 @@ class TestVectorRetrieverExtra:
         docs = retriever.get_relevant_documents("query")
         assert len(docs) == 1
 
+    def test_score_threshold_filters_low_scores(self) -> None:
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.return_value = [
+            (Document(page_content="high", metadata={}), 0.8),
+            (Document(page_content="mid", metadata={}), 0.3),
+            (Document(page_content="low", metadata={}), 0.1),
+        ]
+
+        retriever = VectorRetriever(mock_store, score_threshold=0.25)
+        results = retriever.search("query")
+
+        assert [doc.page_content for doc, _ in results] == ["high", "mid"]
+
+    def test_no_threshold_returns_everything(self) -> None:
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.return_value = [
+            (Document(page_content="high", metadata={}), 0.8),
+            (Document(page_content="low", metadata={}), 0.01),
+        ]
+
+        retriever = VectorRetriever(mock_store, score_threshold=None)
+        results = retriever.search("query")
+
+        assert len(results) == 2
+
 
 class TestBM25RetrieverExtra:
     """Additional tests for BM25Retriever."""
@@ -222,6 +291,33 @@ class TestBM25RetrieverExtra:
         assert "test" in tokens
         assert "123" in tokens
         assert "a" not in tokens
+
+    def test_search_no_term_overlap_returns_empty(self) -> None:
+        """Regression test: a query with no term overlap in the corpus must
+        return [], not `k` zero-scored documents padded in to fill the
+        result list (the bug that kept HybridRetriever's refusal path
+        unreachable — see fix-rrf-relevance-thresholds design.md)."""
+        retriever = BM25Retriever(
+            [
+                Document(page_content="power grid model calculation", metadata={}),
+                Document(page_content="short circuit analysis", metadata={}),
+            ]
+        )
+        results = retriever.search("xylophone marmalade quokka", k=4)
+        assert results == []
+
+    def test_search_partial_overlap_omits_non_matching_docs(self) -> None:
+        retriever = BM25Retriever(
+            [
+                Document(page_content="power grid model calculation", metadata={}),
+                Document(page_content="short circuit analysis", metadata={}),
+                Document(page_content="completely unrelated text about kazoos", metadata={}),
+            ]
+        )
+        results = retriever.search("power grid", k=5)
+        assert len(results) == 1
+        assert results[0][0].page_content == "power grid model calculation"
+        assert results[0][1] > 0
 
 
 class TestOllamaClientExtra:

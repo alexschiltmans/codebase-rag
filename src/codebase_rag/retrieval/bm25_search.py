@@ -66,6 +66,11 @@ class BM25Retriever:
     def search(self, query: str, k: int = 4) -> list[tuple[Document, float]]:
         """Search for documents matching the query.
 
+        Documents scoring exactly 0 (no query term appears in them at all)
+        are excluded rather than padded in to reach `k`: a 0 score is not
+        evidence of relevance, and returning it as a "match" would make
+        every search look non-empty regardless of the query.
+
         Args:
             query: Search query.
             k: Number of results to return.
@@ -85,7 +90,8 @@ class BM25Retriever:
 
         scores = self.bm25.get_scores(query_tokens)
 
-        results = sorted(zip(self.documents, scores, strict=False), key=lambda x: x[1], reverse=True)[:k]
+        matches = [(doc, score) for doc, score in zip(self.documents, scores, strict=False) if score > 0]
+        results = sorted(matches, key=lambda x: x[1], reverse=True)[:k]
 
         logger.info("BM25 search for '%s' returned %d results", query, len(results))
         return results

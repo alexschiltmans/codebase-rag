@@ -43,7 +43,7 @@ from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever as Bm25Index
 from codebase_rag.retrieval.bm25_search import load_bm25_corpus
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
-from codebase_rag.retrieval.vector_search import VectorRetriever
+from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -86,6 +86,12 @@ def load_testset() -> list[dict]:
 def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     """Build the requested retriever (vector-only, BM25-only, or hybrid).
 
+    The hybrid arm applies `VECTOR_SCORE_THRESHOLD` to its vector component,
+    matching the configuration `AppRuntime` ships — otherwise the ablation
+    would measure a retrieval setup no user actually runs. The vector-only
+    arm stays unthresholded on purpose: it isolates the embedding model's
+    raw ranking quality, independent of the production relevance cutoff.
+
     Args:
         retriever_type: One of "vector", "bm25", "hybrid".
         qdrant_store: The Qdrant store backing vector search.
@@ -93,9 +99,8 @@ def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     Returns:
         A retriever exposing a `search(query, k)` method.
     """
-    vector_retriever = VectorRetriever(qdrant_store)
     if retriever_type == "vector":
-        return vector_retriever
+        return VectorRetriever(qdrant_store)
 
     cache_dir = Path("data/cache")
     corpus = load_bm25_corpus(cache_dir / "bm25_corpus")
@@ -105,6 +110,7 @@ def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     if retriever_type == "bm25":
         return bm25_retriever
     if retriever_type == "hybrid":
+        vector_retriever = VectorRetriever(qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
         return HybridRetriever(vector_retriever, bm25_retriever)
     raise ValueError(f"Unknown retriever type: {retriever_type}")
 
@@ -146,7 +152,6 @@ def build_rag_chain(retriever_type: str = "hybrid") -> RAGChain:
         llm=llm,
         top_k=5,
         use_conversation_memory=False,
-        min_relevance_score=0.15,
     )
 
 
@@ -446,6 +451,13 @@ def generate_ablation_markdown(all_metrics: dict[str, dict]) -> str:
         "Same test set (`evals/testset.json`), same LLM, same top_k — only the retriever "
         "feeding the RAG chain changes. Full per-question detail for each configuration is "
         "in `results_<retriever>.md`.\n"
+    )
+    lines.append(
+        f"The hybrid arm applies the production cosine relevance cutoff "
+        f"(`VECTOR_SCORE_THRESHOLD={VECTOR_SCORE_THRESHOLD}`) to its vector component, matching "
+        "the app's shipped configuration. The vector-only arm is unthresholded to isolate raw "
+        "embedding ranking quality; BM25 scores are never thresholded (zero-overlap documents "
+        "are excluded by construction).\n"
     )
     lines.append("| Retriever | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
     lines.append("|-----------|----------------|-------------------|----------|--------|-------------|")
