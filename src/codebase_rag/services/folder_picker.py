@@ -39,6 +39,22 @@ class FolderPickResult:
     error: str | None = None
 
 
+def _normalize_dialog_path(raw: str) -> str:
+    """Trim a trailing separator without collapsing a root selection.
+
+    A bare ``rstrip("/\\\\")`` turns macOS's ``/`` into an empty string
+    (mistaken for a cancel) and Windows's ``C:\\`` into the drive-relative
+    ``C:`` (resolves to the process's cwd instead of the drive root).
+    """
+    path = raw.strip()
+    stripped = path.rstrip("/\\")
+    if not stripped:
+        return path[:1]  # "/" (or "\") selected: keep the root itself.
+    if len(stripped) == 2 and stripped[1] == ":":
+        return stripped + "\\"  # Windows drive root, e.g. "C:\\".
+    return stripped
+
+
 class FolderPicker:
     """Runs a single native folder-picker dialog per (per-session) request token.
 
@@ -65,14 +81,16 @@ class FolderPicker:
             self._token = token
             self._result = None
 
-        def _run() -> None:
-            path, error = _pick_folder_path()
-            with self._lock:
-                if self._token is token:
-                    self._result = FolderPickResult(path=path, error=error)
+            def _run() -> None:
+                path, error = _pick_folder_path()
+                with self._lock:
+                    if self._token is token:
+                        self._result = FolderPickResult(path=path, error=error)
 
-        self._thread = threading.Thread(target=_run, daemon=True)
-        self._thread.start()
+            thread = threading.Thread(target=_run, daemon=True)
+            self._thread = thread
+
+        thread.start()
         return token
 
     def is_open(self) -> bool:
@@ -139,7 +157,7 @@ def _pick_folder_path() -> tuple[str | None, str | None]:
         else:
             logger.warning("No folder dialog tool available (install zenity or kdialog)")
             return None, "No folder dialog tool available — install zenity or kdialog, or type a path instead."
-        path = result.stdout.strip().rstrip("/\\")
+        path = _normalize_dialog_path(result.stdout)
         if path:
             return path, None
         stderr = result.stderr.strip()

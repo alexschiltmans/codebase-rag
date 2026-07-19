@@ -9,7 +9,7 @@ from typing import Any
 
 import streamlit as st
 
-from codebase_rag.app.runtime import AppRuntime, get_repo_list
+from codebase_rag.app.runtime import AppRuntime, get_repo_list, list_chat_metadata
 from codebase_rag.app.state import SessionState
 from codebase_rag.database.chat_storage import get_chat_history_manager
 
@@ -181,18 +181,35 @@ def _display_local_folder_tab(runtime: AppRuntime, ingestion_running: bool) -> N
             st.session_state["folder_dialog_error"] = "A folder dialog is already open."
 
     if dialog_open:
-        st.caption("⏳ Folder dialog opened — waiting for your selection…")
+        _folder_dialog_wait_fragment(runtime)
 
     if st.session_state.get("folder_dialog_error"):
         st.error(st.session_state["folder_dialog_error"])
 
     st.caption("Or, if no native dialog is available (e.g. inside Docker), type a path directly:")
     typed_path = st.text_input("Folder path", key="typed_folder_path", label_visibility="collapsed")
-    if typed_path:
+    prev_typed = st.session_state.get("_prev_typed_folder_path", "")
+    if typed_path and typed_path != prev_typed:
         st.session_state.selected_folder = typed_path
+    st.session_state["_prev_typed_folder_path"] = typed_path
 
     if st.session_state.selected_folder:
         _display_selected_folder(runtime, ingestion_running)
+
+
+@st.fragment(run_every=1)
+def _folder_dialog_wait_fragment(runtime: AppRuntime) -> None:
+    """Poll the open native dialog while nothing else is driving a rerun.
+
+    Without this, a picked path only appears once the user happens to
+    interact with some other widget, since a background thread can't
+    trigger a Streamlit rerun on its own.
+    """
+    _poll_folder_dialog(runtime)
+    if runtime.folder_picker.is_open():
+        st.caption("⏳ Folder dialog opened — waiting for your selection…")
+    else:
+        st.rerun(scope="app")
 
 
 def _poll_folder_dialog(runtime: AppRuntime) -> None:
@@ -236,12 +253,17 @@ def _display_selected_folder(runtime: AppRuntime, ingestion_running: bool) -> No
 
 def _preview_local_folder(folder_path: Path) -> tuple[list[str], int]:
     """Return (and cache) the discovered dirs and file count for a folder,
-    so this isn't re-walked on every rerun while the expander is open."""
+    so this isn't re-walked on every rerun while the expander is open.
+
+    A zero-file result is never cached: it's cheap to recompute and caching
+    it would leave the Ingest button disabled forever if the user adds
+    files to the same folder without changing the path.
+    """
     from codebase_rag.data_ingestion.pipeline import count_ingestible_files
 
     cache_key = str(folder_path)
     cached = st.session_state.get("_folder_preview_cache")
-    if cached and cached.get("path") == cache_key:
+    if cached and cached.get("path") == cache_key and cached.get("count", 0) > 0:
         return cached["dirs"], cached["count"]
 
     included_dirs, file_count = count_ingestible_files(folder_path)
@@ -293,11 +315,8 @@ def _ordered_chats(state: SessionState) -> list[tuple[str, list[dict[str, Any]]]
     """Order sidebar chats by ``last_updated`` DESC, straight from storage
     metadata, instead of the old insertion-order-plus-reverse() scheme.
     """
-    try:
-        metadata = get_chat_history_manager().list_chat_histories()
-        order = [m["chat_id"] for m in metadata if m.get("chat_id") in state.chat_histories]
-    except (OSError, RuntimeError, ValueError):
-        order = []
+    metadata = list_chat_metadata()
+    order = [m["chat_id"] for m in metadata if m.get("chat_id") in state.chat_histories]
 
     ordered_ids = order + [cid for cid in state.chat_histories if cid not in order]
     return [(cid, state.chat_histories[cid]) for cid in ordered_ids]
@@ -327,5 +346,6 @@ def _delete_chat(state: SessionState, chat_id: str) -> None:
 
     try:
         get_chat_history_manager().delete_chat_history(chat_id)
+        list_chat_metadata.clear()  # type: ignore[attr-defined]
     except (OSError, RuntimeError, ValueError) as e:
         logger.error("Failed to delete chat from persistent storage: %s", e)

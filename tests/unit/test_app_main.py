@@ -56,14 +56,30 @@ class TestDisplayAutoIngestGate:
 
 
 class TestRestoreSavedChats:
+    @patch("codebase_rag.app.main.st")
     @patch("codebase_rag.app.main.get_chat_history_manager")
-    def test_skips_if_chats_already_loaded(self, mock_get_mgr: MagicMock) -> None:
+    def test_skips_if_already_restored_this_session(self, mock_get_mgr: MagicMock, mock_st: MagicMock) -> None:
         state = _new_state()
-        state.chat_histories["c1"] = []
+        mock_st.session_state = {"_chats_restored": True}
 
         _restore_saved_chats(state)
 
         mock_get_mgr.assert_not_called()
+
+    @patch("codebase_rag.app.main.st")
+    @patch("codebase_rag.app.main.get_chat_history_manager")
+    def test_runs_once_even_with_no_saved_chats(self, mock_get_mgr: MagicMock, mock_st: MagicMock) -> None:
+        """A user with zero saved chats must still only pay the storage
+        scan once per session, not on every rerun."""
+        mock_get_mgr.return_value.list_chat_histories.return_value = []
+        mock_st.session_state = {}
+        state = _new_state()
+
+        _restore_saved_chats(state)
+        _restore_saved_chats(state)
+
+        mock_get_mgr.assert_called_once()
+        assert mock_st.session_state["_chats_restored"] is True
 
     @patch("codebase_rag.app.main.st")
     @patch("codebase_rag.app.main.get_chat_history_manager")

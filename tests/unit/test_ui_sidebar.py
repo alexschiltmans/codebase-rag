@@ -53,11 +53,9 @@ class TestGetChatTitle:
 
 
 class TestOrderedChats:
-    @patch("codebase_rag.app.ui_sidebar.get_chat_history_manager")
-    def test_orders_by_storage_last_updated_desc(self, mock_get_mgr: MagicMock) -> None:
-        mock_mgr = MagicMock()
-        mock_mgr.list_chat_histories.return_value = [{"chat_id": "c2"}, {"chat_id": "c1"}]
-        mock_get_mgr.return_value = mock_mgr
+    @patch("codebase_rag.app.ui_sidebar.list_chat_metadata")
+    def test_orders_by_storage_last_updated_desc(self, mock_list_metadata: MagicMock) -> None:
+        mock_list_metadata.return_value = [{"chat_id": "c2"}, {"chat_id": "c1"}]
 
         state = _new_state()
         state.chat_histories["c1"] = [{"role": "user", "content": "old"}]
@@ -66,20 +64,18 @@ class TestOrderedChats:
         ordered = _ordered_chats(state)
         assert [chat_id for chat_id, _ in ordered] == ["c2", "c1"]
 
-    @patch("codebase_rag.app.ui_sidebar.get_chat_history_manager")
-    def test_falls_back_to_dict_order_on_storage_error(self, mock_get_mgr: MagicMock) -> None:
-        mock_get_mgr.side_effect = OSError("db error")
+    @patch("codebase_rag.app.ui_sidebar.list_chat_metadata")
+    def test_falls_back_to_dict_order_on_storage_error(self, mock_list_metadata: MagicMock) -> None:
+        mock_list_metadata.return_value = []
         state = _new_state()
         state.chat_histories["c1"] = []
 
         ordered = _ordered_chats(state)
         assert [chat_id for chat_id, _ in ordered] == ["c1"]
 
-    @patch("codebase_rag.app.ui_sidebar.get_chat_history_manager")
-    def test_new_in_session_chat_not_in_storage_still_appears(self, mock_get_mgr: MagicMock) -> None:
-        mock_mgr = MagicMock()
-        mock_mgr.list_chat_histories.return_value = [{"chat_id": "c1"}]
-        mock_get_mgr.return_value = mock_mgr
+    @patch("codebase_rag.app.ui_sidebar.list_chat_metadata")
+    def test_new_in_session_chat_not_in_storage_still_appears(self, mock_list_metadata: MagicMock) -> None:
+        mock_list_metadata.return_value = [{"chat_id": "c1"}]
 
         state = _new_state()
         state.chat_histories["c1"] = []

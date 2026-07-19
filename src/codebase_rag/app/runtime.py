@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import streamlit as st
 
@@ -73,18 +73,23 @@ class IngestionManager:
             try:
                 pipeline = IngestPipeline(repo_urls=[source], use_cache=False)
                 pipeline.run()
-                with self._lock:
-                    job.state = "succeeded"
-                    job.finished_at = time.time()
-                logger.info("Ingestion completed for %s", source)
-                if self._on_success:
-                    self._on_success(job)
             except Exception as exc:  # noqa: BLE001 - surfaced via IngestJob.error, not swallowed
                 logger.error("Ingestion error for %s: %s", source, exc)
                 with self._lock:
                     job.state = "failed"
                     job.error = str(exc)
                     job.finished_at = time.time()
+                return
+
+            with self._lock:
+                job.state = "succeeded"
+                job.finished_at = time.time()
+            logger.info("Ingestion completed for %s", source)
+            if self._on_success:
+                try:
+                    self._on_success(job)
+                except Exception as exc:  # noqa: BLE001 - a hook failure must not undo a real success
+                    logger.error("Post-ingest hook failed for %s: %s", source, exc)
 
         threading.Thread(target=_run, daemon=True).start()
         return True
@@ -143,6 +148,22 @@ def _warm_up_vector_store(vector_retriever: VectorRetriever) -> None:
         logger.warning("Vector store warm-up failed: %s", e)
 
 
+def _run_health_checks(llm: OllamaClient, vector_retriever: VectorRetriever) -> None:
+    """Best-effort connectivity checks, logged only. Run off the main
+    thread so a slow/unreachable Ollama never blocks the first render.
+    """
+    llm_status = llm.check_connection()
+    if llm_status["status"] != "connected":
+        logger.warning("LLM connection issue: %s", llm_status["message"])
+    model_status = llm.check_model_availability()
+    if model_status["status"] != "available":
+        logger.warning("Model availability issue: %s", model_status["message"])
+    _warm_up_vector_store(vector_retriever)
+
+
+MAX_CONVERSATION_HISTORY = 10
+
+
 class AppRuntime:
     """Process-wide resource root: one Qdrant client, one LLM client, one
     set of retrievers, and the ingestion manager, all sharing a single
@@ -179,14 +200,7 @@ class AppRuntime:
             max_tokens=1024,
             timeout=120,
         )
-        llm_status = self.llm.check_connection()
-        if llm_status["status"] != "connected":
-            logger.warning("LLM connection issue: %s", llm_status["message"])
-        model_status = self.llm.check_model_availability()
-        if model_status["status"] != "available":
-            logger.warning("Model availability issue: %s", model_status["message"])
-
-        _warm_up_vector_store(self.vector_retriever)
+        threading.Thread(target=_run_health_checks, args=(self.llm, self.vector_retriever), daemon=True).start()
 
         self.folder_picker = FolderPicker()
         self.ingestion = IngestionManager(on_success=self._on_ingest_success)
@@ -201,7 +215,10 @@ class AppRuntime:
         without needing a new retriever, LLM client, or Qdrant connection.
         """
         return RAGChain(
-            retriever=self.hybrid_retriever, llm=self.llm, use_conversation_memory=True, max_conversation_history=10
+            retriever=self.hybrid_retriever,
+            llm=self.llm,
+            use_conversation_memory=True,
+            max_conversation_history=MAX_CONVERSATION_HISTORY,
         )
 
     def swap_bm25(self, index: BM25Retriever) -> None:
@@ -272,4 +289,19 @@ def get_repo_list(_qdrant_store: QdrantStore) -> list[str]:
         return _qdrant_store.list_repos()
     except Exception as e:  # noqa: BLE001
         logger.warning("Could not connect to Qdrant: %s", e)
+        return []
+
+
+@st.cache_data(ttl=30)
+def list_chat_metadata() -> list[dict[str, Any]]:
+    """Cached chat-storage listing used for sidebar ordering: avoids a disk
+    scan on every rerun. Explicitly invalidated on save/delete via
+    ``list_chat_metadata.clear()``.
+    """
+    from codebase_rag.database.chat_storage import get_chat_history_manager
+
+    try:
+        return get_chat_history_manager().list_chat_histories()
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Could not list chat histories: %s", e)
         return []
