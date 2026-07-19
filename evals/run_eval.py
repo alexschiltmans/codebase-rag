@@ -6,10 +6,16 @@ Optionally logs scores to Langfuse.
 Usage:
     uv run python evals/run_eval.py
     uv run python evals/run_eval.py --langfuse  # also log to Langfuse
+
+    # By default RAGAS judges answers with the same model that generated them
+    # (self-judged, caveated in the reports). Pass a fixed, larger judge model
+    # via --judge-model or RAGAS_JUDGE_MODEL to avoid that:
+    uv run python evals/run_eval.py --judge-model qwen3-coder:30b
 """
 
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -46,6 +52,29 @@ EVALS_DIR = Path(__file__).parent
 TESTSET_PATH = EVALS_DIR / "testset.json"
 
 RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
+
+
+def resolve_judge_model_name(generation_model_name: str) -> str:
+    """Determine which model should judge the RAGAS metrics.
+
+    Judging your own outputs with the same (often small) model that generated
+    them adds self-preference bias and, for a 350M model, questionable
+    competence as a judge in the first place. Prefer a fixed, larger model via
+    `--judge-model <name>` or the `RAGAS_JUDGE_MODEL` env var. If neither is
+    set, falls back to the generation model — callers must caveat scores in
+    that case (see `is_self_judged` usage in `main()`).
+
+    Args:
+        generation_model_name: The model used to generate the answers being judged.
+    """
+    if "--judge-model" in sys.argv:
+        idx = sys.argv.index("--judge-model")
+        if idx + 1 < len(sys.argv):
+            return sys.argv[idx + 1]
+    env_judge_model = os.getenv("RAGAS_JUDGE_MODEL")
+    if env_judge_model:
+        return env_judge_model
+    return generation_model_name
 
 
 def load_testset() -> list[dict]:
@@ -202,17 +231,22 @@ def compute_custom_metrics(results: list[dict]) -> dict:
     }
 
 
-def run_ragas_evaluation(results: list[dict]) -> dict:
+def run_ragas_evaluation(results: list[dict], judge_model_name: str) -> dict:
     """Run ragas evaluation metrics on the results.
 
-    Uses the local Ollama LLM as the judge model via LangchainLLMWrapper.
-    Returns the ragas scores dict.
+    Args:
+        results: Output of `run_rag_on_testset`.
+        judge_model_name: Ollama model to use as the RAGAS judge. See
+            `resolve_judge_model_name` — this may or may not be the same
+            model that generated the answers being judged.
+
+    Returns:
+        The ragas scores dict.
     """
     config = Config.get_instance()
 
-    # Use local Ollama as judge LLM
     judge_llm = ChatOllama(
-        model=config.llm_model_name,
+        model=judge_model_name,
         base_url=config.ollama_base_url,
         temperature=0.0,
         timeout=300,
@@ -326,7 +360,13 @@ def log_to_langfuse(results: list[dict], custom_metrics: dict, ragas_scores: dic
         logger.warning("Failed to log to Langfuse: %s", e)
 
 
-def generate_results_markdown(results: list[dict], custom_metrics: dict, ragas_scores: dict) -> str:
+def generate_results_markdown(
+    results: list[dict],
+    custom_metrics: dict,
+    ragas_scores: dict,
+    judge_model_name: str,
+    is_self_judged: bool,
+) -> str:
     """Generate a markdown report from the evaluation results."""
     lines = ["# Evaluation Results\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
@@ -340,7 +380,15 @@ def generate_results_markdown(results: list[dict], custom_metrics: dict, ragas_s
         lines.append(f"| {k} | {v:.4f} |" if isinstance(v, float) else f"| {k} | {v} |")
 
     if ragas_scores and "ragas_error" not in ragas_scores:
-        lines.append("\n## RAGAS Scores\n")
+        lines.append(f"\n## RAGAS Scores (judge: `{judge_model_name}`)\n")
+        if is_self_judged:
+            lines.append(
+                "> ⚠️ **Self-judged.** No `--judge-model`/`RAGAS_JUDGE_MODEL` was set, so the "
+                f"same model that generated these answers (`{judge_model_name}`) also scored them. "
+                "This adds self-preference bias, and a model this size is a weak judge to begin "
+                "with — treat these numbers as indicative at best. The custom keyword recall / "
+                "source precision metrics above don't use an LLM judge and are more trustworthy.\n"
+            )
         lines.append("| Metric | Score |")
         lines.append("|--------|-------|")
         for k, v in ragas_scores.items():
@@ -423,6 +471,19 @@ def main() -> None:
     testset = load_testset()
     logger.info("Loaded %d test questions", len(testset))
 
+    config = Config.get_instance()
+    judge_model_name = resolve_judge_model_name(config.llm_model_name)
+    is_self_judged = judge_model_name == config.llm_model_name
+    if is_self_judged:
+        logger.warning(
+            "No --judge-model/RAGAS_JUDGE_MODEL set — RAGAS will judge '%s' with itself. "
+            "Scores will be marked self-judged in the reports; pass a fixed, larger judge "
+            "model to avoid self-preference bias.",
+            judge_model_name,
+        )
+    else:
+        logger.info("Using '%s' as a fixed RAGAS judge model", judge_model_name)
+
     all_custom_metrics: dict[str, dict] = {}
 
     for retriever_type in RETRIEVER_TYPES:
@@ -438,7 +499,7 @@ def main() -> None:
         all_custom_metrics[retriever_type] = custom_metrics
 
         logger.info("Running ragas evaluation...")
-        ragas_scores = run_ragas_evaluation(results)
+        ragas_scores = run_ragas_evaluation(results, judge_model_name)
 
         results_path = EVALS_DIR / f"results_{retriever_type}.json"
         with open(results_path, "w") as f:
@@ -448,6 +509,8 @@ def main() -> None:
                     "results": results,
                     "custom_metrics": custom_metrics,
                     "ragas_scores": ragas_scores,
+                    "ragas_judge_model": judge_model_name,
+                    "ragas_self_judged": is_self_judged,
                 },
                 f,
                 indent=2,
@@ -455,7 +518,7 @@ def main() -> None:
             )
         logger.info("Raw results saved to %s", results_path)
 
-        md = generate_results_markdown(results, custom_metrics, ragas_scores)
+        md = generate_results_markdown(results, custom_metrics, ragas_scores, judge_model_name, is_self_judged)
         md_path = EVALS_DIR / f"results_{retriever_type}.md"
         with open(md_path, "w") as f:
             f.write(md)
@@ -474,7 +537,9 @@ def main() -> None:
         print(f"Avg source precision: {custom_metrics['avg_source_precision']:.4f}")
         print(f"Avg latency:          {custom_metrics['avg_latency_s']:.1f}s")
         if ragas_scores and "ragas_error" not in ragas_scores:
-            print("\nRAGAS scores:")
+            print(f"\nRAGAS scores (judge: {judge_model_name}):")
+            if is_self_judged:
+                print("  WARNING: self-judged — same model generated and scored these answers.")
             for k, v in ragas_scores.items():
                 print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
         print("=" * 60)
