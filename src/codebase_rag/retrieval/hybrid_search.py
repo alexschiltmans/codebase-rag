@@ -78,51 +78,46 @@ class HybridRetriever:
         Returns:
             List of (document, score) tuples.
         """
-        try:
-            k_value = k if k is not None else self.top_k
+        k_value = k if k is not None else self.top_k
 
-            # Get vector search results (fetch extra for better reranking)
-            vector_results = self.vector_retriever.search(query, k=k_value * 2)
+        # Get vector search results (fetch extra for better reranking)
+        vector_results = self.vector_retriever.search(query, k=k_value * 2)
 
-            # Get BM25 search results (if BM25 retriever is available)
-            bm25_results = self.bm25_retriever.search(query, k=k_value * 2) if self.bm25_retriever else []
+        # Get BM25 search results (if BM25 retriever is available)
+        bm25_results = self.bm25_retriever.search(query, k=k_value * 2) if self.bm25_retriever else []
 
-            if not vector_results and not bm25_results:
-                logger.warning("No results from either vector or BM25 search")
-                return []
-
-            # Reciprocal Rank Fusion: each ranker contributes weight / (rrf_k + rank),
-            # using each list's own rank order rather than its raw score magnitude.
-            doc_to_score: dict[str, dict] = {}
-
-            def doc_id(doc: Document) -> str:
-                return str(doc.metadata.get("source", "")) + str(doc.metadata.get("chunk_index", ""))
-
-            for rank, (doc, _score) in enumerate(vector_results, start=1):
-                entry = doc_to_score.setdefault(doc_id(doc), {"doc": doc, "rrf_score": 0.0})
-                entry["rrf_score"] += self.vector_weight / (self.rrf_k + rank)
-
-            for rank, (doc, _score) in enumerate(bm25_results, start=1):
-                entry = doc_to_score.setdefault(doc_id(doc), {"doc": doc, "rrf_score": 0.0})
-                entry["rrf_score"] += self.bm25_weight / (self.rrf_k + rank)
-
-            # Rescale so a document ranked #1 by every available ranker scores 1.0.
-            max_possible_score = self.vector_weight / (self.rrf_k + 1)
-            if self.bm25_retriever:
-                max_possible_score += self.bm25_weight / (self.rrf_k + 1)
-
-            results = []
-            for entry in doc_to_score.values():
-                normalized_score = entry["rrf_score"] / max_possible_score if max_possible_score > 0 else 0.0
-                if normalized_score >= self.min_score_threshold:
-                    results.append((entry["doc"], normalized_score))
-
-            results.sort(key=lambda x: x[1], reverse=True)
-            return results[:k_value]
-
-        except Exception as e:
-            logger.error("Error in hybrid search: %s", str(e))
+        if not vector_results and not bm25_results:
+            logger.warning("No results from either vector or BM25 search")
             return []
+
+        # Reciprocal Rank Fusion: each ranker contributes weight / (rrf_k + rank),
+        # using each list's own rank order rather than its raw score magnitude.
+        doc_to_score: dict[str, dict] = {}
+
+        def doc_id(doc: Document) -> str:
+            return str(doc.metadata.get("source", "")) + str(doc.metadata.get("chunk_index", ""))
+
+        for rank, (doc, _score) in enumerate(vector_results, start=1):
+            entry = doc_to_score.setdefault(doc_id(doc), {"doc": doc, "rrf_score": 0.0})
+            entry["rrf_score"] += self.vector_weight / (self.rrf_k + rank)
+
+        for rank, (doc, _score) in enumerate(bm25_results, start=1):
+            entry = doc_to_score.setdefault(doc_id(doc), {"doc": doc, "rrf_score": 0.0})
+            entry["rrf_score"] += self.bm25_weight / (self.rrf_k + rank)
+
+        # Rescale so a document ranked #1 by every available ranker scores 1.0.
+        max_possible_score = self.vector_weight / (self.rrf_k + 1)
+        if self.bm25_retriever:
+            max_possible_score += self.bm25_weight / (self.rrf_k + 1)
+
+        results = []
+        for entry in doc_to_score.values():
+            normalized_score = entry["rrf_score"] / max_possible_score if max_possible_score > 0 else 0.0
+            if normalized_score >= self.min_score_threshold:
+                results.append((entry["doc"], normalized_score))
+
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:k_value]
 
     def get_relevant_documents(self, query: str) -> list[Document]:
         """Retrieve relevant documents using hybrid search.

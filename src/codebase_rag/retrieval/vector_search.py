@@ -51,15 +51,10 @@ class VectorRetriever:
         Returns:
             List of (document, score) tuples.
         """
-        try:
-            results = self.vector_store.similarity_search_with_score(query, k)
-            if not results:
-                logger.debug("Empty results from similarity_search_with_score")
-                return []
-            return results
-        except Exception as e:
-            logger.error("Error in vector search: %s", str(e))
-            return []
+        results = self.vector_store.similarity_search_with_score(query, k)
+        if not results:
+            logger.debug("Empty results from similarity_search_with_score")
+        return results
 
     def get_relevant_documents(self, query: str, **kwargs: Any) -> list[Document]:
         """Retrieve relevant documents using vector similarity.

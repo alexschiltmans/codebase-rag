@@ -133,14 +133,14 @@ class TestHybridRetrieverExtra:
 
         assert len(results) == 1
 
-    def test_search_error_returns_empty(self) -> None:
+    def test_search_error_propagates(self) -> None:
 
         mock_vector = MagicMock()
         mock_vector.search.side_effect = RuntimeError("error")
 
         retriever = HybridRetriever(vector_retriever=mock_vector)
-        results = retriever.search("test")
-        assert results == []
+        with pytest.raises(RuntimeError, match="error"):
+            retriever.search("test")
 
     def test_get_relevant_documents(self) -> None:
 
@@ -178,14 +178,14 @@ class TestVectorRetrieverExtra:
         results = retriever.search("query")
         assert results == []
 
-    def test_search_error_returns_empty(self) -> None:
+    def test_search_error_propagates(self) -> None:
 
         mock_store = MagicMock()
         mock_store.similarity_search_with_score.side_effect = RuntimeError("error")
 
         retriever = VectorRetriever(mock_store)
-        results = retriever.search("query")
-        assert results == []
+        with pytest.raises(RuntimeError, match="error"):
+            retriever.search("query")
 
     def test_get_relevant_documents(self) -> None:
 
