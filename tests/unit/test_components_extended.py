@@ -175,6 +175,29 @@ class TestGetAutoIngestionStatus:
             comp._ingestion_status.update(original_status)
             comp._auto_ingest_error = original_error
 
+    def test_manual_ingestion_does_not_report_as_auto_running(self) -> None:
+        """A manual ingest occupying the shared status slot must not make
+        the chat interface think auto-ingestion (and its first-boot banner)
+        is still in progress."""
+
+        original_attempted = comp._auto_ingest_attempted
+        original_status = dict(comp._ingestion_status)
+        original_error = comp._auto_ingest_error
+
+        comp._auto_ingest_attempted = True
+        comp._ingestion_status.clear()
+        comp._ingestion_status.update(running=True, repo="manual-repo", kind="manual")
+        comp._auto_ingest_error = None
+
+        try:
+            result = comp.get_auto_ingestion_status()
+            assert result == {"running": False}
+        finally:
+            comp._auto_ingest_attempted = original_attempted
+            comp._ingestion_status.clear()
+            comp._ingestion_status.update(original_status)
+            comp._auto_ingest_error = original_error
+
     def test_returns_error_when_present(self) -> None:
 
         original_attempted = comp._auto_ingest_attempted
@@ -279,7 +302,7 @@ class TestCheckAndStartAutoIngestion:
 
         try:
             comp.check_and_start_auto_ingestion()
-            mock_ingest.assert_called_once_with("https://github.com/test/repo")
+            mock_ingest.assert_called_once_with("https://github.com/test/repo", kind="auto")
         finally:
             comp._auto_ingest_attempted = original
 
@@ -612,6 +635,30 @@ class TestDeleteChat:
         _delete_chat("c1")
 
 
+class TestPreviewLocalFolder:
+    """Tests for _preview_local_folder."""
+
+    def test_computes_and_caches_result(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("print('hi')")
+
+        session_state: dict = {}
+        with patch("codebase_rag.app.components.st") as mock_st:
+            mock_st.session_state = session_state
+
+            dirs, count = comp._preview_local_folder(tmp_path)
+            assert count == 1
+            assert "src" in dirs
+            assert session_state["_folder_preview_cache"]["path"] == str(tmp_path)
+
+            # Second call for the same path should hit the cache instead of
+            # re-walking the filesystem.
+            with patch("codebase_rag.data_ingestion.pipeline.count_ingestible_files") as mock_count:
+                dirs2, count2 = comp._preview_local_folder(tmp_path)
+                mock_count.assert_not_called()
+                assert (dirs2, count2) == (dirs, count)
+
+
 class TestGetQdrantStore:
     """Tests for _get_qdrant_store."""
 
@@ -639,12 +686,30 @@ class TestRunIngestion:
     def test_starts_thread(self, mock_st: MagicMock, mock_threading: MagicMock) -> None:
 
         original = dict(comp._ingestion_status)
+        comp._ingestion_status.clear()
         try:
             comp._run_ingestion("https://github.com/test/repo")
 
             mock_threading.Thread.assert_called_once()
             mock_threading.Thread.return_value.start.assert_called_once()
             assert comp._ingestion_status["running"] is True
+            assert comp._ingestion_status["kind"] == "manual"
+        finally:
+            comp._ingestion_status.clear()
+            comp._ingestion_status.update(original)
+
+    @patch("codebase_rag.app.components.threading")
+    @patch("codebase_rag.app.components.st")
+    def test_refuses_to_start_when_already_running(self, mock_st: MagicMock, mock_threading: MagicMock) -> None:
+
+        original = dict(comp._ingestion_status)
+        comp._ingestion_status.clear()
+        comp._ingestion_status.update(running=True, repo="already-running-repo", kind="manual")
+        try:
+            comp._run_ingestion("https://github.com/test/other-repo")
+
+            mock_threading.Thread.assert_not_called()
+            assert comp._ingestion_status["repo"] == "already-running-repo"
         finally:
             comp._ingestion_status.clear()
             comp._ingestion_status.update(original)

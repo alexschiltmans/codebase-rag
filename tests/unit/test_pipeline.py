@@ -13,12 +13,61 @@ from langchain_core.documents import Document
 
 from codebase_rag.data_ingestion.pipeline import (
     IngestPipeline,
+    count_ingestible_files,
+    discover_included_dirs,
     display_progress,
     load_documents_cache,
     save_documents_cache,
     setup_logging,
 )
 from codebase_rag.retrieval.bm25_search import BM25Retriever
+
+
+class TestDiscoverIncludedDirs:
+    """Tests for discover_included_dirs."""
+
+    def test_skips_default_excluded_dirs(self, tmp_path: Path) -> None:
+        for name in ["src", "node_modules", "venv", "dist", "docs"]:
+            (tmp_path / name).mkdir()
+
+        result = discover_included_dirs(tmp_path, fallback=["docs", "src", "tests"])
+
+        assert set(result) == {"src", "docs"}
+
+    def test_skips_hidden_dirs(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / ".git").mkdir()
+
+        result = discover_included_dirs(tmp_path, fallback=[])
+
+        assert result == ["src"]
+
+    def test_returns_fallback_when_path_missing(self, tmp_path: Path) -> None:
+        missing = tmp_path / "does-not-exist"
+
+        result = discover_included_dirs(missing, fallback=["docs", "src", "tests"])
+
+        assert result == ["docs", "src", "tests"]
+
+
+class TestCountIngestibleFiles:
+    """Tests for count_ingestible_files."""
+
+    def test_counts_files_excluding_denylisted_dirs(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("print('hi')")
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "node_modules" / "pkg.js").write_text("module.exports = {}")
+
+        included_dirs, count = count_ingestible_files(tmp_path)
+
+        assert "node_modules" not in included_dirs
+        assert count == 1
+
+    def test_zero_files_for_empty_folder(self, tmp_path: Path) -> None:
+        included_dirs, count = count_ingestible_files(tmp_path)
+
+        assert count == 0
 
 
 class TestSetupLogging:

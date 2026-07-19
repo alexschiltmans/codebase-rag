@@ -244,11 +244,17 @@ def _get_qdrant_store() -> QdrantStore:
 
 
 def get_auto_ingestion_status() -> dict[str, object] | None:
-    """Return the current auto-ingestion status, or None if not applicable."""
+    """Return the current auto-ingestion status, or None if not applicable.
+
+    ``_ingestion_status`` is shared with manual ingestion, so a status
+    whose ``kind`` isn't ``"auto"`` describes a manual run in progress —
+    from this function's perspective that means auto-ingestion itself
+    isn't running, even though the shared dict is currently occupied.
+    """
     if not _auto_ingest_attempted:
         return None
     status = _get_ingestion_status()
-    result = status if status else {"running": False}
+    result = status if status and status.get("kind") == "auto" else {"running": False}
     if _auto_ingest_error:
         result["error"] = _auto_ingest_error
     return result
@@ -282,22 +288,41 @@ def check_and_start_auto_ingestion() -> None:
 
     _auto_ingest_attempted = True
     logger.info("No data found. Auto-ingesting default repo: %s", default_repo)
-    _run_ingestion(default_repo)
+    _run_ingestion(default_repo, kind="auto")
 
 
-def _run_ingestion(repo_url: str) -> None:
+def _start_ingestion_status(repo_url: str, kind: str) -> bool:
+    """Atomically claim the shared ingestion-status slot for a new run.
+
+    Returns False without changing anything if an ingestion is already
+    running, so callers can refuse to start a second, overlapping
+    ``IngestPipeline`` (which would race on the BM25 pickle/JSON cache
+    and interleave Qdrant writes).
+    """
+    with _ingestion_lock:
+        if _ingestion_status.get("running"):
+            return False
+        _ingestion_status.clear()
+        _ingestion_status.update(running=True, repo=repo_url, error=None, start_time=time.time(), kind=kind)
+        return True
+
+
+def _run_ingestion(repo_url: str, kind: str = "manual") -> None:
     """Run the ingestion pipeline for a repository in a background thread.
 
     Runs the ``IngestPipeline`` directly in a daemon thread so
     Streamlit's UI loop is not blocked. Progress is tracked via
-    ``_ingestion_status``.
+    ``_ingestion_status``, tagged with ``kind`` ("auto" or "manual") so
+    ``get_auto_ingestion_status()`` can tell the two apart. Refuses to
+    start if another ingestion is already running.
     """
     from codebase_rag.data_ingestion.pipeline import IngestPipeline  # Avoid circular import
 
-    logger.info("Starting ingestion for %s", repo_url)
+    if not _start_ingestion_status(repo_url, kind):
+        logger.warning("Ingestion already in progress; ignoring request to ingest %s", repo_url)
+        return
 
-    # Track status in module-level dict (threads can't write st.session_state)
-    _set_ingestion_status(running=True, repo=repo_url, error=None, start_time=time.time())
+    logger.info("Starting ingestion for %s", repo_url)
 
     def _run() -> None:
         global _auto_ingest_error  # noqa: PLW0603
@@ -309,7 +334,8 @@ def _run_ingestion(repo_url: str) -> None:
         except Exception as exc:
             logger.error("Ingestion error for %s: %s", repo_url, exc)
             _set_ingestion_status(running=False, error=str(exc))
-            _auto_ingest_error = str(exc)
+            if kind == "auto":
+                _auto_ingest_error = str(exc)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -355,7 +381,7 @@ def _display_github_tab(ingestion_running: bool) -> None:
     )
     if st.button("Ingest", key="btn_ingest_repo", disabled=bool(not new_repo_url or ingestion_running)):
         if new_repo_url and new_repo_url.startswith("https://github.com/"):
-            _run_ingestion(new_repo_url)
+            _run_ingestion(new_repo_url, kind="manual")
             st.rerun()
         elif new_repo_url:
             st.error("Please enter a valid GitHub URL")
@@ -377,14 +403,46 @@ def _display_local_folder_tab(ingestion_running: bool) -> None:
 
     if st.session_state.selected_folder:
         st.markdown(f"📂 `{st.session_state.selected_folder}`")
+        folder_path = Path(st.session_state.selected_folder).resolve()
+        if folder_path.is_dir():
+            included_dirs, file_count = _preview_local_folder(folder_path)
+            if file_count == 0:
+                st.warning(
+                    "No ingestible files found in this folder "
+                    "(after skipping node_modules, venv, dist, and similar directories)."
+                )
+            else:
+                dirs_label = ", ".join(included_dirs) if included_dirs else "(root)"
+                st.caption(f"📄 {file_count} file(s) found in: {dirs_label}")
+
         if st.button("Ingest", key="btn_ingest_local", disabled=ingestion_running):
-            resolved = Path(st.session_state.selected_folder).resolve()
-            if resolved.is_dir():
+            if folder_path.is_dir():
                 st.session_state.selected_folder = ""
-                _run_ingestion(str(resolved))
+                st.session_state.pop("_folder_preview_cache", None)
+                _run_ingestion(str(folder_path), kind="manual")
                 st.rerun()
             else:
                 st.error("Directory does not exist")
+
+
+def _preview_local_folder(folder_path: Path) -> tuple[list[str], int]:
+    """Return (and cache) the discovered dirs and file count for a folder.
+
+    Recomputing this on every 5-second fragment refresh would mean
+    re-walking the filesystem repeatedly while the user just sits on the
+    "Add Repository" expander, so the result is cached in session state
+    until the selected folder changes.
+    """
+    from codebase_rag.data_ingestion.pipeline import count_ingestible_files  # Avoid circular import
+
+    cache_key = str(folder_path)
+    cached = st.session_state.get("_folder_preview_cache")
+    if cached and cached.get("path") == cache_key:
+        return cached["dirs"], cached["count"]
+
+    included_dirs, file_count = count_ingestible_files(folder_path)
+    st.session_state["_folder_preview_cache"] = {"path": cache_key, "dirs": included_dirs, "count": file_count}
+    return included_dirs, file_count
 
 
 def _open_folder_dialog() -> None:
