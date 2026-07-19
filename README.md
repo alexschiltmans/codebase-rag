@@ -29,7 +29,7 @@
 ## Features
 
 **Retrieval Design**
-- **Hybrid search.** Weighted combination of vector similarity (0.7) and BM25 keyword search (0.3), with score normalization and re-ranking.
+- **Hybrid search.** Vector similarity and BM25 results merged with Reciprocal Rank Fusion (weighted 0.7/0.3), so ranking depends on each retriever's rank order rather than raw score magnitudes.
 - **Language-aware chunking.** Naively splitting code by token count breaks at arbitrary lines, destroying context. Python-specific and Markdown-aware splitting preserves logical code units (functions, classes, sections).
 - **Source citations.** Every answer includes the source files and repositories it drew from, so answers are verifiable.
 
