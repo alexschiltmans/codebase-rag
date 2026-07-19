@@ -1,114 +1,165 @@
 """End-to-end tests for the Streamlit application.
 
-Note: These tests don't actually run the Streamlit server but test the
-application code that would be executed by Streamlit.
+These run the real `app/main.py` script headlessly through
+``streamlit.testing.v1.AppTest``, with only the external services (Qdrant,
+Ollama, the RAG chain) mocked out. Unlike calling individual functions
+directly, this exercises the session-state and rerun state machine that
+Streamlit actually drives: a stuck "thinking" flag, a banner that vanishes
+before a fragment tick finishes, chat state left inconsistent by a partial
+reset. Bugs at that layer don't show up in a plain function call test.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import streamlit as st
+from streamlit.testing.v1 import AppTest
 
-from codebase_rag.app.main import initialize_app_components, process_user_query
+import codebase_rag.app.components as comp
 
-
-@pytest.mark.e2e
-@patch("codebase_rag.database.qdrant_store.QdrantStore")
-@patch("codebase_rag.llm.ollama_client.OllamaClient")
-def test_app_initialization(
-    mock_ollama_client,
-    mock_qdrant_store,
-) -> None:
-    """Test the app initialization components."""
-    mock_qdrant_instance = MagicMock()
-    mock_qdrant_store.return_value = mock_qdrant_instance
-    mock_qdrant_instance.collection_exists.return_value = True
-
-    mock_client = MagicMock()
-    mock_ollama_client.return_value = mock_client
-    mock_client.check_connection.return_value = {
-        "status": "connected",
-        "message": "Connected to Ollama",
-    }
-    mock_client.check_model_availability.return_value = {
-        "status": "available",
-        "message": "Model is available",
-    }
-
-    # Mock the RAG chain creation to return a valid object directly
-    with patch("codebase_rag.llm.rag_chain.RAGChain") as mock_rag_chain_class:
-        mock_rag_chain = MagicMock()
-        mock_rag_chain_class.return_value = mock_rag_chain
-
-        # Mock other dependencies
-        with (
-            patch("codebase_rag.retrieval.hybrid_search.HybridRetriever"),
-            patch("codebase_rag.retrieval.vector_search.VectorRetriever"),
-            patch("codebase_rag.retrieval.bm25_search.BM25Retriever"),
-            patch("codebase_rag.app.main.BM25Retriever.load_json"),
-        ):
-            try:
-                components = initialize_app_components()
-                assert isinstance(components, dict)
-            except Exception as e:
-                # For now, just verify the function exists and is callable
-                # Real testing would require full infrastructure
-                assert callable(initialize_app_components), f"initialize_app_components should be callable: {e}"
+APP_PATH = str(Path(__file__).parent.parent.parent / "src" / "codebase_rag" / "app" / "main.py")
 
 
-@pytest.mark.e2e
-def test_rag_chain_access() -> None:
-    """Test that RAG chain is accessible through initialize_app_components."""
+@pytest.fixture
+def mocked_rag_chain():
+    """Patch Qdrant, Ollama, and the RAG chain so `main.py` runs offline.
 
-    assert callable(initialize_app_components)
+    `initialize_app_components` is cached with `st.cache_resource`, so the
+    cache is cleared before and after each test to stop one test's mocks
+    leaking into the next.
+    """
+    st.cache_resource.clear()
 
-    with (
-        patch("codebase_rag.app.main.initialize_vector_store") as mock_init_vs,
-        patch("codebase_rag.app.main.load_or_create_bm25_retriever") as mock_bm25,
-        patch("codebase_rag.app.main.initialize_llm") as mock_init_llm,
-        patch("codebase_rag.app.main.warm_up_vector_store"),
-        patch("codebase_rag.app.main.VectorRetriever"),
-        patch("codebase_rag.app.main.HybridRetriever"),
-        patch("codebase_rag.app.main.RAGChain") as mock_rag_chain_cls,
-    ):
-        mock_init_vs.return_value = MagicMock()
-        mock_bm25.return_value = MagicMock()
-        mock_init_llm.return_value = MagicMock()
-        mock_rag_chain = MagicMock()
-        mock_rag_chain_cls.return_value = mock_rag_chain
+    mock_qdrant = MagicMock()
+    mock_qdrant.collection_exists.return_value = True
 
-        components = initialize_app_components.__wrapped__()
-        assert "rag_chain" in components
-        assert components["rag_chain"] is mock_rag_chain
-
-
-@pytest.mark.e2e
-def test_query_processing() -> None:
-    """Test the query processing flow."""
-
-    assert callable(process_user_query)
+    mock_llm = MagicMock()
+    mock_llm.check_connection.return_value = {"status": "connected", "message": "ok"}
+    mock_llm.check_model_availability.return_value = {"status": "available", "message": "ok"}
 
     mock_rag_chain = MagicMock()
-    mock_rag_chain.last_result = {
-        "answer": "This tool can be used by importing the package...",
-        "sources": [{"id": "1", "file_path": "docs/api.md", "file_name": "api.md"}],
-    }
-
-    mock_session = MagicMock()
-    mock_session.initialized = True
-    mock_session.components = {"rag_chain": mock_rag_chain}
-    mock_session.messages = []
-    mock_session.processing_query = False
-    mock_session.thinking = False
-    mock_session.query_to_process = None
+    mock_rag_chain.stream.return_value = iter(["Hello", " world"])
+    mock_rag_chain.last_result = {"answer": "Hello world", "sources": []}
 
     with (
-        patch("codebase_rag.app.main.st") as mock_st,
-        patch("codebase_rag.app.main.add_message") as mock_add_message,
+        patch("codebase_rag.database.qdrant_store.QdrantStore", return_value=mock_qdrant),
+        patch("codebase_rag.llm.ollama_client.OllamaClient", return_value=mock_llm),
+        patch("codebase_rag.llm.rag_chain.RAGChain", return_value=mock_rag_chain),
     ):
-        mock_st.session_state = mock_session
-        mock_st.write_stream.return_value = "This tool can be used by importing the package..."
+        yield mock_rag_chain
 
-        process_user_query("How do I use this codebase?")
+    st.cache_resource.clear()
 
-        mock_rag_chain.stream.assert_called_once_with("How do I use this codebase?")
-        mock_add_message.assert_called()
+
+@pytest.fixture(autouse=True)
+def _reset_ingestion_status():
+    """Ingestion status is a module-level dict shared across the process;
+    make sure one test's leftovers can't leak into the next."""
+    original = dict(comp._ingestion_status)
+    comp._ingestion_status.clear()
+    yield
+    comp._ingestion_status.clear()
+    comp._ingestion_status.update(original)
+
+
+@pytest.mark.e2e
+def test_app_initializes_and_shows_chat_input(mocked_rag_chain: MagicMock) -> None:
+    """A healthy backend should initialize successfully and unlock chat input."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    assert not at.exception
+    assert at.session_state["initialized"] is True
+    assert len(at.chat_input) == 1
+    assert not at.chat_input[0].disabled
+
+
+@pytest.mark.e2e
+def test_submitting_a_question_streams_answer_and_resets_thinking(mocked_rag_chain: MagicMock) -> None:
+    """Submitting a question should stream the answer and leave the
+    thinking/query_to_process flags clean, ready for the next question."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    at.chat_input[0].set_value("How do I use this codebase?").run()
+
+    mocked_rag_chain.stream.assert_called_once_with("How do I use this codebase?")
+    assert at.session_state["thinking"] is False
+    assert at.session_state["query_to_process"] is None
+    assert not at.exception
+    assert any("Hello world" in msg["content"] for msg in at.session_state["messages"])
+
+
+@pytest.mark.e2e
+def test_stream_error_resets_thinking_instead_of_looping(mocked_rag_chain: MagicMock) -> None:
+    """Regression test for FE-1: a failure while streaming the answer (e.g.
+    Ollama becoming unreachable mid-query) must not leave `thinking=True`
+    with the query still queued, which previously caused the same failing
+    query to re-run forever on every subsequent rerun."""
+    mocked_rag_chain.stream.side_effect = RuntimeError("backend unreachable")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+    at.chat_input[0].set_value("this will fail").run()
+
+    assert at.session_state["thinking"] is False
+    assert at.session_state["query_to_process"] is None
+    assert any("encountered an error" in msg["content"] for msg in at.session_state["messages"])
+
+    # A further, unrelated rerun must not re-attempt the failed query.
+    mocked_rag_chain.stream.reset_mock(side_effect=True)
+    at.run()
+    mocked_rag_chain.stream.assert_not_called()
+
+
+@pytest.mark.e2e
+def test_ingestion_error_banner_persists_until_dismissed(mocked_rag_chain: MagicMock) -> None:
+    """Regression test for FE-5: an ingestion failure banner used to be
+    wiped from state the instant it was shown, so it vanished on the very
+    next 5-second sidebar fragment tick. It should now survive repeated
+    reruns until the user explicitly dismisses it."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    comp._ingestion_status.update(running=False, error="disk full")
+    at.run()  # simulates the sidebar fragment's first auto-refresh tick
+
+    def sidebar_text() -> str:
+        return " ".join(e.value for e in at.sidebar.error) + " ".join(e.value for e in at.sidebar.success)
+
+    assert "disk full" in sidebar_text()
+
+    at.run()  # a second tick, the old code cleared state on the first tick
+    assert "disk full" in sidebar_text()
+
+    dismiss_buttons = [b for b in at.sidebar.button if b.key == "btn_dismiss_ingestion_outcome"]
+    assert dismiss_buttons, "expected a dismiss button once the outcome banner is showing"
+    dismiss_buttons[0].click().run()
+
+    assert "disk full" not in sidebar_text()
+
+
+@pytest.mark.e2e
+def test_invalid_github_url_error_persists_until_dismissed(mocked_rag_chain: MagicMock) -> None:
+    """The "Please enter a valid GitHub URL" validation message should also
+    survive a fragment tick instead of disappearing within seconds."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "new_repo_url"]
+    assert text_inputs
+    text_inputs[0].set_value("not-a-github-url").run()
+
+    ingest_buttons = [b for b in at.sidebar.button if b.key == "btn_ingest_repo"]
+    assert ingest_buttons
+    ingest_buttons[0].click().run()
+
+    def sidebar_text() -> str:
+        return " ".join(e.value for e in at.sidebar.error)
+
+    assert "valid GitHub URL" in sidebar_text()
+
+    at.run()  # another tick — the message must still be there
+    assert "valid GitHub URL" in sidebar_text()
