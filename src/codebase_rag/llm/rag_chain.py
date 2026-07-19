@@ -6,6 +6,7 @@ language model generation to produce answers grounded in a knowledge base.
 
 import logging
 import time
+from collections.abc import Iterator
 from typing import Any
 
 from langchain_core.documents import Document
@@ -82,6 +83,10 @@ class RAGChain:
         self.conversation_history: list[dict[str, Any]] = []
         self.max_conversation_history = max_conversation_history
         self.min_relevance_score = min_relevance_score
+        # Populated by stream() once its generator is fully consumed, since
+        # st.write_stream() only returns the concatenated text — callers that
+        # need sources/metrics read them from here afterward.
+        self.last_result: dict[str, Any] | None = None
 
         if prompt_template is None:
             self.prompt_template = (
@@ -167,6 +172,98 @@ class RAGChain:
         except Exception as e:
             logger.error("Error running RAG chain: %s", e)
             raise
+
+    def stream(self, query: str, **kwargs: Any) -> Iterator[str]:
+        """Run the RAG chain on the given query, streaming the answer as it's generated.
+
+        Retrieval happens synchronously first (same as `run()`), then generation is
+        yielded chunk by chunk. Once the generator is fully consumed, `self.last_result`
+        holds the same dict shape `run()` returns — callers that need sources or
+        metrics (rather than just the displayed text) should read it from there
+        afterward, since a generator can't both yield text and return a value.
+
+        Args:
+            query: The user query.
+            **kwargs: Additional parameters for retrieval or generation.
+
+        Yields:
+            Successive text chunks of the generated answer.
+        """
+        langfuse = _get_langfuse()
+        trace = langfuse.trace(name="rag-chain", input={"query": query}) if langfuse else None
+
+        try:
+            start_time = time.time()
+
+            if self.use_conversation_memory:
+                self.add_user_message(query)
+
+            # Retrieve relevant documents
+            top_k = kwargs.get("top_k", self.top_k)
+            retrieval_span = trace.span(name="retrieval", input={"query": query, "top_k": top_k}) if trace else None
+            documents = self._retrieve_documents(query, top_k)
+            retrieval_time = time.time() - start_time
+            logger.debug("Retrieved %d documents in %.2f seconds", len(documents), retrieval_time)
+
+            if retrieval_span:
+                retrieval_span.end(output={"documents_retrieved": len(documents), "retrieval_time": retrieval_time})
+
+            if not documents:
+                self.last_result = self._empty_retrieval_result(start_time, retrieval_time, trace)
+                yield str(self.last_result["answer"])
+                return
+
+            context = self._create_context(documents)
+            prompt = self._create_prompt(query, context)
+
+            generation_span = trace.span(name="generation", input={"prompt_length": len(prompt)}) if trace else None
+            generation_start = time.time()
+
+            chunks: list[str] = []
+            for chunk in self._stream_llm(prompt):
+                chunks.append(chunk)
+                yield chunk
+            answer = "".join(chunks)
+
+            generation_time = time.time() - generation_start
+            logger.debug("Generated answer in %.2f seconds", generation_time)
+
+            if generation_span:
+                generation_span.end(output={"answer_length": len(answer), "generation_time": generation_time})
+
+            sources = self._format_sources(documents)
+
+            if self.use_conversation_memory:
+                self.add_assistant_message(answer, sources)
+
+            total_time = time.time() - start_time
+            logger.info("RAG chain (streamed) completed in %.2f seconds", total_time)
+
+            result: dict[str, Any] = {
+                "answer": answer,
+                "sources": sources,
+                "documents": documents,
+                "prompt": prompt,
+                "metrics": {
+                    "total_time": total_time,
+                    "retrieval_time": retrieval_time,
+                    "generation_time": generation_time,
+                    "documents_retrieved": len(documents),
+                },
+            }
+            if trace:
+                trace.update(output=result)
+            self.last_result = result
+        except Exception as e:
+            logger.error("Error streaming RAG chain: %s", e)
+            raise
+
+    def _stream_llm(self, prompt: str) -> Iterator[str]:
+        """Stream text chunks from the LLM, falling back to one chunk if it can't stream."""
+        if hasattr(self.llm, "stream"):
+            yield from self.llm.stream(prompt)
+        else:
+            yield self.llm.invoke(prompt)
 
     def _retrieve_documents(self, query: str, top_k: int) -> list[Document]:
         """Retrieve and filter relevant documents for a query."""

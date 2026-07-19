@@ -302,9 +302,10 @@ class TestRunRagQuery:
             {"role": "assistant", "content": "prev a", "sources": []},
             {"role": "user", "content": "current q"},
         ]
+        mock_st.write_stream.return_value = "The answer is 42"
 
         mock_chain = MagicMock()
-        mock_chain.run.return_value = {
+        mock_chain.last_result = {
             "answer": "The answer is 42",
             "sources": [{"id": "1", "file_path": "a.py", "file_name": "a.py"}],
         }
@@ -313,8 +314,10 @@ class TestRunRagQuery:
 
         mock_chain.add_user_message.assert_called()
         mock_chain.add_assistant_message.assert_called()
+        mock_chain.stream.assert_called_once_with("current q")
         mock_add.assert_called_once()
         assert mock_add.call_args[0][1] == "The answer is 42"
+        assert mock_add.call_args[0][2] == [{"id": "1", "file_path": "a.py", "file_name": "a.py"}]
 
     @patch("codebase_rag.app.main.add_message")
     @patch("codebase_rag.app.main.st")
@@ -322,9 +325,12 @@ class TestRunRagQuery:
 
         mock_st.session_state = MagicMock()
         mock_st.session_state.messages = []
+        mock_st.write_stream.side_effect = RuntimeError("LLM error")
+        # A real chat_message context manager doesn't suppress exceptions raised
+        # inside it; MagicMock's default __exit__ is truthy and would, so pin it.
+        mock_st.chat_message.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_chain = MagicMock()
-        mock_chain.run.side_effect = RuntimeError("LLM error")
 
         _run_rag_query(mock_chain, "query")
 

@@ -232,11 +232,11 @@ def _get_rag_chain() -> Any:
 
 
 def _run_rag_query(rag_chain: Any, query: str) -> None:
-    """Execute a query against the RAG chain and add the response."""
+    """Execute a query against the RAG chain, streaming the response into the chat."""
     if hasattr(st.session_state, "messages") and st.session_state.messages:
         rag_chain.conversation_history = []
         # Exclude the last message (the current user query) because
-        # rag_chain.run() will add it via add_user_message.
+        # rag_chain.stream() will add it via add_user_message.
         history_messages = st.session_state.messages[:-1]
         for msg in history_messages:
             if msg["role"] == "user":
@@ -245,8 +245,12 @@ def _run_rag_query(rag_chain: Any, query: str) -> None:
                 rag_chain.add_assistant_message(msg["content"], msg.get("sources"))
 
     try:
-        response = rag_chain.run(query)
-        add_message("assistant", response["answer"], response["sources"])
+        with st.chat_message("assistant"):
+            answer = st.write_stream(rag_chain.stream(query))
+        if not isinstance(answer, str):
+            answer = "".join(str(part) for part in answer)
+        sources = (rag_chain.last_result or {}).get("sources", [])
+        add_message("assistant", answer, sources)
     except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
         logger.error("Error generating response: %s", e)
         add_message("assistant", f"I encountered an error while processing your question: {e}")
@@ -357,9 +361,11 @@ def _display_chat_interface() -> None:
     display_chat_history()
 
     if st.session_state.thinking and st.session_state.query_to_process:
-        with st.chat_message("assistant"), st.spinner("Thinking..."):
-            process_user_query(st.session_state.query_to_process)
-            st.rerun()
+        # process_user_query() renders the assistant's chat bubble itself (via
+        # _run_rag_query streaming the answer with st.write_stream), so no
+        # spinner/chat_message wrapper is needed here.
+        process_user_query(st.session_state.query_to_process)
+        st.rerun()
 
     if prompt := st.chat_input("Ask about your codebase"):
         add_message("user", prompt)

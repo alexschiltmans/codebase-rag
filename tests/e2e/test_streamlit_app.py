@@ -88,7 +88,7 @@ def test_query_processing() -> None:
     assert callable(process_user_query)
 
     mock_rag_chain = MagicMock()
-    mock_rag_chain.run.return_value = {
+    mock_rag_chain.last_result = {
         "answer": "This tool can be used by importing the package...",
         "sources": [{"id": "1", "file_path": "docs/api.md", "file_name": "api.md"}],
     }
@@ -106,8 +106,9 @@ def test_query_processing() -> None:
         patch("codebase_rag.app.main.add_message") as mock_add_message,
     ):
         mock_st.session_state = mock_session
+        mock_st.write_stream.return_value = "This tool can be used by importing the package..."
 
         process_user_query("How do I use this codebase?")
 
-        mock_rag_chain.run.assert_called_once_with("How do I use this codebase?")
+        mock_rag_chain.stream.assert_called_once_with("How do I use this codebase?")
         mock_add_message.assert_called()
