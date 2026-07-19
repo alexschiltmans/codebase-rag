@@ -22,6 +22,62 @@ from codebase_rag.retrieval.bm25_search import BM25Retriever, rebuild_bm25_index
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
 from codebase_rag.retrieval.vector_search import VectorRetriever
 
+# Top-level directory names skipped during auto-discovery (see
+# discover_included_dirs). These are dependency/build/cache directories
+# that are large, low-signal for retrieval, and never meant to be
+# hand-authored — picking a folder that contains one by accident (e.g. a
+# JS project's node_modules) shouldn't silently embed it.
+DEFAULT_EXCLUDED_DIRS = frozenset(
+    {
+        "node_modules",
+        "venv",
+        ".venv",
+        "env",
+        "dist",
+        "build",
+        "target",
+        "__pycache__",
+        "vendor",
+        "bin",
+        "obj",
+        ".tox",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "site-packages",
+        "egg-info",
+    }
+)
+
+
+def discover_included_dirs(local_path: Path, fallback: list[str]) -> list[str]:
+    """Auto-discover top-level directories to scan for a repo.
+
+    Returns every non-hidden top-level directory on disk except those in
+    ``DEFAULT_EXCLUDED_DIRS``, or ``fallback`` if ``local_path`` doesn't
+    exist yet.
+    """
+    if not local_path.is_dir():
+        return fallback
+    return [
+        d.name
+        for d in local_path.iterdir()
+        if d.is_dir() and not d.name.startswith(".") and d.name not in DEFAULT_EXCLUDED_DIRS
+    ]
+
+
+def count_ingestible_files(local_path: Path) -> tuple[list[str], int]:
+    """Preview how many files a local-folder ingest would pick up.
+
+    Runs the same directory discovery and file collection the pipeline
+    itself uses, without cloning or chunking anything, so the UI can show
+    a "N files found" confirmation before a background ingest starts.
+    """
+    included_dirs = discover_included_dirs(local_path, ["docs", "src", "tests"])
+    loader = GitLoader(repo_url=None, local_path=local_path)
+    file_paths = loader.get_file_paths(included_dirs=included_dirs, included_files=["README.md", "pyproject.toml"])
+    return included_dirs, len(file_paths)
+
 
 def setup_logging(log_level: str = "INFO") -> logging.Logger:
     """Set up logging configuration.
@@ -262,15 +318,15 @@ class IngestPipeline:
 
         If the caller explicitly requested a fixed set of directories, honor
         it. Otherwise auto-discover every non-hidden top-level directory on
-        disk, so cloned GitHub repos get the same treatment as local-folder
-        ingestion instead of being limited to docs/src/tests (which yields a
-        near-empty index for repos that don't follow that layout).
+        disk (skipping common dependency/build directories, see
+        ``DEFAULT_EXCLUDED_DIRS``), so cloned GitHub repos get the same
+        treatment as local-folder ingestion instead of being limited to
+        docs/src/tests (which yields a near-empty index for repos that
+        don't follow that layout).
         """
         if self._explicit_included_dirs is not None:
             return self._explicit_included_dirs
-        if not local_path.is_dir():
-            return self.included_dirs
-        return [d.name for d in local_path.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        return discover_included_dirs(local_path, self.included_dirs)
 
     def _resolve_repo_source(self, repo_url: str) -> tuple[str, Path, GitLoader, bool]:
         """Determine repo name, local path, and GitLoader for a source."""
