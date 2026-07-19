@@ -103,6 +103,15 @@ See the [setup guide](docs/getting-started.md) for Docker and local installation
 
 All settings are configured via environment variables or `.env`. See the full [configuration reference](docs/configuration.md).
 
+## HTTP API
+
+`make api` starts a FastAPI server (`uvicorn`) alongside Streamlit, giving coding agents (Copilot, Claude Code, OpenCode, Cursor, aider) direct, token-budgeted access to the retrieval stack instead of falling back to grep/whole-file reads. It binds to `127.0.0.1` by default (`API_HOST`/`API_PORT`) — **exposing it beyond localhost requires adding authentication first; there is none today.**
+
+- `POST /search` — `{"query": str, "k": int, "repo": str | null, "token_budget": int, "format": "json" | "compact"}`. Ranks chunks with the hybrid retriever, drops overlapping chunks from the same file, and stops once the combined token estimate would exceed `token_budget` (default 2000). Each result has `path`, `start_line`, `end_line`, `score`, `snippet`, `token_estimate`. `format=compact` returns plain text (`path:start-end (score)` + snippet) instead of a JSON envelope.
+- `POST /answer` — `{"question": str, "stream": bool}`. Runs the full RAG chain and returns `answer` plus `sources` (file path + line range). `stream: true` returns Server-Sent Events (`event: token`, then a final `event: done` carrying `sources`).
+- `GET /repos` — ingested repositories with freshness metadata (last-ingest time, and the indexed HEAD SHA for git-backed repos).
+- `POST /ingest` — `{"source": str}`, accepting a git URL or a local filesystem path. Local paths are ingested from the working tree in place, without cloning. Re-ingesting diffs files by content hash so only changed files re-embed; unchanged chunks are left untouched. Returns a job status immediately (`202`); a second ingest while one is running gets `409`. Poll `GET /ingest/status` for completion.
+
 ## Development
 
 The `Makefile` is the primary development interface. Run `make help` for the full list.
