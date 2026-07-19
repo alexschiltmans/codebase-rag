@@ -214,7 +214,7 @@ class QdrantStore:
             return doc_score_pairs
         except Exception as e:
             logger.error("Error during similarity search: %s", e)
-            return []
+            raise RuntimeError(f"Vector search failed: {e}") from e
 
     def collection_exists(self) -> bool:
         """Check if the collection exists in Qdrant.

@@ -373,8 +373,8 @@ class TestQdrantStore:
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
-        results = store.similarity_search_with_score("query")
-        assert results == []
+        with pytest.raises(RuntimeError, match="Vector search failed"):
+            store.similarity_search_with_score("query")
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
