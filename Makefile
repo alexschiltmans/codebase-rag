@@ -92,6 +92,10 @@ setup: venv pre-commit-install ## Initial dev setup: venv + .env file + pre-comm
 app: venv ## Start the Streamlit app
 	$(STREAMLIT) run src/codebase_rag/app/main.py
 
+.PHONY: api
+api: venv ## Start the retrieval HTTP API (localhost only by default)
+	$(PYTHON) -m codebase_rag.api
+
 .PHONY: ingest
 ingest: venv ## Run data ingestion (use REPO= to specify a repo URL)
 ifdef REPO

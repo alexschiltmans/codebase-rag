@@ -43,6 +43,10 @@ class Config:
     # Application settings
     log_level: str = "INFO"
 
+    # HTTP API settings
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+
     # Langfuse tracing settings
     langfuse_enabled: bool = False
     langfuse_public_key: str = ""
@@ -75,6 +79,8 @@ class Config:
                 embedding_model=os.getenv("EMBEDDING_MODEL", cls.embedding_model),
                 default_repo_url=os.getenv("DEFAULT_REPO_URL", cls.default_repo_url),
                 log_level=os.getenv("LOG_LEVEL", cls.log_level),
+                api_host=os.getenv("API_HOST", cls.api_host),
+                api_port=int(os.getenv("API_PORT", str(cls.api_port))),
                 langfuse_enabled=os.getenv("LANGFUSE_ENABLED", "false").lower() == "true",
                 langfuse_public_key=os.getenv("LANGFUSE_PUBLIC_KEY", cls.langfuse_public_key),
                 langfuse_secret_key=os.getenv("LANGFUSE_SECRET_KEY", cls.langfuse_secret_key),

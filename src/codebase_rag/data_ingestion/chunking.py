@@ -45,12 +45,14 @@ class DocumentChunker:
             language=Language.PYTHON,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            add_start_index=True,
         )
 
         self.markdown_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             separators=["\n## ", "\n### ", "\n#### ", "\n##### ", "\n###### ", "\n", " ", ""],
+            add_start_index=True,
         )
 
         self.markdown_header_splitter = MarkdownHeaderTextSplitter(
@@ -68,6 +70,7 @@ class DocumentChunker:
         self.default_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            add_start_index=True,
         )
 
     def _determine_strategy(self, file_path: Path) -> ChunkingStrategy:
@@ -113,9 +116,37 @@ class DocumentChunker:
             chunk.metadata["chunk_index"] = i
             chunk.metadata["chunk_count"] = len(chunks)
             chunk.metadata["content_hash"] = hashlib.sha256(chunk.page_content.encode("utf-8")).hexdigest()
+            start_line, end_line = self._line_range(content, chunk)
+            chunk.metadata["start_line"] = start_line
+            chunk.metadata["end_line"] = end_line
 
         logger.debug("Split document into %d chunks", len(chunks))
         return chunks
+
+    @staticmethod
+    def _line_range(content: str, chunk: Document) -> tuple[int, int]:
+        """Compute a chunk's 1-indexed line range within the original document.
+
+        Uses the splitter's ``start_index`` metadata when available (accurate
+        for single-pass splitting); falls back to locating the chunk text
+        directly in ``content`` for two-pass markdown splitting, where
+        ``start_index`` is only relative to the header-split slice.
+        """
+        start_index = chunk.metadata.get("start_index")
+        if not isinstance(start_index, int):
+            start_index = content.find(chunk.page_content)
+        if start_index < 0:
+            # MarkdownHeaderTextSplitter strips per-line whitespace, so a chunk
+            # containing indented lines won't appear verbatim in the original.
+            # Its first line (usually the section header) is unindented and
+            # still locates the chunk.
+            first_line = chunk.page_content.split("\n", 1)[0].strip()
+            start_index = content.find(first_line) if first_line else -1
+        start_index = max(start_index, 0)
+
+        start_line = content.count("\n", 0, start_index) + 1
+        end_line = start_line + chunk.page_content.count("\n")
+        return start_line, end_line
 
     def _chunk_markdown(self, content: str, metadata: dict[str, Any]) -> list[Document]:
         """Split markdown content using header-aware chunking."""
@@ -130,6 +161,12 @@ class DocumentChunker:
 
             if len(doc.page_content) > self.chunk_size:
                 sub_chunks = self.markdown_splitter.create_documents([doc.page_content], [doc_metadata])
+                for sub_chunk in sub_chunks:
+                    # start_index here is relative to doc.page_content (the header-split
+                    # slice), not the original content, so it would compute wrong line
+                    # numbers if left in place. Drop it and let _line_range fall back
+                    # to locating the chunk text directly in the original content.
+                    sub_chunk.metadata.pop("start_index", None)
                 chunks.extend(sub_chunks)
             else:
                 chunks.append(Document(page_content=doc.page_content, metadata=doc_metadata))
