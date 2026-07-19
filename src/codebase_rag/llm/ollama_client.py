@@ -1,6 +1,7 @@
 """Ollama LLM client using LangChain's ChatOllama."""
 
 import logging
+from collections.abc import Iterator
 from typing import Any
 
 import requests
@@ -59,6 +60,21 @@ class OllamaClient:
         text = str(message.content)
         logger.debug("Received response of length %d", len(text))
         return text
+
+    def stream(self, prompt: str, **kwargs: Any) -> Iterator[str]:
+        """Stream a response for the given prompt as it's generated.
+
+        Args:
+            prompt: The text prompt to send to the model.
+
+        Yields:
+            Successive text chunks of the generated response.
+        """
+        logger.debug("Streaming from Ollama with prompt length %d", len(prompt))
+        for chunk in self._llm.stream(prompt, **kwargs):
+            text = str(chunk.content)
+            if text:
+                yield text
 
     def check_connection(self) -> dict[str, Any]:
         """Check the connection to the Ollama service."""
