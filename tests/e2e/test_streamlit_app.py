@@ -54,13 +54,20 @@ def mocked_rag_chain():
 
 @pytest.fixture(autouse=True)
 def _reset_ingestion_status():
-    """Ingestion status is a module-level dict shared across the process;
-    make sure one test's leftovers can't leak into the next."""
+    """Ingestion status and the folder-dialog result are module-level
+    state shared across the process; make sure one test's leftovers
+    can't leak into the next."""
     original = dict(comp._ingestion_status)
     comp._ingestion_status.clear()
+    with comp._folder_dialog_lock:
+        comp._folder_dialog_result.clear()
+    comp._folder_dialog_thread = None
     yield
     comp._ingestion_status.clear()
     comp._ingestion_status.update(original)
+    with comp._folder_dialog_lock:
+        comp._folder_dialog_result.clear()
+    comp._folder_dialog_thread = None
 
 
 @pytest.mark.e2e
@@ -163,3 +170,65 @@ def test_invalid_github_url_error_persists_until_dismissed(mocked_rag_chain: Mag
 
     at.run()  # another tick — the message must still be there
     assert "valid GitHub URL" in sidebar_text()
+
+
+def _click_browse(at: AppTest) -> None:
+    browse_buttons = [b for b in at.sidebar.button if b.key == "btn_browse_folder"]
+    assert browse_buttons, "expected a Browse… button in the Local Folder tab"
+    browse_buttons[0].click().run()
+    # The dialog runs in a background thread; wait for it to deliver its
+    # result before simulating the next fragment tick.
+    assert comp._folder_dialog_thread is not None
+    comp._folder_dialog_thread.join(timeout=5)
+
+
+@pytest.mark.e2e
+def test_browse_button_shows_picked_folder(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """The full Browse loop: click → dialog thread → result dict → poll on
+    the next fragment tick → selected path rendered with an Ingest button."""
+    (tmp_path / "main.py").write_text("print('hi')")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    with patch.object(comp, "_pick_folder_path", return_value=(str(tmp_path), None)):
+        _click_browse(at)
+
+    at.run()  # next fragment tick picks the result out of the shared dict
+
+    assert at.session_state["selected_folder"] == str(tmp_path)
+    sidebar_md = " ".join(m.value for m in at.sidebar.markdown)
+    assert str(tmp_path) in sidebar_md
+    assert [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+
+@pytest.mark.e2e
+def test_browse_cancel_shows_nothing(mocked_rag_chain: MagicMock) -> None:
+    """Cancelling the dialog should leave the tab unchanged — no path, no
+    error banner."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    with patch.object(comp, "_pick_folder_path", return_value=(None, None)):
+        _click_browse(at)
+
+    at.run()
+
+    assert at.session_state["selected_folder"] == ""
+    assert not [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+
+@pytest.mark.e2e
+def test_browse_failure_surfaces_error(mocked_rag_chain: MagicMock) -> None:
+    """A real dialog failure (e.g. missing Automation permission) must be
+    shown in the sidebar instead of only being logged on the server."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    with patch.object(comp, "_pick_folder_path", return_value=(None, "Folder dialog failed: boom")):
+        _click_browse(at)
+
+    at.run()
+
+    sidebar_errors = " ".join(e.value for e in at.sidebar.error)
+    assert "boom" in sidebar_errors
