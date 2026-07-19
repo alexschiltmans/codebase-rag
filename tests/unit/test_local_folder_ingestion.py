@@ -94,7 +94,7 @@ class TestPipelineResolveRepoSource:
 
 
 class TestOpenFolderDialog:
-    """Tests for _open_folder_dialog."""
+    """Tests for _pick_folder_path and _open_folder_dialog."""
 
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
@@ -102,13 +102,19 @@ class TestOpenFolderDialog:
         from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "darwin"
-        mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="/Users/test/project/\n")
+        mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="/Users/test/project/\n", stderr="")
 
         result = _pick_folder_path()
 
-        assert result == "/Users/test/project"
+        assert result == ("/Users/test/project", None)
         mock_run.assert_called_once()
-        assert "osascript" in mock_run.call_args[0][0][0]
+        cmd = mock_run.call_args[0][0]
+        assert "osascript" in cmd[0]
+        # The dialog must run via an activated System Events, otherwise it
+        # opens unfocused behind the browser (or on another Space entirely).
+        script = cmd[2]
+        assert "System Events" in script
+        assert "activate" in script
 
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
@@ -116,11 +122,13 @@ class TestOpenFolderDialog:
         from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "win32"
-        mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="C:\\Users\\test\\project\\\n")
+        mock_run.return_value = CompletedProcess(
+            args=[], returncode=0, stdout="C:\\Users\\test\\project\\\n", stderr=""
+        )
 
         result = _pick_folder_path()
 
-        assert result == "C:\\Users\\test\\project"
+        assert result == ("C:\\Users\\test\\project", None)
         mock_run.assert_called_once()
         assert "powershell" in mock_run.call_args[0][0][0]
 
@@ -131,42 +139,116 @@ class TestOpenFolderDialog:
         from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "linux"
-        mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="/home/test/project\n")
+        mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="/home/test/project\n", stderr="")
 
         result = _pick_folder_path()
 
-        assert result == "/home/test/project"
+        assert result == ("/home/test/project", None)
 
     @patch("codebase_rag.app.components.subprocess.run")
     @patch("codebase_rag.app.components.sys")
-    def test_dialog_returns_none_on_cancel(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
-        from codebase_rag.app.components import _open_folder_dialog
+    def test_cancel_returns_no_path_and_no_error(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
+        from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "darwin"
-        mock_run.return_value = CompletedProcess(args=[], returncode=1, stdout="")
+        mock_run.return_value = CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="execution error: User cancelled. (-128)"
+        )
 
-        result = _open_folder_dialog()
+        assert _pick_folder_path() == (None, None)
 
-        assert result is None
+    @patch("codebase_rag.app.components.subprocess.run")
+    @patch("codebase_rag.app.components.sys")
+    def test_automation_denial_surfaces_permission_hint(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
+        from codebase_rag.app.components import _pick_folder_path
+
+        mock_sys.platform = "darwin"
+        mock_run.return_value = CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="execution error: Not authorized to send Apple events to System Events. (-1743)",
+        )
+
+        path, error = _pick_folder_path()
+
+        assert path is None
+        assert error is not None
+        assert "Automation" in error
 
     @patch("codebase_rag.app.components.subprocess.run", side_effect=OSError("no such command"))
     @patch("codebase_rag.app.components.sys")
-    def test_dialog_returns_none_on_error(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
-        from codebase_rag.app.components import _open_folder_dialog
+    def test_oserror_surfaces_error_message(self, mock_sys: MagicMock, mock_run: MagicMock) -> None:
+        from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "darwin"
 
-        result = _open_folder_dialog()
+        path, error = _pick_folder_path()
 
-        assert result is None
+        assert path is None
+        assert error is not None
+        assert "no such command" in error
 
     @patch("codebase_rag.app.components.shutil.which", return_value=None)
     @patch("codebase_rag.app.components.sys")
     def test_linux_no_dialog_tool(self, mock_sys: MagicMock, mock_which: MagicMock) -> None:
-        from codebase_rag.app.components import _open_folder_dialog
+        from codebase_rag.app.components import _pick_folder_path
 
         mock_sys.platform = "linux"
 
-        result = _open_folder_dialog()
+        path, error = _pick_folder_path()
 
-        assert result is None
+        assert path is None
+        assert error is not None
+        assert "zenity" in error
+
+    def test_open_folder_dialog_does_not_stack_dialogs(self) -> None:
+        """A second Browse click while a dialog is open must not spawn a
+        second dialog whose result would overwrite the first."""
+        import threading
+
+        import codebase_rag.app.components as comp
+
+        release = threading.Event()
+        calls: list[int] = []
+
+        def slow_pick() -> tuple[str | None, str | None]:
+            calls.append(1)
+            release.wait(timeout=5)
+            return None, None
+
+        original_thread = comp._folder_dialog_thread
+        comp._folder_dialog_thread = None
+        try:
+            with patch.object(comp, "_pick_folder_path", side_effect=slow_pick):
+                comp._open_folder_dialog()
+                first_thread = comp._folder_dialog_thread
+                comp._open_folder_dialog()
+                assert comp._folder_dialog_thread is first_thread
+                release.set()
+                assert first_thread is not None
+                first_thread.join(timeout=5)
+            assert calls == [1]
+        finally:
+            comp._folder_dialog_thread = original_thread
+
+    def test_dialog_result_delivers_path(self) -> None:
+        """The background thread's selection must land in the shared result
+        dict that the sidebar fragment polls."""
+        import codebase_rag.app.components as comp
+
+        original_thread = comp._folder_dialog_thread
+        comp._folder_dialog_thread = None
+        try:
+            with comp._folder_dialog_lock:
+                comp._folder_dialog_result.clear()
+            with patch.object(comp, "_pick_folder_path", return_value=("/Users/test/project", None)):
+                comp._open_folder_dialog()
+                assert comp._folder_dialog_thread is not None
+                comp._folder_dialog_thread.join(timeout=5)
+            with comp._folder_dialog_lock:
+                assert comp._folder_dialog_result.get("path") == "/Users/test/project"
+        finally:
+            with comp._folder_dialog_lock:
+                comp._folder_dialog_result.clear()
+            comp._folder_dialog_thread = original_thread

@@ -30,6 +30,10 @@ _ingestion_lock = threading.Lock()
 # fragment refresh so the UI never blocks.
 _folder_dialog_result: dict[str, object] = {}
 _folder_dialog_lock = threading.Lock()
+# The currently running dialog thread, if any — checked so repeated
+# "Browse…" clicks don't stack native dialogs whose results would
+# overwrite each other.
+_folder_dialog_thread: threading.Thread | None = None
 
 # Tracks whether auto-ingestion of the default repo has already been
 # attempted in this process lifetime (prevents re-triggering).
@@ -401,12 +405,24 @@ def _display_local_folder_tab(ingestion_running: bool) -> None:
 
     # Poll for a result from the background folder-dialog thread.
     with _folder_dialog_lock:
-        if _folder_dialog_result.get("path"):
-            st.session_state.selected_folder = _folder_dialog_result["path"]
-            _folder_dialog_result.clear()
+        dialog_result = dict(_folder_dialog_result)
+        _folder_dialog_result.clear()
+    if dialog_result.get("path"):
+        st.session_state.selected_folder = dialog_result["path"]
+        st.session_state.pop("folder_dialog_error", None)
+    elif dialog_result.get("error"):
+        st.session_state["folder_dialog_error"] = dialog_result["error"]
 
-    if st.button("Browse…", key="btn_browse_folder", disabled=ingestion_running):
+    dialog_open = _folder_dialog_thread is not None and _folder_dialog_thread.is_alive()
+    if st.button("Browse…", key="btn_browse_folder", disabled=ingestion_running or dialog_open):
+        st.session_state.pop("folder_dialog_error", None)
         _open_folder_dialog()
+
+    if _folder_dialog_thread is not None and _folder_dialog_thread.is_alive():
+        st.caption("⏳ Folder dialog opened — waiting for your selection…")
+
+    if st.session_state.get("folder_dialog_error"):
+        st.error(st.session_state["folder_dialog_error"])
 
     if st.session_state.selected_folder:
         st.markdown(f"📂 `{st.session_state.selected_folder}`")
@@ -457,27 +473,55 @@ def _open_folder_dialog() -> None:
 
     The dialog runs in a separate thread so Streamlit's main thread
     never blocks. The result is written to ``_folder_dialog_result`` and
-    picked up by the main thread on the next fragment refresh.
+    picked up by the main thread on the next fragment refresh. If a
+    dialog is already open, this is a no-op instead of stacking a second
+    one on top of it.
     """
+    global _folder_dialog_thread
+    if _folder_dialog_thread is not None and _folder_dialog_thread.is_alive():
+        return
 
     def _run_dialog() -> None:
-        path = _pick_folder_path()
+        path, error = _pick_folder_path()
         with _folder_dialog_lock:
-            _folder_dialog_result["path"] = path
+            _folder_dialog_result.clear()
+            if path:
+                _folder_dialog_result["path"] = path
+            elif error:
+                _folder_dialog_result["error"] = error
 
-    thread = threading.Thread(target=_run_dialog, daemon=True)
-    thread.start()
+    _folder_dialog_thread = threading.Thread(target=_run_dialog, daemon=True)
+    _folder_dialog_thread.start()
 
 
-def _pick_folder_path() -> str | None:
-    """Return the path selected by the user, or None on failure/cancel."""
+# A bare `choose folder` run from osascript belongs to a faceless
+# background process: the panel opens without keyboard focus, never
+# raises above the browser, and with a fullscreen browser it lands on a
+# different Space entirely — the click looks like a no-op. Routing it
+# through System Events and activating first makes the dialog take
+# focus and switch to the user's Space. First use prompts once for
+# Automation permission (osascript → System Events).
+_MACOS_CHOOSE_FOLDER_SCRIPT = (
+    'tell application "System Events"\n'
+    "activate\n"
+    'return POSIX path of (choose folder with prompt "Select a codebase folder")\n'
+    "end tell"
+)
+
+
+def _pick_folder_path() -> tuple[str | None, str | None]:
+    """Show the native folder picker and return ``(path, error)``.
+
+    ``(path, None)`` on selection, ``(None, None)`` on cancel/timeout,
+    and ``(None, message)`` for real failures the user should see.
+    """
     try:
         if sys.platform == "darwin":
-            result = subprocess.run(
-                ["osascript", "-e", 'POSIX path of (choose folder with prompt "Select a codebase folder")'],  # noqa: S607
+            result = subprocess.run(  # noqa: S603
+                ["osascript", "-e", _MACOS_CHOOSE_FOLDER_SCRIPT],  # noqa: S607
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=300,
                 check=False,
             )
         elif sys.platform == "win32":
@@ -512,12 +556,27 @@ def _pick_folder_path() -> str | None:
             )
         else:
             logger.warning("No folder dialog tool available (install zenity or kdialog)")
-            return None
+            return None, "No folder dialog tool available — install zenity or kdialog."
         path = result.stdout.strip().rstrip("/\\")
-        return path if path else None
-    except (subprocess.TimeoutExpired, OSError) as exc:
+        if path:
+            return path, None
+        stderr = result.stderr.strip()
+        if result.returncode == 0 or not stderr or "cancel" in stderr.lower():
+            return None, None
+        logger.warning("Folder dialog failed: %s", stderr)
+        if "-1743" in stderr or "Not authorized" in stderr:
+            return None, (
+                "The folder dialog needs Automation permission: allow your "
+                "terminal to control System Events under System Settings → "
+                "Privacy & Security → Automation, then try again."
+            )
+        return None, f"Folder dialog failed: {stderr}"
+    except subprocess.TimeoutExpired:
+        logger.warning("Folder dialog timed out waiting for a selection")
+        return None, None
+    except OSError as exc:
         logger.warning("Folder dialog failed: %s", exc)
-        return None
+        return None, f"Folder dialog failed: {exc}"
 
 
 def _display_ingestion_status() -> None:
