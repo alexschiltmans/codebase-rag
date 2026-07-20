@@ -104,8 +104,8 @@ endif
 PYTEST_COV := --cov=src/codebase_rag --cov-report=term --cov-report=xml:coverage.xml
 
 .PHONY: test
-test: venv ## Run unit + integration + e2e tests with coverage
-	$(PYTEST) tests/unit/ tests/integration/ -m "not performance and not evaluation" $(PYTEST_COV)
+test: venv ## Run unit + integration + e2e tests (needs make services-start)
+	$(PYTEST) tests/unit/ tests/integration/ tests/e2e/ -m "not performance and not evaluation" $(PYTEST_COV)
 
 .PHONY: test-unit
 test-unit: venv ## Run unit tests only
@@ -140,17 +140,31 @@ lint: venv ## Run ruff linter
 format: venv ## Auto-format with ruff
 	$(PYTHON) -m ruff format src/ tests/ scripts/
 
+.PHONY: format-check
+format-check: venv ## Check formatting without rewriting files (matches CI)
+	$(PYTHON) -m ruff format --check src/ tests/ scripts/
+
 .PHONY: typecheck
 typecheck: venv ## Run mypy
 	$(PYTHON) -m mypy src/
 
 .PHONY: check
-check: lint typecheck test-unit ## Run lint, typecheck, and unit tests
+check: lint format-check typecheck test-unit ## Fast gate: lint, format, types, unit tests
+
+# The gate to run before review, commit, and push. Covers every tier that
+# works without live services, so it is safe to run anywhere and in a hook.
+.PHONY: verify
+verify: lint format-check typecheck ## Full offline gate: check + performance/evaluation tiers + OpenSpec validation
+	$(PYTEST) tests/unit/ tests/performance/ tests/evaluation/ $(PYTEST_COV)
+	openspec validate --changes
+	openspec validate --specs
 
 # ── Pre-commit ───────────────────────────────────────────────────────────────
 .PHONY: pre-commit-install
-pre-commit-install: venv ## Install pre-commit hooks
+pre-commit-install: venv ## Install pre-commit hooks (commit, commit-msg, pre-push)
 	$(VENV)/bin/pre-commit install
+	$(VENV)/bin/pre-commit install --hook-type commit-msg
+	$(VENV)/bin/pre-commit install --hook-type pre-push
 
 .PHONY: pre-commit-run
 pre-commit-run: venv ## Run all pre-commit hooks on all files
