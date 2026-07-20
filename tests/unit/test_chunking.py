@@ -1,5 +1,6 @@
 """Unit tests for data_ingestion/chunking.py."""
 
+import json
 from pathlib import Path
 
 from codebase_rag.data_ingestion.chunking import ChunkingStrategy, DocumentChunker
@@ -12,9 +13,9 @@ class TestDetermineStrategy:
         chunker = DocumentChunker()
         assert chunker._determine_strategy(Path("foo.py")) == ChunkingStrategy.CODE
 
-    def test_notebook_file_is_code(self) -> None:
+    def test_notebook_file_is_notebook(self) -> None:
         chunker = DocumentChunker()
-        assert chunker._determine_strategy(Path("notebook.ipynb")) == ChunkingStrategy.CODE
+        assert chunker._determine_strategy(Path("notebook.ipynb")) == ChunkingStrategy.NOTEBOOK
 
     def test_markdown_file_is_markdown(self) -> None:
         chunker = DocumentChunker()
@@ -100,3 +101,107 @@ class TestProcessFile:
         chunks = chunker.process_file(missing_path)
 
         assert chunks == []
+
+
+class TestProcessNotebookFile:
+    """Tests for DocumentChunker.process_file with .ipynb notebooks."""
+
+    NOTEBOOK_JSON = json.dumps(
+        {
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["def foo():\n", "    return 1\n"],
+                    "outputs": [],
+                    "execution_count": 1,
+                },
+                {
+                    "cell_type": "markdown",
+                    "source": "# Notebook Title\n\nSome explanation.",
+                },
+                {
+                    "cell_type": "code",
+                    "source": "plt.imshow(data)",
+                    "outputs": [
+                        {
+                            "output_type": "display_data",
+                            "data": {"image/png": "iVBORw0KGgoAAAANSUhEUgAAAAUA/////wAAAP///w=="},
+                        }
+                    ],
+                    "execution_count": 2,
+                },
+            ]
+        }
+    )
+
+    def test_mixed_notebook_splits_code_and_markdown(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "example.ipynb"
+        file_path.write_text(self.NOTEBOOK_JSON, encoding="utf-8")
+
+        chunker = DocumentChunker()
+        chunks = chunker.process_file(file_path)
+
+        code_chunks = [c for c in chunks if c.metadata["notebook_cell_type"] == "code"]
+        markdown_chunks = [c for c in chunks if c.metadata["notebook_cell_type"] == "markdown"]
+
+        assert code_chunks
+        assert markdown_chunks
+        assert any("def foo" in c.page_content for c in code_chunks)
+        assert any("plt.imshow" in c.page_content for c in code_chunks)
+        assert any("Notebook Title" in c.page_content for c in markdown_chunks)
+
+        for chunk in chunks:
+            assert "iVBORw0KGgo" not in chunk.page_content
+            assert '"cell_type"' not in chunk.page_content
+            assert '"execution_count"' not in chunk.page_content
+
+    def test_notebook_chunks_keep_chunk_document_metadata(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "example.ipynb"
+        file_path.write_text(self.NOTEBOOK_JSON, encoding="utf-8")
+
+        chunker = DocumentChunker()
+        chunks = chunker.process_file(file_path)
+
+        assert chunks
+        for chunk in chunks:
+            assert "chunk_index" in chunk.metadata
+            assert "chunk_count" in chunk.metadata
+            assert "content_hash" in chunk.metadata
+
+    def test_broken_notebook_json_returns_empty_list(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "broken.ipynb"
+        file_path.write_text("{not valid json", encoding="utf-8")
+
+        chunker = DocumentChunker()
+        chunks = chunker.process_file(file_path)
+
+        assert chunks == []
+
+    def test_notebook_missing_cells_key_returns_empty_list(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "no-cells.ipynb"
+        file_path.write_text(json.dumps({"metadata": {}}), encoding="utf-8")
+
+        chunker = DocumentChunker()
+        chunks = chunker.process_file(file_path)
+
+        assert chunks == []
+
+    def test_notebook_chunk_index_is_unique_across_code_and_markdown_groups(self, tmp_path: Path) -> None:
+        notebook_json = json.dumps(
+            {
+                "cells": [
+                    {"cell_type": "code", "source": "x = 1\n" * 40},
+                    {"cell_type": "markdown", "source": "word " * 200},
+                ]
+            }
+        )
+        file_path = tmp_path / "multi-chunk.ipynb"
+        file_path.write_text(notebook_json, encoding="utf-8")
+
+        chunker = DocumentChunker(chunk_size=50, chunk_overlap=0)
+        chunks = chunker.process_file(file_path)
+
+        indices = [c.metadata["chunk_index"] for c in chunks]
+        assert len(indices) > 2
+        assert indices == list(range(len(chunks)))
+        assert all(c.metadata["chunk_count"] == len(chunks) for c in chunks)

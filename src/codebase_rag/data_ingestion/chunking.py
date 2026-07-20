@@ -1,6 +1,7 @@
 """Text chunking strategies that preserve code structure and context."""
 
 import hashlib
+import json
 import logging
 from enum import StrEnum
 from pathlib import Path
@@ -17,6 +18,7 @@ class ChunkingStrategy(StrEnum):
 
     CODE = "code"
     MARKDOWN = "markdown"
+    NOTEBOOK = "notebook"
     DEFAULT = "default"
 
 
@@ -81,7 +83,9 @@ class DocumentChunker:
         """
         suffix = file_path.suffix.lower()
 
-        if suffix in [".py", ".ipynb"]:
+        if suffix == ".ipynb":
+            return ChunkingStrategy.NOTEBOOK
+        if suffix == ".py":
             return ChunkingStrategy.CODE
         if suffix in [".md", ".rst"]:
             return ChunkingStrategy.MARKDOWN
@@ -136,6 +140,33 @@ class DocumentChunker:
 
         return chunks
 
+    def _extract_notebook_cells(self, content: str) -> tuple[str, str]:
+        """Extract code and markdown cell sources from notebook JSON.
+
+        Args:
+            content: Raw .ipynb file content.
+
+        Returns:
+            tuple[str, str]: Concatenated (code_text, markdown_text) cell sources.
+        """
+        notebook = json.loads(content)
+        cells = notebook["cells"]
+
+        code_sources: list[str] = []
+        markdown_sources: list[str] = []
+
+        for cell in cells:
+            cell_type = cell["cell_type"]
+            source = cell["source"]
+            text = "".join(source) if isinstance(source, list) else source
+
+            if cell_type == "code":
+                code_sources.append(text)
+            elif cell_type == "markdown":
+                markdown_sources.append(text)
+
+        return "\n\n".join(code_sources), "\n\n".join(markdown_sources)
+
     def process_file(self, file_path: Path) -> list[Document]:
         """Process a file into chunked documents with appropriate metadata.
 
@@ -156,6 +187,30 @@ class DocumentChunker:
             }
 
             strategy = self._determine_strategy(file_path)
+
+            if strategy == ChunkingStrategy.NOTEBOOK:
+                try:
+                    code_text, markdown_text = self._extract_notebook_cells(content)
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    logger.warning("Skipping unparseable notebook %s: %s", file_path, e)
+                    return []
+
+                chunks: list[Document] = []
+                if code_text:
+                    code_chunks = self.chunk_document(code_text, metadata, ChunkingStrategy.CODE)
+                    for chunk in code_chunks:
+                        chunk.metadata["notebook_cell_type"] = "code"
+                    chunks.extend(code_chunks)
+                if markdown_text:
+                    markdown_chunks = self.chunk_document(markdown_text, metadata, ChunkingStrategy.MARKDOWN)
+                    for chunk in markdown_chunks:
+                        chunk.metadata["notebook_cell_type"] = "markdown"
+                    chunks.extend(markdown_chunks)
+
+                for i, chunk in enumerate(chunks):
+                    chunk.metadata["chunk_index"] = i
+                    chunk.metadata["chunk_count"] = len(chunks)
+                return chunks
 
             return self.chunk_document(content, metadata, strategy)
 
