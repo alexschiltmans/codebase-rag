@@ -10,6 +10,11 @@ from rank_bm25 import BM25Okapi
 
 logger = logging.getLogger(__name__)
 
+# Number of documents `search` returns when the caller passes no `k`. The
+# protocol's `k=None` resolves to this, so the value lives here rather than
+# in the signature (where `None` is the declared default) or in the docstring.
+DEFAULT_TOP_K = 4
+
 
 def _doc_to_dict(doc: Document) -> dict:
     return {"page_content": doc.page_content, "metadata": doc.metadata}
@@ -63,17 +68,24 @@ class BM25Retriever:
         self.bm25 = BM25Okapi(self.corpus)
         logger.info("Initialized BM25 index with %d documents", len(self.documents))
 
-    def search(self, query: str, k: int = 4) -> list[tuple[Document, float]]:
+    def search(self, query: str, k: int | None = None) -> list[tuple[Document, float]]:
         """Search for documents matching the query.
 
-        Documents scoring exactly 0 (no query term appears in them at all)
-        are excluded rather than padded in to reach `k`: a 0 score is not
-        evidence of relevance, and returning it as a "match" would make
-        every search look non-empty regardless of the query.
+        Documents scoring at or below 0 are excluded rather than padded in
+        to reach `k`: such a score is not evidence of relevance, and
+        returning it as a "match" would make every search look non-empty
+        regardless of the query.
+
+        Two distinct cases score at or below zero, and both should be
+        excluded. A document containing none of the query terms scores
+        exactly 0. Separately, BM25 assigns a *negative* IDF to any term
+        appearing in more than roughly half the corpus — such a term
+        carries no discriminative signal — so documents matching only
+        those terms can score slightly below 0.
 
         Args:
             query: Search query.
-            k: Number of results to return.
+            k: Number of results to return. ``None`` uses ``DEFAULT_TOP_K``.
 
         Returns:
             List[Tuple[Document, float]]: List of (document, score) tuples.
@@ -88,10 +100,11 @@ class BM25Retriever:
             logger.warning("No valid tokens in query, returning empty result")
             return []
 
+        k_value = k if k is not None else DEFAULT_TOP_K
         scores = self.bm25.get_scores(query_tokens)
 
         matches = [(doc, score) for doc, score in zip(self.documents, scores, strict=False) if score > 0]
-        results = sorted(matches, key=lambda x: x[1], reverse=True)[:k]
+        results = sorted(matches, key=lambda x: x[1], reverse=True)[:k_value]
 
         logger.info("BM25 search for '%s' returned %d results", query, len(results))
         return results

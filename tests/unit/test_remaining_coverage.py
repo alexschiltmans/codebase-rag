@@ -12,6 +12,7 @@ from langchain_core.documents import Document
 from codebase_rag.data_ingestion.git_loader import GitLoader
 from codebase_rag.llm.ollama_client import OllamaClient
 from codebase_rag.llm.rag_chain import RAGChain
+from codebase_rag.retrieval import bm25_search, vector_search
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
 from codebase_rag.retrieval.vector_search import VectorRetriever
@@ -85,19 +86,28 @@ class TestRAGChainConversationMemory:
         assert "my question" in prompt
         assert "some context" in prompt
 
-    def test_retrieve_documents_fallback(self) -> None:
-        """Test _retrieve_documents with TypeError fallback."""
+    def test_retrieve_documents_calls_search_once(self) -> None:
+        """Retrieval goes through the protocol's `search(query, k)` exactly
+        once — no attribute probing, no fallback call path."""
         chain = self._make_chain()
-        mock_retriever = MagicMock()
-        # First call with top_k raises TypeError, second without succeeds
-        mock_retriever.search.side_effect = [
-            TypeError("unexpected argument"),
-            [(Document(page_content="doc", metadata={}), 0.9)],
-        ]
-        chain.retriever = mock_retriever
+        chain.retriever.search.return_value = [(Document(page_content="doc", metadata={}), 0.9)]
 
         result = chain._retrieve_documents("query", 5)
+
         assert len(result) == 1
+        chain.retriever.search.assert_called_once_with("query", 5)
+
+    def test_retriever_type_error_propagates(self) -> None:
+        """Regression test for SE-1: a TypeError raised *inside* a retriever
+        must reach the caller instead of being swallowed by argument-dispatch
+        logic and silently retried without top_k."""
+        chain = self._make_chain()
+        chain.retriever.search.side_effect = TypeError("bug inside the retriever")
+
+        with pytest.raises(TypeError, match="bug inside the retriever"):
+            chain.run("test query")
+
+        chain.retriever.search.assert_called_once()
 
     def test_run_with_generation_error(self) -> None:
         chain = self._make_chain()
@@ -155,28 +165,36 @@ class TestHybridRetrieverExtra:
         with pytest.raises(RuntimeError, match="error"):
             retriever.search("test")
 
-    def test_get_relevant_documents(self) -> None:
+    def test_empty_bm25_index_does_not_rescale_vector_scores(self) -> None:
+        """Regression test: normalization keys off the rankers that actually
+        returned results, not off which retriever objects exist.
 
+        Before this fix, a configured-but-empty BM25 index (exactly what the
+        app holds before its first ingest) still contributed its weight to
+        the denominator, capping every fused score at vector_weight (0.7)
+        even though BM25 returned nothing.
+        """
+        doc = Document(page_content="top hit", metadata={"source": "a.py", "chunk_index": 0})
         mock_vector = MagicMock()
-        mock_vector.search.return_value = [
-            (Document(page_content="doc", metadata={"source": "a.py", "chunk_index": 0}), 0.8),
-        ]
+        mock_vector.search.return_value = [(doc, 0.95)]
 
-        retriever = HybridRetriever(vector_retriever=mock_vector, bm25_retriever=None)
-        docs = retriever.get_relevant_documents("test")
-        assert len(docs) == 1
-        assert docs[0].page_content == "doc"
+        with_empty_index = HybridRetriever(mock_vector, BM25Retriever([])).search("query")
+        without_bm25 = HybridRetriever(mock_vector, None).search("query")
 
-    def test_aget_relevant_documents(self) -> None:
+        assert with_empty_index[0][1] == pytest.approx(1.0)
+        assert with_empty_index[0][1] == pytest.approx(without_bm25[0][1])
 
+    def test_both_rankers_contributing_scores_top_doc_1(self) -> None:
+        """A document ranked #1 by both rankers still scores exactly 1.0."""
+        doc = Document(page_content="top hit", metadata={"source": "a.py", "chunk_index": 0})
         mock_vector = MagicMock()
-        mock_vector.search.return_value = [
-            (Document(page_content="doc", metadata={"source": "a.py", "chunk_index": 0}), 0.8),
-        ]
+        mock_vector.search.return_value = [(doc, 0.95)]
+        mock_bm25 = MagicMock()
+        mock_bm25.search.return_value = [(doc, 12.0)]
 
-        retriever = HybridRetriever(vector_retriever=mock_vector, bm25_retriever=None)
-        docs = retriever.aget_relevant_documents("test")
-        assert len(docs) == 1
+        results = HybridRetriever(mock_vector, mock_bm25).search("query")
+
+        assert results[0][1] == pytest.approx(1.0)
 
     def test_both_components_empty_returns_empty(self) -> None:
         """Regression test: HybridRetriever no longer filters on fused score,
@@ -231,17 +249,6 @@ class TestVectorRetrieverExtra:
         with pytest.raises(RuntimeError, match="error"):
             retriever.search("query")
 
-    def test_get_relevant_documents(self) -> None:
-
-        mock_store = MagicMock()
-        mock_store.similarity_search_with_score.return_value = [
-            (Document(page_content="doc", metadata={}), 0.9),
-        ]
-
-        retriever = VectorRetriever(mock_store)
-        docs = retriever.get_relevant_documents("query")
-        assert len(docs) == 1
-
     def test_score_threshold_filters_low_scores(self) -> None:
         mock_store = MagicMock()
         mock_store.similarity_search_with_score.return_value = [
@@ -254,6 +261,16 @@ class TestVectorRetrieverExtra:
         results = retriever.search("query")
 
         assert [doc.page_content for doc, _ in results] == ["high", "mid"]
+
+    def test_k_none_resolves_to_default(self) -> None:
+        """Protocol contract: `k=None` means the retriever's own default,
+        sourced from the module constant rather than an inline literal."""
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.return_value = []
+
+        VectorRetriever(mock_store).search("query")
+
+        mock_store.similarity_search_with_score.assert_called_once_with("query", vector_search.DEFAULT_TOP_K)
 
     def test_no_threshold_returns_everything(self) -> None:
         mock_store = MagicMock()
@@ -291,6 +308,24 @@ class TestBM25RetrieverExtra:
         assert "test" in tokens
         assert "123" in tokens
         assert "a" not in tokens
+
+    def test_k_none_resolves_to_default(self) -> None:
+        """Protocol contract: `k=None` means the retriever's own default,
+        sourced from the module constant rather than an inline literal.
+
+        Five of twenty documents match, so the cap — not the number of
+        matches — is what limits the result count. The ratio matters: BM25
+        gives a term appearing in more than about half the corpus a negative
+        IDF, and those documents are then dropped by the score > 0 filter.
+        """
+        docs = [Document(page_content=f"transformer winding document {i}", metadata={}) for i in range(5)]
+        docs += [Document(page_content=f"unrelated content number {i}", metadata={}) for i in range(15)]
+        retriever = BM25Retriever(docs)
+
+        results = retriever.search("transformer winding")
+
+        assert len(results) == bm25_search.DEFAULT_TOP_K
+        assert all(score > 0 for _, score in results)
 
     def test_search_no_term_overlap_returns_empty(self) -> None:
         """Regression test: a query with no term overlap in the corpus must

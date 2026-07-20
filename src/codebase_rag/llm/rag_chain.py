@@ -12,6 +12,7 @@ from typing import Any
 from langchain_core.documents import Document
 
 from codebase_rag.config import Config
+from codebase_rag.retrieval.retriever_protocol import RetrieverProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class RAGChain:
 
     def __init__(
         self,
-        retriever: Any,
+        retriever: RetrieverProtocol,
         llm: Any,
         prompt_template: str | None = None,
         top_k: int = 5,
@@ -67,7 +68,7 @@ class RAGChain:
         """Initialize the RAG chain.
 
         Args:
-            retriever: Document retriever component.
+            retriever: Document retriever component (any `RetrieverProtocol`).
             llm: Language model for generation.
             prompt_template: Optional custom prompt template.
             top_k: Number of documents to retrieve.
@@ -263,24 +264,15 @@ class RAGChain:
             yield self.llm.invoke(prompt)
 
     def _retrieve_documents(self, query: str, top_k: int) -> list[Document]:
-        """Retrieve and filter relevant documents for a query."""
-        try:
-            return self._do_retrieve(query, top_k)
-        except TypeError:
-            return self._do_retrieve(query)
-
-    def _do_retrieve(self, query: str, top_k: int | None = None) -> list[Document]:
-        """Execute retrieval, dispatching based on retriever capabilities.
+        """Retrieve documents for a query through the retriever protocol.
 
         Relevance filtering happens inside the retriever itself (see
         `VectorRetriever.search`), not here — after RRF fusion, a fused
         score can no longer distinguish relevant from irrelevant results.
+        Exceptions from the retriever propagate to `run()`/`stream()`
+        rather than being caught and retried.
         """
-        if hasattr(self.retriever, "search"):
-            args = (query, top_k) if top_k is not None else (query,)
-            documents_and_scores = self.retriever.search(*args)
-            return [doc for doc, _ in documents_and_scores]
-        return self.retriever.get_relevant_documents(query)  # type: ignore[no-any-return]
+        return [doc for doc, _ in self.retriever.search(query, top_k)]
 
     def _empty_retrieval_result(self, start_time: float, retrieval_time: float, trace: Any) -> dict[str, Any]:
         """Build the response dict when no relevant documents are found."""
