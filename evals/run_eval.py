@@ -11,6 +11,17 @@ Usage:
     # (self-judged, caveated in the reports). Pass a fixed, larger judge model
     # via --judge-model or RAGAS_JUDGE_MODEL to avoid that:
     uv run python evals/run_eval.py --judge-model qwen3-coder:30b
+
+    # Judge concurrency is bounded to what one local Ollama serves in parallel
+    # (default 1) via --max-workers or RAGAS_MAX_WORKERS; a run whose coverage
+    # falls below --min-coverage/RAGAS_MIN_COVERAGE (default 0.9) fails rather
+    # than publishing. Disable a metric outright with a repeatable --skip-metric:
+    uv run python evals/run_eval.py --max-workers 2 --skip-metric context_recall
+
+Operational precondition: this harness must not share its Ollama instance with
+the running app or another eval — both compete for the same single-threaded
+server and inflate every latency figure with queueing time. Run
+`docker stop codebase-rag-app` before an eval to guarantee that.
 """
 
 import json
@@ -18,6 +29,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +66,38 @@ TESTSET_PATH = EVALS_DIR / "testset.json"
 RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
 
 
+def build_ragas_metrics(wrapped_llm: Any, wrapped_embeddings: Any) -> list:
+    """Build the ragas metrics this harness scores, in report order.
+
+    Single source of truth for the metric set: `RAGAS_METRIC_NAMES` (the
+    all-skip guard) and `run_ragas_evaluation` both derive from this list, so
+    adding or removing a metric cannot leave the guard or the coverage gate
+    out of sync with what actually runs. Passing `None` for the judge and
+    embeddings is safe when only the metric names are needed.
+    """
+    return [
+        Faithfulness(llm=wrapped_llm),
+        AnswerRelevancy(llm=wrapped_llm, embeddings=wrapped_embeddings),
+        ContextRecall(llm=wrapped_llm),
+    ]
+
+
+RAGAS_METRIC_NAMES = frozenset(m.name for m in build_ragas_metrics(None, None))
+
+
+def _resolve_config_value[T](flag: str, env_var: str, default: T, cast: Callable[[str], T]) -> T:
+    """Resolve a config value: `--flag value` or `--flag=value` in argv, then `env_var`, then `default`."""
+    for i, arg in enumerate(sys.argv):
+        if arg == flag and i + 1 < len(sys.argv):
+            return cast(sys.argv[i + 1])
+        if arg.startswith(f"{flag}="):
+            return cast(arg.split("=", 1)[1])
+    env_val = os.getenv(env_var)
+    if env_val:
+        return cast(env_val)
+    return default
+
+
 def resolve_judge_model_name(generation_model_name: str) -> str:
     """Determine which model should judge the RAGAS metrics.
 
@@ -67,14 +111,44 @@ def resolve_judge_model_name(generation_model_name: str) -> str:
     Args:
         generation_model_name: The model used to generate the answers being judged.
     """
-    if "--judge-model" in sys.argv:
-        idx = sys.argv.index("--judge-model")
-        if idx + 1 < len(sys.argv):
-            return sys.argv[idx + 1]
-    env_judge_model = os.getenv("RAGAS_JUDGE_MODEL")
-    if env_judge_model:
-        return env_judge_model
-    return generation_model_name
+    return _resolve_config_value("--judge-model", "RAGAS_JUDGE_MODEL", generation_model_name, str)
+
+
+def resolve_max_workers() -> int:
+    """Determine how many concurrent judge calls RAGAS may issue.
+
+    The eval targets one local Ollama container that serves generation
+    requests sequentially (`OLLAMA_NUM_PARALLEL=1` by default); RAGAS's own
+    default of 16 concurrent jobs would queue behind each other and share a
+    single deadline, timing out in batches instead of measuring per-job work.
+    Configurable via `--max-workers <n>` or `RAGAS_MAX_WORKERS`, default 1.
+    """
+    return _resolve_config_value("--max-workers", "RAGAS_MAX_WORKERS", 1, int)
+
+
+def resolve_min_coverage() -> float:
+    """Determine the minimum completed-job share required to publish a metric.
+
+    Below this share of `attempted` judge jobs completing, a metric's score
+    is not a trustworthy average and the run should fail rather than publish
+    it. Configurable via `--min-coverage <fraction>` or `RAGAS_MIN_COVERAGE`,
+    default 0.9.
+    """
+    return _resolve_config_value("--min-coverage", "RAGAS_MIN_COVERAGE", 0.9, float)
+
+
+def resolve_skip_metrics() -> set[str]:
+    """Determine which metrics are explicitly disabled for this run.
+
+    Repeatable `--skip-metric <name>` flag. A skipped metric is absent from
+    both `ragas_scores` and the coverage gate, distinguishing "not asked for"
+    from "could not measure".
+    """
+    skipped = set()
+    for i, arg in enumerate(sys.argv):
+        if arg == "--skip-metric" and i + 1 < len(sys.argv):
+            skipped.add(sys.argv[i + 1])
+    return skipped
 
 
 def load_testset() -> list[dict]:
@@ -237,7 +311,66 @@ def compute_custom_metrics(results: list[dict]) -> dict:
     }
 
 
-def run_ragas_evaluation(results: list[dict], judge_model_name: str) -> dict:
+def compute_ragas_scores_and_coverage(df: Any) -> tuple[dict[str, float | None], dict[str, dict[str, int]]]:
+    """Derive per-metric scores and judge-job coverage from a ragas result DataFrame.
+
+    Args:
+        df: `EvaluationResult.to_pandas()` output — one row per sample, judge
+            metric columns alongside `user_input`/`response`/`retrieved_contexts`/
+            `reference`, NaN in a metric's column for a failed judge job.
+
+    Returns:
+        `(scores, coverage)`. `scores` maps metric -> rounded mean, or `None` if
+        every job for that metric failed. `coverage` maps metric ->
+        `{attempted, completed, failed}` job counts.
+    """
+    score_cols = [c for c in df.columns if c not in ("user_input", "response", "retrieved_contexts", "reference")]
+    scores: dict[str, float | None] = {}
+    coverage: dict[str, dict[str, int]] = {}
+    for col in score_cols:
+        attempted = len(df[col])
+        vals = df[col].dropna()
+        completed = len(vals)
+        coverage[col] = {"attempted": attempted, "completed": completed, "failed": attempted - completed}
+        scores[col] = round(vals.mean(), 4) if not vals.empty else None
+    return scores, coverage
+
+
+def check_coverage_gate(
+    ragas_coverage: dict[str, dict[str, int]],
+    min_coverage: float,
+    requested_metrics: set[str] | None = None,
+) -> str | None:
+    """Return the name of the first metric below the coverage threshold, or `None` if all pass.
+
+    Args:
+        ragas_coverage: metric -> `{attempted, completed, failed}`, as returned by
+            `compute_ragas_scores_and_coverage`. A skipped metric is absent here
+            entirely and so cannot fail the gate.
+        min_coverage: Minimum required `completed / attempted` share.
+        requested_metrics: Metric names this run was supposed to measure (not
+            skipped). A requested metric missing from `ragas_coverage` entirely
+            — the judge phase failed wholesale, or produced no samples to score
+            — also fails the gate; an empty `ragas_coverage` only means "pass"
+            when nothing was requested in the first place.
+    """
+    for metric_name in sorted(requested_metrics or set()):
+        if metric_name not in ragas_coverage:
+            return metric_name
+    for metric_name, counts in ragas_coverage.items():
+        attempted = counts["attempted"]
+        share = counts["completed"] / attempted if attempted else 0.0
+        if share < min_coverage:
+            return metric_name
+    return None
+
+
+def run_ragas_evaluation(
+    results: list[dict],
+    judge_model_name: str,
+    max_workers: int,
+    skip_metrics: set[str],
+) -> dict:
     """Run ragas evaluation metrics on the results.
 
     Args:
@@ -245,9 +378,16 @@ def run_ragas_evaluation(results: list[dict], judge_model_name: str) -> dict:
         judge_model_name: Ollama model to use as the RAGAS judge. See
             `resolve_judge_model_name` — this may or may not be the same
             model that generated the answers being judged.
+        max_workers: Maximum concurrent judge calls. See `resolve_max_workers`.
+        skip_metrics: Metric names to exclude entirely. See `resolve_skip_metrics`.
 
     Returns:
-        The ragas scores dict.
+        A dict with `scores` (metric -> score, `None` for an enabled metric
+        with zero completed jobs), `coverage` (metric ->
+        `{attempted, completed, failed}`), and `requested_metrics` (the metric
+        names that weren't skipped — what this run was supposed to measure,
+        used by `check_coverage_gate` to catch a wholesale judge-phase failure
+        that leaves `coverage` empty).
     """
     config = Config.get_instance()
 
@@ -261,6 +401,17 @@ def run_ragas_evaluation(results: list[dict], judge_model_name: str) -> dict:
 
     embeddings = HuggingFaceEmbeddings(model_name=config.embedding_model)
     wrapped_embeddings = LangchainEmbeddingsWrapper(embeddings)
+
+    all_metrics = build_ragas_metrics(wrapped_llm, wrapped_embeddings)
+    metrics = [m for m in all_metrics if m.name not in skip_metrics]
+    requested_metrics = {m.name for m in metrics}
+    if skip_metrics:
+        logger.info("Skipping metrics: %s", sorted(skip_metrics))
+
+    # Defensive: main() already rejects an all-skip run before the loop; this guards direct callers too.
+    if not metrics:
+        logger.info("All ragas metrics skipped — nothing to judge")
+        return {"scores": {}, "coverage": {}, "requested_metrics": requested_metrics}
 
     # Build evaluation dataset from results
     samples = []
@@ -277,19 +428,13 @@ def run_ragas_evaluation(results: list[dict], judge_model_name: str) -> dict:
 
     if not samples:
         logger.warning("No valid samples for ragas evaluation")
-        return {}
+        return {"scores": {}, "coverage": {}, "requested_metrics": requested_metrics}
 
     eval_dataset = EvaluationDataset(samples=samples)
 
-    metrics = [
-        Faithfulness(llm=wrapped_llm),
-        AnswerRelevancy(llm=wrapped_llm, embeddings=wrapped_embeddings),
-        ContextRecall(llm=wrapped_llm),
-    ]
-
-    logger.info("Running ragas evaluation with %d samples...", len(samples))
+    logger.info("Running ragas evaluation with %d samples, max_workers=%d...", len(samples), max_workers)
     try:
-        run_config = RunConfig(timeout=600, max_retries=2, max_wait=120)
+        run_config = RunConfig(timeout=600, max_retries=2, max_wait=120, max_workers=max_workers)
 
         eval_result = evaluate(
             dataset=eval_dataset,
@@ -300,19 +445,15 @@ def run_ragas_evaluation(results: list[dict], judge_model_name: str) -> dict:
             show_progress=True,
             run_config=run_config,
         )
-        # Extract scores from the pandas DataFrame
+        # Extract scores and per-metric judge-job coverage from the pandas DataFrame
         df = eval_result.to_pandas()
-        score_cols = [c for c in df.columns if c not in ("user_input", "response", "retrieved_contexts", "reference")]
-        scores = {}
-        for col in score_cols:
-            vals = df[col].dropna()
-            if not vals.empty:
-                scores[col] = round(vals.mean(), 4)
+        scores, coverage = compute_ragas_scores_and_coverage(df)
         logger.info("ragas scores: %s", scores)
-        return scores
+        logger.info("ragas coverage: %s", coverage)
+        return {"scores": scores, "coverage": coverage, "requested_metrics": requested_metrics}
     except Exception as e:
         logger.error("ragas evaluation failed: %s", e)
-        return {"ragas_error": str(e)}
+        return {"scores": {"ragas_error": str(e)}, "coverage": {}, "requested_metrics": requested_metrics}
 
 
 def log_to_langfuse(results: list[dict], custom_metrics: dict, ragas_scores: dict) -> None:
@@ -370,13 +511,20 @@ def generate_results_markdown(
     results: list[dict],
     custom_metrics: dict,
     ragas_scores: dict,
+    ragas_coverage: dict,
     judge_model_name: str,
     is_self_judged: bool,
+    latency_probe_s: float,
 ) -> str:
     """Generate a markdown report from the evaluation results."""
     lines = ["# Evaluation Results\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(f"**Test set:** {len(results)} questions\n")
+    lines.append(
+        f"**Latency probe:** {latency_probe_s:.2f}s (single generation timed before the test set ran; "
+        "compare `avg_latency_s` only against runs with a similar probe — a high probe means the "
+        "run was contended)\n"
+    )
 
     # Overall metrics
     lines.append("## Custom Metrics\n")
@@ -395,10 +543,13 @@ def generate_results_markdown(
                 "with — treat these numbers as indicative at best. The custom keyword recall / "
                 "source precision metrics above don't use an LLM judge and are more trustworthy.\n"
             )
-        lines.append("| Metric | Score |")
-        lines.append("|--------|-------|")
+        lines.append("| Metric | Score | Coverage |")
+        lines.append("|--------|-------|----------|")
         for k, v in ragas_scores.items():
-            lines.append(f"| {k} | {v:.4f} |" if isinstance(v, float) else f"| {k} | {v} |")
+            score_str = f"{v:.4f}" if isinstance(v, float) else str(v)
+            cov = ragas_coverage.get(k)
+            cov_str = f"{cov['completed']}/{cov['attempted']}" if cov else "-"
+            lines.append(f"| {k} | {score_str} | {cov_str} |")
     elif ragas_scores.get("ragas_error"):
         lines.append(f"\n## RAGAS Scores\n\nFailed: {ragas_scores['ragas_error']}\n")
 
@@ -460,6 +611,10 @@ def generate_ablation_markdown(all_metrics: dict[str, dict]) -> str:
         "embedding ranking quality; BM25 scores are never thresholded (zero-overlap documents "
         "are excluded by construction).\n"
     )
+    lines.append(
+        "Avg Latency figures are comparable only across runs with similar latency probes — see "
+        "each configuration's `results_<retriever>.md` for its probe.\n"
+    )
     lines.append("| Retriever | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
     lines.append("|-----------|----------------|-------------------|----------|--------|-------------|")
     for retriever_type in RETRIEVER_TYPES:
@@ -469,6 +624,81 @@ def generate_ablation_markdown(all_metrics: dict[str, dict]) -> str:
             f"{m['questions_answered']} | {m['questions_failed']} | {m['avg_latency_s']:.1f}s |"
         )
     return "\n".join(lines)
+
+
+def publish_retriever_results(
+    evals_dir: Path,
+    retriever_type: str,
+    results: list[dict],
+    custom_metrics: dict,
+    ragas_scores: dict,
+    ragas_coverage: dict,
+    requested_metrics: set[str],
+    latency_probe_s: float,
+    judge_model_name: str,
+    is_self_judged: bool,
+    min_coverage: float,
+) -> None:
+    """Gate on judge coverage, then write the JSON and markdown reports for one retriever.
+
+    Checks `check_coverage_gate` before any write. On a gate failure, logs the
+    failing metric — with its counts if it has any, or the wholesale-failure
+    reason from `ragas_scores` if it doesn't — and exits the process non-zero
+    without writing `results_<retriever_type>.{json,md}`, leaving whatever was
+    previously published there untouched.
+    """
+    failed_metric = check_coverage_gate(ragas_coverage, min_coverage, requested_metrics)
+    if failed_metric:
+        counts = ragas_coverage.get(failed_metric)
+        if counts is None:
+            reason = ragas_scores.get("ragas_error", "the judge phase produced no results to measure coverage from")
+            logger.error(
+                "Coverage gate failed for retriever=%s metric=%s: %s. Not writing results.",
+                retriever_type,
+                failed_metric,
+                reason,
+            )
+        else:
+            attempted = counts["attempted"]
+            share = counts["completed"] / attempted if attempted else 0.0
+            logger.error(
+                "Coverage gate failed for retriever=%s metric=%s: %d/%d completed (%.1f%%), "
+                "below the configured minimum coverage of %.2f. Not writing results.",
+                retriever_type,
+                failed_metric,
+                counts["completed"],
+                attempted,
+                share * 100,
+                min_coverage,
+            )
+        sys.exit(1)
+
+    results_path = evals_dir / f"results_{retriever_type}.json"
+    with open(results_path, "w") as f:
+        json.dump(
+            {
+                "retriever": retriever_type,
+                "results": results,
+                "custom_metrics": custom_metrics,
+                "latency_probe_s": round(latency_probe_s, 4),
+                "ragas_scores": ragas_scores,
+                "ragas_coverage": ragas_coverage,
+                "ragas_judge_model": judge_model_name,
+                "ragas_self_judged": is_self_judged,
+            },
+            f,
+            indent=2,
+            default=str,
+        )
+    logger.info("Raw results saved to %s", results_path)
+
+    md = generate_results_markdown(
+        results, custom_metrics, ragas_scores, ragas_coverage, judge_model_name, is_self_judged, latency_probe_s
+    )
+    md_path = evals_dir / f"results_{retriever_type}.md"
+    with open(md_path, "w") as f:
+        f.write(md)
+    logger.info("Markdown report saved to %s", md_path)
 
 
 def main() -> None:
@@ -487,6 +717,22 @@ def main() -> None:
     config = Config.get_instance()
     judge_model_name = resolve_judge_model_name(config.llm_model_name)
     is_self_judged = judge_model_name == config.llm_model_name
+    max_workers = resolve_max_workers()
+    min_coverage = resolve_min_coverage()
+    skip_metrics = resolve_skip_metrics()
+    logger.info(
+        "Resolved eval config: max_workers=%d, min_coverage=%.2f, skip_metrics=%s",
+        max_workers,
+        min_coverage,
+        sorted(skip_metrics),
+    )
+    if skip_metrics >= RAGAS_METRIC_NAMES:
+        logger.error(
+            "--skip-metric disables every ragas metric (%s) — nothing would be judged. "
+            "Skip fewer metrics, or drop --skip-metric entirely if you don't want ragas at all.",
+            sorted(RAGAS_METRIC_NAMES),
+        )
+        sys.exit(1)
     if is_self_judged:
         logger.warning(
             "No --judge-model/RAGAS_JUDGE_MODEL set — RAGAS will judge '%s' with itself. "
@@ -503,6 +749,12 @@ def main() -> None:
         logger.info("=== Retriever: %s ===", retriever_type)
         rag_chain = build_rag_chain(retriever_type)
 
+        logger.info("Timing latency probe...")
+        probe_start = time.time()
+        rag_chain.run("What does this repository do?")
+        latency_probe_s = time.time() - probe_start
+        logger.info("Latency probe: %.2fs", latency_probe_s)
+
         logger.info("Running RAG on test set...")
         results = run_rag_on_testset(rag_chain, testset)
 
@@ -512,30 +764,24 @@ def main() -> None:
         all_custom_metrics[retriever_type] = custom_metrics
 
         logger.info("Running ragas evaluation...")
-        ragas_scores = run_ragas_evaluation(results, judge_model_name)
+        ragas_result = run_ragas_evaluation(results, judge_model_name, max_workers, skip_metrics)
+        ragas_scores = ragas_result["scores"]
+        ragas_coverage = ragas_result["coverage"]
+        requested_metrics = ragas_result["requested_metrics"]
 
-        results_path = EVALS_DIR / f"results_{retriever_type}.json"
-        with open(results_path, "w") as f:
-            json.dump(
-                {
-                    "retriever": retriever_type,
-                    "results": results,
-                    "custom_metrics": custom_metrics,
-                    "ragas_scores": ragas_scores,
-                    "ragas_judge_model": judge_model_name,
-                    "ragas_self_judged": is_self_judged,
-                },
-                f,
-                indent=2,
-                default=str,
-            )
-        logger.info("Raw results saved to %s", results_path)
-
-        md = generate_results_markdown(results, custom_metrics, ragas_scores, judge_model_name, is_self_judged)
-        md_path = EVALS_DIR / f"results_{retriever_type}.md"
-        with open(md_path, "w") as f:
-            f.write(md)
-        logger.info("Markdown report saved to %s", md_path)
+        publish_retriever_results(
+            EVALS_DIR,
+            retriever_type,
+            results,
+            custom_metrics,
+            ragas_scores,
+            ragas_coverage,
+            requested_metrics,
+            latency_probe_s,
+            judge_model_name,
+            is_self_judged,
+            min_coverage,
+        )
 
         if use_langfuse:
             log_to_langfuse(results, custom_metrics, ragas_scores)
@@ -549,12 +795,15 @@ def main() -> None:
         print(f"Avg keyword recall:   {custom_metrics['avg_keyword_recall']:.4f}")
         print(f"Avg source precision: {custom_metrics['avg_source_precision']:.4f}")
         print(f"Avg latency:          {custom_metrics['avg_latency_s']:.1f}s")
+        print(f"Latency probe:        {latency_probe_s:.1f}s")
         if ragas_scores and "ragas_error" not in ragas_scores:
             print(f"\nRAGAS scores (judge: {judge_model_name}):")
             if is_self_judged:
                 print("  WARNING: self-judged — same model generated and scored these answers.")
             for k, v in ragas_scores.items():
-                print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
+                cov = ragas_coverage.get(k)
+                cov_str = f" ({cov['completed']}/{cov['attempted']})" if cov else ""
+                print(f"  {k}: {v:.4f}{cov_str}" if isinstance(v, float) else f"  {k}: {v}{cov_str}")
         print("=" * 60)
 
     ablation_md = generate_ablation_markdown(all_custom_metrics)
