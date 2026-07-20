@@ -93,3 +93,9 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+markers = [
+    "integration: needs live Qdrant (make services-start)",
+    "e2e: end-to-end flow, needs live services",
+    "performance: timing and scaling checks, runs offline",
+    "evaluation: retrieval/response quality checks, runs offline",
+]
