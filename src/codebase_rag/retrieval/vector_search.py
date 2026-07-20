@@ -5,7 +5,6 @@ by computing the similarity between query and document vectors.
 """
 
 import logging
-from typing import Any
 
 from langchain_core.documents import Document
 
@@ -19,6 +18,11 @@ logger = logging.getLogger(__name__)
 # Shared by the app runtime and the eval's hybrid arm so the eval measures
 # the same retrieval configuration production ships.
 VECTOR_SCORE_THRESHOLD = 0.25
+
+# Number of documents `search` returns when the caller passes no `k`. The
+# protocol's `k=None` resolves to this, so the value lives here rather than
+# in the signature (where `None` is the declared default) or in the docstring.
+DEFAULT_TOP_K = 5
 
 
 class VectorRetriever:
@@ -48,7 +52,7 @@ class VectorRetriever:
         if score_threshold is not None:
             logger.info("Using score threshold: %s", score_threshold)
 
-    def search(self, query: str, k: int = 5) -> list[tuple[Document, float]]:
+    def search(self, query: str, k: int | None = None) -> list[tuple[Document, float]]:
         """Search for documents similar to the query.
 
         Results below ``self.score_threshold`` (raw cosine similarity from the
@@ -58,12 +62,13 @@ class VectorRetriever:
 
         Args:
             query: The search query.
-            k: Number of documents to retrieve.
+            k: Number of documents to retrieve. ``None`` uses ``DEFAULT_TOP_K``.
 
         Returns:
             List of (document, score) tuples.
         """
-        results = self.vector_store.similarity_search_with_score(query, k)
+        k_value = k if k is not None else DEFAULT_TOP_K
+        results = self.vector_store.similarity_search_with_score(query, k_value)
         if not results:
             logger.debug("Empty results from similarity_search_with_score")
             return results
@@ -80,29 +85,3 @@ class VectorRetriever:
             return filtered
 
         return results
-
-    def get_relevant_documents(self, query: str, **kwargs: Any) -> list[Document]:
-        """Retrieve relevant documents using vector similarity.
-
-        Args:
-            query: The search query.
-            **kwargs: Additional parameters for the retrieval.
-
-        Returns:
-            List of relevant documents.
-        """
-        top_k = kwargs.get("top_k", 5)
-        results = self.search(query, k=top_k)
-        return [doc for doc, _ in results]
-
-    def aget_relevant_documents(self, query: str, **kwargs: Any) -> list[Document]:
-        """Retrieve relevant documents using vector similarity (sync fallback).
-
-        Args:
-            query: The search query.
-            **kwargs: Additional parameters for the retrieval.
-
-        Returns:
-            List of relevant documents.
-        """
-        return self.get_relevant_documents(query, **kwargs)

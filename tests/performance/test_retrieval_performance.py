@@ -11,21 +11,31 @@ from codebase_rag.retrieval.bm25_search import BM25Retriever
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
 
 
-def generate_random_text(length: int = 500) -> str:
+def generate_random_text(length: int = 500, rng: random.Random | None = None) -> str:
     """Generate random text of specified length."""
-    return "".join(random.choice(string.ascii_letters + " " * 10) for _ in range(length))
+    rng = rng or random
+    return "".join(rng.choice(string.ascii_letters + " " * 10) for _ in range(length))
 
 
-def generate_test_documents(num_docs: int = 100, codebase_keywords: bool = True) -> list[Document]:
+def generate_test_documents(
+    num_docs: int = 100, codebase_keywords: bool = True, seed: int = 20260720
+) -> list[Document]:
     """Generate a large number of test documents.
+
+    Uses a seeded, local RNG so the corpus is identical run to run. Keyword
+    occurrences must be deterministic: BM25 legitimately returns nothing when
+    a query term is absent, so a corpus that only *probably* contains the
+    queried terms makes any "found something" assertion flaky.
 
     Args:
         num_docs: Number of documents to generate.
         codebase_keywords: Whether to include codebase-related keywords.
+        seed: Seed for the local RNG.
 
     Returns:
         List[Document]: Generated test documents.
     """
+    rng = random.Random(seed)
     documents = []
 
     # Keywords to randomly insert (if codebase_keywords is True)
@@ -44,11 +54,14 @@ def generate_test_documents(num_docs: int = 100, codebase_keywords: bool = True)
     ]
 
     for i in range(num_docs):
-        content = generate_random_text()
+        content = generate_random_text(rng=rng)
 
-        if codebase_keywords and random.random() < 0.3:  # 30% chance
-            keyword = random.choice(keywords)
-            position = random.randint(0, len(content) - len(keyword) - 1)
+        if codebase_keywords and rng.random() < 0.3:  # 30% chance
+            # Round-robin rather than random choice so every keyword is
+            # guaranteed present, and pad with spaces so the keyword survives
+            # tokenization instead of fusing with adjacent random letters.
+            keyword = f" {keywords[i % len(keywords)]} "
+            position = rng.randint(0, len(content) - len(keyword) - 1)
             content = content[:position] + keyword + content[position + len(keyword) :]
 
         documents.append(Document(page_content=content, metadata={"source": f"doc{i}.txt", "chunk_index": i}))
@@ -89,6 +102,10 @@ def test_bm25_search_performance(num_docs) -> None:
 
         if "codebase" in query or "power" in query or "load" in query:
             assert len(results) > 0
+        else:
+            # No term overlap with the corpus: BM25 must return nothing rather
+            # than padding the list out to k with zero-scored documents.
+            assert len(results) == 0
 
 
 @pytest.mark.performance
