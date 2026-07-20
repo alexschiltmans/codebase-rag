@@ -218,6 +218,7 @@ class AppRuntime:
             llm=self.llm,
             use_conversation_memory=True,
             max_conversation_history=MAX_CONVERSATION_HISTORY,
+            prompt_budget_chars=self.llm.prompt_budget_chars,
         )
 
     def swap_bm25(self, index: BM25Retriever) -> None:

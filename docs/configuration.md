@@ -12,6 +12,7 @@ All settings are configured via environment variables or a `.env` file in the pr
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
 | `LLM_MODEL_NAME` | `sam860/LFM2:350m` | Ollama model for generation |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | HuggingFace embedding model |
+| `OLLAMA_NUM_CTX` | `8192` | Ollama context window (tokens). Raising it increases Ollama's memory use; lower it on constrained hardware. Below roughly 1780 (with the default `max_tokens=1024`) the remaining prompt budget can't hold even one context chunk, and the app refuses to start rather than answer every question with no context. |
 
 ## Storage settings
 

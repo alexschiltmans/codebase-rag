@@ -11,6 +11,13 @@ from ..config import Config
 
 logger = logging.getLogger(__name__)
 
+# Reserved for the model's own output so the prompt budget doesn't crowd it out.
+GENERATION_MARGIN_TOKENS = 256
+# Conservative chars-per-token estimate for code-heavy English text; no tokenizer dependency.
+CHARS_PER_TOKEN = 4
+# Below this, the budget can't hold the template, a question, and one context chunk.
+MIN_PROMPT_BUDGET_CHARS = 2000
+
 
 class OllamaClient:
     """Client for the Ollama LLM API using ChatOllama.
@@ -28,6 +35,7 @@ class OllamaClient:
         top_k: int = 40,
         max_tokens: int = 1024,
         timeout: int = 120,
+        num_ctx: int | None = None,
     ) -> None:
         config = Config.get_instance()
 
@@ -35,6 +43,18 @@ class OllamaClient:
         self.base_url = base_url or config.ollama_base_url
         self.temperature = temperature
         self.timeout = timeout
+        self.max_tokens = max_tokens
+        self.num_ctx = num_ctx if num_ctx is not None else config.ollama_num_ctx
+
+        reservation_tokens = self.max_tokens + GENERATION_MARGIN_TOKENS
+        self.prompt_budget_chars = (self.num_ctx - reservation_tokens) * CHARS_PER_TOKEN
+        if self.prompt_budget_chars < MIN_PROMPT_BUDGET_CHARS:
+            raise ValueError(
+                f"OLLAMA_NUM_CTX={self.num_ctx} leaves a prompt budget of "
+                f"{self.prompt_budget_chars} chars after reserving {reservation_tokens} tokens "
+                f"({self.max_tokens} for generation + {GENERATION_MARGIN_TOKENS} margin) — "
+                f"raise OLLAMA_NUM_CTX or lower max_tokens."
+            )
 
         self._llm = ChatOllama(
             model=self.model_name,
@@ -43,6 +63,7 @@ class OllamaClient:
             top_p=top_p,
             top_k=top_k,
             num_predict=max_tokens,
+            num_ctx=self.num_ctx,
         )
         logger.info("Initialized OllamaClient (ChatOllama) for model '%s' at %s", self.model_name, self.base_url)
 

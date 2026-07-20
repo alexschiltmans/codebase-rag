@@ -80,11 +80,116 @@ class TestRAGChainConversationMemory:
         assert "Code snippet" in result
         assert "test.py" in result
 
-    def test_create_prompt(self) -> None:
+    def test_build_within_budget_no_budget_set_leaves_docs_untouched(self) -> None:
         chain = self._make_chain()
-        prompt = chain._create_prompt("my question", "some context")
-        assert "my question" in prompt
-        assert "some context" in prompt
+        docs = [Document(page_content="x" * 100, metadata={"source": f"f{i}.py"}) for i in range(5)]
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget(
+            "question", docs
+        )
+        assert used_docs == docs
+        assert docs_dropped == 0
+        assert history_dropped == 0
+        assert question_truncated == 0
+        assert "question" in prompt
+
+    def test_build_within_budget_trims_lowest_ranked_docs_first(self) -> None:
+        chain = self._make_chain(prompt_budget_chars=600)
+        docs = [Document(page_content="x" * 200, metadata={"source": f"f{i}.py"}) for i in range(5)]
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget(
+            "question", docs
+        )
+        assert docs_dropped > 0
+        assert used_docs == docs[: len(docs) - docs_dropped]
+        assert len(prompt) <= chain.prompt_budget_chars
+        assert question_truncated == 0
+        assert "question" in prompt
+
+    def test_build_within_budget_drops_history_after_docs_exhausted(self) -> None:
+        chain = self._make_chain(use_conversation_memory=True, prompt_budget_chars=300)
+        chain.add_user_message("a" * 200)
+        chain.add_assistant_message("b" * 200)
+        docs = [Document(page_content="x" * 200, metadata={"source": "f.py"})]
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget(
+            "question", docs
+        )
+        assert docs_dropped == 1
+        assert used_docs == []
+        assert history_dropped > 0
+        assert len(prompt) <= chain.prompt_budget_chars
+
+    def test_build_within_budget_drops_oldest_history_with_uneven_lengths(self) -> None:
+        """Regression test: uneven message lengths used to make the drop loop report a fit while still over budget."""
+        chain = self._make_chain(use_conversation_memory=True, prompt_budget_chars=350)
+        chain.add_user_message("old")
+        chain.add_assistant_message("new assistant " + "n" * 500)
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget("q", [])
+        assert len(prompt) <= chain.prompt_budget_chars
+        assert history_dropped > 0
+
+    def test_build_within_budget_keeps_newest_history_drops_oldest(self) -> None:
+        """Regression test: the retention policy is oldest-first, so a partial drop must keep the newest turn."""
+        chain = self._make_chain(use_conversation_memory=True, prompt_budget_chars=240)
+        chain.add_user_message("oldest question")
+        chain.add_assistant_message("oldest answer")
+        chain.add_user_message("newest question")
+        chain.add_assistant_message("newest answer")
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget("q", [])
+        assert len(prompt) <= chain.prompt_budget_chars
+        assert 0 < history_dropped < 4
+        assert "oldest question" not in prompt
+        assert "newest question" in prompt
+
+    def test_build_within_budget_within_budget_untouched(self) -> None:
+        chain = self._make_chain(prompt_budget_chars=100_000)
+        docs = [Document(page_content="short", metadata={"source": "f.py"})]
+        _, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget("question", docs)
+        assert used_docs == docs
+        assert docs_dropped == 0
+        assert history_dropped == 0
+        assert question_truncated == 0
+
+    def test_build_within_budget_truncates_question_as_last_resort(self) -> None:
+        chain = self._make_chain(prompt_budget_chars=2000)
+        query = "q" * 5000
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget(query, [])
+        assert question_truncated > 0
+        assert "[truncated]" in prompt
+        assert used_docs == []
+        assert query not in prompt
+        assert len(prompt) <= chain.prompt_budget_chars
+
+    def test_build_within_budget_truncation_skipped_when_it_would_grow_the_prompt(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Regression test: a query shorter than the elision marker used to grow the prompt instead of shrinking it."""
+        chain = self._make_chain(prompt_budget_chars=160)
+        query = "hi"
+        with caplog.at_level("WARNING", logger="codebase_rag.llm.rag_chain"):
+            prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget(query, [])
+        assert used_docs == []
+        assert question_truncated == 0
+        assert "hi" in prompt
+        assert "[truncated]" not in prompt
+        assert len(prompt) > chain.prompt_budget_chars
+        assert any("still exceeds budget" in r.message for r in caplog.records)
+
+    def test_build_within_budget_stops_dropping_docs_that_would_grow_the_prompt(self) -> None:
+        """Regression test: a doc shorter than the empty-context sentinel used to get dropped, growing the prompt."""
+        chain = self._make_chain(prompt_budget_chars=10_000)
+        doc = Document(page_content="x", metadata={})
+        prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget(
+            "q" * 20_000, [doc]
+        )
+        assert docs_dropped == 0
+        assert used_docs == [doc]
+        assert len(prompt) <= chain.prompt_budget_chars
+
+    def test_build_within_budget_excludes_current_query_from_history(self) -> None:
+        chain = self._make_chain(use_conversation_memory=True, prompt_budget_chars=100_000)
+        chain.add_user_message("current question")
+        prompt, _, _, history_dropped, _ = chain._build_within_budget("current question", [])
+        assert prompt.count("current question") == 1
+        assert history_dropped == 0
 
     def test_retrieve_documents_calls_search_once(self) -> None:
         """Retrieval goes through the protocol's `search(query, k)` exactly
@@ -365,6 +470,7 @@ class TestOllamaClientExtra:
         mock_config = MagicMock()
         mock_config.llm_model_name = "test"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         mock_resp = MagicMock()
@@ -383,6 +489,7 @@ class TestOllamaClientExtra:
         mock_config = MagicMock()
         mock_config.llm_model_name = "test"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         mock_get.side_effect = requests.exceptions.Timeout("timeout")

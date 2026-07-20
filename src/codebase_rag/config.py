@@ -36,6 +36,7 @@ class Config:
     ollama_base_url: str = "http://localhost:11434"
     llm_model_name: str = "sam860/LFM2:350m"
     embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
+    ollama_num_ctx: int = 8192
 
     # Default repository for auto-ingestion on first startup
     default_repo_url: str = ""
@@ -73,6 +74,7 @@ class Config:
                 ollama_base_url=os.getenv("OLLAMA_BASE_URL", cls.ollama_base_url),
                 llm_model_name=os.getenv("LLM_MODEL_NAME", cls.llm_model_name),
                 embedding_model=os.getenv("EMBEDDING_MODEL", cls.embedding_model),
+                ollama_num_ctx=int(os.getenv("OLLAMA_NUM_CTX", str(cls.ollama_num_ctx))),
                 default_repo_url=os.getenv("DEFAULT_REPO_URL", cls.default_repo_url),
                 log_level=os.getenv("LOG_LEVEL", cls.log_level),
                 langfuse_enabled=os.getenv("LANGFUSE_ENABLED", "false").lower() == "true",

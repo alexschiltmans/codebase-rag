@@ -26,6 +26,9 @@ def _build_runtime(config: MagicMock, *, existing_repos: list[str] | None = None
     mock_llm = MagicMock()
     mock_llm.check_connection.return_value = {"status": "connected"}
     mock_llm.check_model_availability.return_value = {"status": "available"}
+    mock_llm.num_ctx = 8192
+    mock_llm.max_tokens = 1024
+    mock_llm.prompt_budget_chars = (8192 - 1024 - 256) * 4
 
     with (
         patch("codebase_rag.app.runtime.QdrantStore", return_value=mock_qdrant),
@@ -102,4 +105,5 @@ class TestNewRagChain:
                 llm=runtime.llm,
                 use_conversation_memory=True,
                 max_conversation_history=10,
+                prompt_budget_chars=(8192 - 1024 - 256) * 4,
             )
