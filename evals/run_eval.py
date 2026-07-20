@@ -152,6 +152,7 @@ def build_rag_chain(retriever_type: str = "hybrid") -> RAGChain:
         llm=llm,
         top_k=5,
         use_conversation_memory=False,
+        prompt_budget_chars=llm.prompt_budget_chars,
     )
 
 

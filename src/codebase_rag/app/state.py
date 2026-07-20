@@ -124,10 +124,19 @@ class SessionState:
         self._store["current_chat_id"] = chat_id
         self._store["messages"] = self._store["chat_histories"][chat_id].copy()
 
-    def append_message(self, role: str, content: str, sources: list[dict[str, str]] | None = None) -> None:
+    def append_message(
+        self,
+        role: str,
+        content: str,
+        sources: list[dict[str, str]] | None = None,
+        *,
+        question_truncated: bool = False,
+    ) -> None:
         message: dict[str, Any] = {"role": role, "content": content}
         if role == "assistant" and sources:
             message["sources"] = sources
+        if role == "assistant" and question_truncated:
+            message["question_truncated"] = True
         self._store["messages"].append(message)
 
         chat_id = self.ensure_current_chat()

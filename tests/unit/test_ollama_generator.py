@@ -2,9 +2,73 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
 from codebase_rag.llm.ollama_client import OllamaClient
+
+
+@patch("codebase_rag.llm.ollama_client.ChatOllama")
+@patch("codebase_rag.llm.ollama_client.Config")
+def test_num_ctx_defaults_from_config(mock_config_cls: MagicMock, mock_chat_ollama: MagicMock) -> None:
+    """`num_ctx` falls back to `config.ollama_num_ctx` when not passed explicitly."""
+    mock_config = MagicMock()
+    mock_config.llm_model_name = "test-model"
+    mock_config.ollama_base_url = "http://localhost:11434"
+    mock_config.ollama_num_ctx = 8192
+    mock_config_cls.get_instance.return_value = mock_config
+
+    OllamaClient(model_name="test-model")
+
+    _, kwargs = mock_chat_ollama.call_args
+    assert kwargs["num_ctx"] == 8192
+
+
+@patch("codebase_rag.llm.ollama_client.ChatOllama")
+@patch("codebase_rag.llm.ollama_client.Config")
+def test_num_ctx_override(mock_config_cls: MagicMock, mock_chat_ollama: MagicMock) -> None:
+    """An explicit `num_ctx` argument is passed through to `ChatOllama`."""
+    mock_config = MagicMock()
+    mock_config.llm_model_name = "test-model"
+    mock_config.ollama_base_url = "http://localhost:11434"
+    mock_config.ollama_num_ctx = 8192
+    mock_config_cls.get_instance.return_value = mock_config
+
+    OllamaClient(model_name="test-model", num_ctx=4096)
+
+    _, kwargs = mock_chat_ollama.call_args
+    assert kwargs["num_ctx"] == 4096
+
+
+@patch("codebase_rag.llm.ollama_client.ChatOllama")
+@patch("codebase_rag.llm.ollama_client.Config")
+def test_num_ctx_below_floor_is_rejected(mock_config_cls: MagicMock, mock_chat_ollama: MagicMock) -> None:
+    """A `num_ctx` that leaves no usable prompt budget fails at construction."""
+    mock_config = MagicMock()
+    mock_config.llm_model_name = "test-model"
+    mock_config.ollama_base_url = "http://localhost:11434"
+    mock_config.ollama_num_ctx = 8192
+    mock_config_cls.get_instance.return_value = mock_config
+
+    with pytest.raises(ValueError, match="OLLAMA_NUM_CTX"):
+        OllamaClient(model_name="test-model", num_ctx=1024, max_tokens=1024)
+
+    mock_chat_ollama.assert_not_called()
+
+
+@patch("codebase_rag.llm.ollama_client.ChatOllama")
+@patch("codebase_rag.llm.ollama_client.Config")
+def test_num_ctx_at_workable_floor_constructs(mock_config_cls: MagicMock, mock_chat_ollama: MagicMock) -> None:
+    """`OLLAMA_NUM_CTX=2048` against the default `max_tokens=1024` reservation still constructs."""
+    mock_config = MagicMock()
+    mock_config.llm_model_name = "test-model"
+    mock_config.ollama_base_url = "http://localhost:11434"
+    mock_config.ollama_num_ctx = 8192
+    mock_config_cls.get_instance.return_value = mock_config
+
+    client = OllamaClient(model_name="test-model", num_ctx=2048, max_tokens=1024)
+
+    assert client.prompt_budget_chars > 0
 
 
 class TestOllamaClient:
@@ -16,6 +80,7 @@ class TestOllamaClient:
         mock_config = MagicMock()
         mock_config.llm_model_name = "default-model"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         client = OllamaClient(
@@ -34,6 +99,7 @@ class TestOllamaClient:
         mock_config = MagicMock()
         mock_config.llm_model_name = "test-model"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         client = OllamaClient(model_name="test-model")
@@ -55,6 +121,7 @@ class TestOllamaClient:
         mock_config = MagicMock()
         mock_config.llm_model_name = "test-model"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         mock_response = MagicMock()
@@ -76,6 +143,7 @@ class TestOllamaClient:
         mock_config = MagicMock()
         mock_config.llm_model_name = "test-model"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         mock_get.side_effect = requests.exceptions.ConnectionError("Connection refused")
@@ -93,6 +161,7 @@ class TestOllamaClient:
         mock_config = MagicMock()
         mock_config.llm_model_name = "test-model"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         # First call: version check, second call: tags
@@ -118,6 +187,7 @@ class TestOllamaClient:
         mock_config = MagicMock()
         mock_config.llm_model_name = "missing-model"
         mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
         mock_config_cls.get_instance.return_value = mock_config
 
         version_resp = MagicMock()

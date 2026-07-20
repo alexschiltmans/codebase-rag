@@ -49,6 +49,29 @@ class TestDisplayChatHistory:
 
         assert mock_st.chat_message.call_count == 2
 
+    @patch("codebase_rag.app.ui_chat.st")
+    def test_flagged_message_renders_the_truncation_warning(self, mock_st: MagicMock) -> None:
+        """This re-render is what the user sees; st.rerun() discards anything drawn during process_pending_query."""
+        mock_st.chat_message.return_value.__enter__ = MagicMock()
+        mock_st.chat_message.return_value.__exit__ = MagicMock()
+        state = _new_state()
+        state.append_message("assistant", "an answer", question_truncated=True)
+
+        display_chat_history(state)
+
+        mock_st.warning.assert_called_once()
+
+    @patch("codebase_rag.app.ui_chat.st")
+    def test_unflagged_message_renders_no_warning(self, mock_st: MagicMock) -> None:
+        mock_st.chat_message.return_value.__enter__ = MagicMock()
+        mock_st.chat_message.return_value.__exit__ = MagicMock()
+        state = _new_state()
+        state.append_message("assistant", "an answer")
+
+        display_chat_history(state)
+
+        mock_st.warning.assert_not_called()
+
 
 class TestAppendMessage:
     @patch("codebase_rag.app.ui_chat.get_chat_history_manager")
@@ -103,6 +126,30 @@ class TestProcessPendingQuery:
 
         assert state.query_state == QueryLifecycle.IDLE
         assert any("42" in m["content"] for m in state.messages)
+        mock_st.warning.assert_not_called()
+
+    @patch("codebase_rag.app.ui_chat.get_chat_history_manager")
+    @patch("codebase_rag.app.ui_chat.st")
+    def test_truncated_question_renders_warning(self, mock_st: MagicMock, mock_get_mgr: MagicMock) -> None:
+        mock_get_mgr.return_value = MagicMock()
+        mock_st.chat_message.return_value.__enter__ = MagicMock()
+        mock_st.chat_message.return_value.__exit__ = MagicMock()
+        mock_st.write_stream.return_value = "42"
+
+        runtime = MagicMock()
+        mock_chain = MagicMock()
+        mock_chain.last_result = {"sources": [], "metrics": {"question_truncated_chars": 37}}
+        runtime.new_rag_chain.return_value = mock_chain
+
+        state = _new_state()
+        state.append_message("user", "what is the answer?")
+        state.submit_query("what is the answer?")
+
+        process_pending_query(runtime, state)
+
+        assert state.query_state == QueryLifecycle.IDLE
+        # Persisted on the message, not rendered immediately, so it survives the st.rerun() that follows.
+        assert state.messages[-1]["question_truncated"] is True
 
     @patch("codebase_rag.app.ui_chat.get_chat_history_manager")
     @patch("codebase_rag.app.ui_chat.st")

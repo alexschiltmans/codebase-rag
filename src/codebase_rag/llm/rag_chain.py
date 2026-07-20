@@ -56,6 +56,8 @@ class RAGChain:
     multiple steps (retrieval, prompt construction, generation).
     """
 
+    _HISTORY_PREFIX = "Previous conversation:\n"
+
     def __init__(
         self,
         retriever: RetrieverProtocol,
@@ -64,6 +66,7 @@ class RAGChain:
         top_k: int = 5,
         use_conversation_memory: bool = True,
         max_conversation_history: int = 5,
+        prompt_budget_chars: int | None = None,
     ) -> None:
         """Initialize the RAG chain.
 
@@ -74,6 +77,8 @@ class RAGChain:
             top_k: Number of documents to retrieve.
             use_conversation_memory: Whether to use conversation memory.
             max_conversation_history: Maximum number of conversation turns to keep.
+            prompt_budget_chars: Maximum prompt length in characters, derived from
+                the LLM's `num_ctx`. `None` disables budget enforcement.
         """
         self.retriever = retriever
         self.llm = llm
@@ -81,6 +86,7 @@ class RAGChain:
         self.use_conversation_memory = use_conversation_memory
         self.conversation_history: list[dict[str, Any]] = []
         self.max_conversation_history = max_conversation_history
+        self.prompt_budget_chars = prompt_budget_chars
         # Populated by stream() once its generator is fully consumed, since
         # st.write_stream() only returns the concatenated text — callers that
         # need sources/metrics read them from here afterward.
@@ -123,17 +129,21 @@ class RAGChain:
             top_k = kwargs.get("top_k", self.top_k)
             retrieval_span = trace.span(name="retrieval", input={"query": query, "top_k": top_k}) if trace else None
             documents = self._retrieve_documents(query, top_k)
+            documents_retrieved = len(documents)
             retrieval_time = time.time() - start_time
-            logger.debug("Retrieved %d documents in %.2f seconds", len(documents), retrieval_time)
+            logger.debug("Retrieved %d documents in %.2f seconds", documents_retrieved, retrieval_time)
 
             if retrieval_span:
-                retrieval_span.end(output={"documents_retrieved": len(documents), "retrieval_time": retrieval_time})
+                retrieval_span.end(
+                    output={"documents_retrieved": documents_retrieved, "retrieval_time": retrieval_time}
+                )
 
             if not documents:
                 return self._empty_retrieval_result(start_time, retrieval_time, trace)
 
-            context = self._create_context(documents)
-            prompt = self._create_prompt(query, context)
+            prompt, documents, docs_dropped, history_dropped, question_truncated_chars = self._build_within_budget(
+                query, documents
+            )
 
             generation_span = trace.span(name="generation", input={"prompt_length": len(prompt)}) if trace else None
             generation_start = time.time()
@@ -161,7 +171,10 @@ class RAGChain:
                     "total_time": total_time,
                     "retrieval_time": retrieval_time,
                     "generation_time": generation_time,
-                    "documents_retrieved": len(documents),
+                    "documents_retrieved": documents_retrieved,
+                    "context_docs_dropped": docs_dropped,
+                    "history_messages_dropped": history_dropped,
+                    "question_truncated_chars": question_truncated_chars,
                 },
             }
             if trace:
@@ -200,19 +213,23 @@ class RAGChain:
             top_k = kwargs.get("top_k", self.top_k)
             retrieval_span = trace.span(name="retrieval", input={"query": query, "top_k": top_k}) if trace else None
             documents = self._retrieve_documents(query, top_k)
+            documents_retrieved = len(documents)
             retrieval_time = time.time() - start_time
-            logger.debug("Retrieved %d documents in %.2f seconds", len(documents), retrieval_time)
+            logger.debug("Retrieved %d documents in %.2f seconds", documents_retrieved, retrieval_time)
 
             if retrieval_span:
-                retrieval_span.end(output={"documents_retrieved": len(documents), "retrieval_time": retrieval_time})
+                retrieval_span.end(
+                    output={"documents_retrieved": documents_retrieved, "retrieval_time": retrieval_time}
+                )
 
             if not documents:
                 self.last_result = self._empty_retrieval_result(start_time, retrieval_time, trace)
                 yield str(self.last_result["answer"])
                 return
 
-            context = self._create_context(documents)
-            prompt = self._create_prompt(query, context)
+            prompt, documents, docs_dropped, history_dropped, question_truncated_chars = self._build_within_budget(
+                query, documents
+            )
 
             generation_span = trace.span(name="generation", input={"prompt_length": len(prompt)}) if trace else None
             generation_start = time.time()
@@ -246,7 +263,10 @@ class RAGChain:
                     "total_time": total_time,
                     "retrieval_time": retrieval_time,
                     "generation_time": generation_time,
-                    "documents_retrieved": len(documents),
+                    "documents_retrieved": documents_retrieved,
+                    "context_docs_dropped": docs_dropped,
+                    "history_messages_dropped": history_dropped,
+                    "question_truncated_chars": question_truncated_chars,
                 },
             }
             if trace:
@@ -297,6 +317,9 @@ class RAGChain:
                 "retrieval_time": retrieval_time,
                 "generation_time": 0,
                 "documents_retrieved": 0,
+                "context_docs_dropped": 0,
+                "history_messages_dropped": 0,
+                "question_truncated_chars": 0,
             },
         }
         if trace:
@@ -318,31 +341,16 @@ class RAGChain:
         context_parts = []
 
         for i, doc in enumerate(documents):
-            content = getattr(doc, "page_content", "") or getattr(doc, "content", "")
-            metadata = getattr(doc, "metadata", {}) or {}
-
-            source_info = ""
-            if "source" in metadata:
-                source_info = f"Source: {metadata['source']}"
-
-            doc_text = f"[Document {i + 1}] {content}\n{source_info}\n"
-            context_parts.append(doc_text)
+            context_parts.append(self._doc_block(doc, i + 1))
 
         return "\n\n".join(context_parts)
 
-    def _create_prompt(self, query: str, context: str) -> str:
-        """Create the prompt for the language model.
-
-        Args:
-            query: The user query.
-            context: The document context.
-
-        Returns:
-            Formatted prompt string.
-        """
-        conversation_history = self._format_conversation_history() if self.use_conversation_memory else ""
-
-        return self.prompt_template.format(question=query, context=context, conversation_history=conversation_history)
+    def _doc_block(self, doc: Document, index: int) -> str:
+        """Render one document the way `_create_context` labels it, so estimates account for `index`'s digit width."""
+        content = getattr(doc, "page_content", "") or getattr(doc, "content", "")
+        metadata = getattr(doc, "metadata", {}) or {}
+        source_info = f"Source: {metadata['source']}" if "source" in metadata else ""
+        return f"[Document {index}] {content}\n{source_info}\n"
 
     def _format_sources(self, documents: list[Any]) -> list[dict[str, str]]:
         """Format sources for citation in the response.
@@ -429,19 +437,145 @@ class RAGChain:
             if i > 0:
                 self.conversation_history = self.conversation_history[i:]
 
-    def _format_conversation_history(self) -> str:
+    def _format_conversation_history(self, history: list[dict[str, Any]] | None = None) -> str:
         """Format the conversation history for inclusion in the prompt.
+
+        Args:
+            history: Messages to format. Defaults to `self.conversation_history`.
 
         Returns:
             Formatted conversation history string
         """
-        if not self.use_conversation_memory or not self.conversation_history:
+        if history is None:
+            history = self.conversation_history
+
+        if not self.use_conversation_memory or not history:
             return "No previous conversation."
 
-        formatted_messages = []
-        for message in self.conversation_history:
-            role = message["role"].capitalize()
-            content = message["content"]
-            formatted_messages.append(f"{role}: {content}")
+        formatted_messages = [self._history_line(message) for message in history]
 
-        return "Previous conversation:\n" + "\n\n".join(formatted_messages)
+        return self._HISTORY_PREFIX + "\n\n".join(formatted_messages)
+
+    def _history_line(self, message: dict[str, Any]) -> str:
+        """Render one history message the way `_format_conversation_history` does, keeping length estimates in sync."""
+        return f"{message['role'].capitalize()}: {message['content']}"
+
+    def _build_within_budget(self, query: str, documents: list[Document]) -> tuple[str, list[Document], int, int, int]:
+        """Assemble a prompt that fits `prompt_budget_chars`, if set.
+
+        Drops the lowest-ranked (last) context document first, then the
+        oldest conversation history message. If the prompt still doesn't
+        fit once both are exhausted, the question itself is truncated
+        (head kept, tail cut, with an elision marker) as a last resort —
+        the alternative is Ollama truncating it silently server-side.
+        The prompt template is never altered. Per-item character costs
+        are computed once so drops don't require rebuilding the whole
+        prompt on every iteration; the final prompt is assembled once.
+
+        Returns:
+            Tuple of (prompt, documents used, docs dropped, history
+            messages dropped, question characters truncated).
+        """
+        docs = list(documents)
+        history = list(self.conversation_history) if self.use_conversation_memory else []
+        # run()/stream() just added the current query as the last history entry; drop it so it isn't counted twice.
+        if history and history[-1]["role"] == "user":
+            history = history[:-1]
+
+        def build(docs_subset: list[Document], history_subset: list[dict[str, Any]], question: str) -> str:
+            context = self._create_context(docs_subset)
+            conversation_history = (
+                self._format_conversation_history(history_subset) if self.use_conversation_memory else ""
+            )
+            return self.prompt_template.format(
+                question=question, context=context, conversation_history=conversation_history
+            )
+
+        if self.prompt_budget_chars is None:
+            return build(docs, history, query), docs, 0, 0, 0
+
+        fixed_len = len(self.prompt_template.format(question=query, context="", conversation_history=""))
+        doc_lens = [len(self._doc_block(d, i + 1)) for i, d in enumerate(docs)]
+        no_context_len = len(self._create_context([]))
+        msg_lens = [len(self._history_line(m)) for m in history]
+        no_history_len = len(self._format_conversation_history([])) if self.use_conversation_memory else 0
+
+        n_docs = len(docs)
+        n_hist = len(history)
+        # Running totals updated incrementally as items drop, instead of re-summing the surviving slice each time.
+        context_total = no_context_len if n_docs == 0 else sum(doc_lens) + 2 * (n_docs - 1)
+        if n_hist == 0 or not self.use_conversation_memory:
+            history_total = no_history_len
+        else:
+            history_total = len(self._HISTORY_PREFIX) + sum(msg_lens) + 2 * (n_hist - 1)
+        total = fixed_len + context_total + history_total
+
+        docs_dropped = 0
+        history_dropped = 0
+
+        while total > self.prompt_budget_chars and n_docs > 0:
+            # Dropping the last doc swaps the whole block for the empty sentinel; otherwise just its length and a join.
+            new_context_total = no_context_len if n_docs == 1 else context_total - doc_lens[n_docs - 1] - 2
+            new_total = total - context_total + new_context_total
+            if new_total >= total:
+                # A doc shorter than its replacement sentinel would grow the prompt, not shrink it — stop.
+                break
+            n_docs -= 1
+            docs_dropped += 1
+            context_total = new_context_total
+            total = new_total
+
+        while total > self.prompt_budget_chars and n_hist > 0:
+            # Dropping oldest-first means the item about to go is at index len(history) - n_hist, not n_hist - 1.
+            dropped_len = msg_lens[len(history) - n_hist]
+            new_history_total = no_history_len if n_hist == 1 else history_total - dropped_len - 2
+            new_total = total - history_total + new_history_total
+            if new_total >= total:
+                break
+            n_hist -= 1
+            history_dropped += 1
+            history_total = new_history_total
+            total = new_total
+
+        docs = docs[:n_docs]
+        history = history[len(history) - n_hist :] if n_hist else []
+
+        if docs_dropped or history_dropped:
+            logger.warning(
+                "Prompt exceeded budget of %d chars; dropped %d context docs and %d history messages",
+                self.prompt_budget_chars,
+                docs_dropped,
+                history_dropped,
+            )
+
+        question = query
+        question_truncated_chars = 0
+        if total > self.prompt_budget_chars:
+            excess = total - self.prompt_budget_chars
+            marker = "... [truncated]"
+            keep = max(0, len(query) - excess - len(marker))
+            truncated_question = query[:keep] + marker
+            # The marker alone can be longer than a short query, so only truncate if it actually shrinks things.
+            if len(truncated_question) < len(query):
+                question = truncated_question
+                question_truncated_chars = len(query) - keep
+                total -= len(query) - len(truncated_question)
+                logger.warning(
+                    "Prompt still exceeded budget of %d chars after dropping context and history; "
+                    "truncated question by %d chars",
+                    self.prompt_budget_chars,
+                    question_truncated_chars,
+                )
+
+            if total > self.prompt_budget_chars:
+                # Nothing left helps; send it over budget anyway (template and question stay intact) but log loudly.
+                logger.warning(
+                    "Prompt of %d chars still exceeds budget of %d chars after dropping all "
+                    "context and history and truncating the question as far as it can go; "
+                    "sending it over budget rather than dropping the question or template",
+                    total,
+                    self.prompt_budget_chars,
+                )
+
+        prompt = build(docs, history, question)
+        return prompt, docs, docs_dropped, history_dropped, question_truncated_chars
