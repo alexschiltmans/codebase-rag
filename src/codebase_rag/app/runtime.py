@@ -23,7 +23,6 @@ from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.llm.ollama_client import OllamaClient
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
-from codebase_rag.retrieval.hybrid_search import HybridRetriever
 from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
 from codebase_rag.services.folder_picker import FolderPicker
 
@@ -183,12 +182,6 @@ class AppRuntime:
 
         self.vector_retriever = VectorRetriever(self.qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
         self.bm25_retriever = _load_or_create_bm25_retriever()
-        self.hybrid_retriever = HybridRetriever(
-            vector_retriever=self.vector_retriever,
-            bm25_retriever=self.bm25_retriever,
-            vector_weight=0.7,
-            bm25_weight=0.3,
-        )
 
         self.llm = OllamaClient(
             model_name=config.llm_model_name,
@@ -214,7 +207,7 @@ class AppRuntime:
         without needing a new retriever, LLM client, or Qdrant connection.
         """
         return RAGChain(
-            retriever=self.hybrid_retriever,
+            retriever=self.bm25_retriever,
             llm=self.llm,
             use_conversation_memory=True,
             max_conversation_history=MAX_CONVERSATION_HISTORY,
@@ -222,7 +215,7 @@ class AppRuntime:
         )
 
     def swap_bm25(self, index: BM25Retriever) -> None:
-        """Atomically replace the hybrid retriever's BM25 component.
+        """Atomically replace the runtime's BM25 retriever.
 
         Called after a successful ingest instead of clearing
         ``st.cache_resource`` and rebuilding everything: the embedding
@@ -231,7 +224,6 @@ class AppRuntime:
         share this runtime.
         """
         self.bm25_retriever = index
-        self.hybrid_retriever.bm25_retriever = index
 
     def _on_ingest_success(self, _job: IngestJob) -> None:
         get_repo_list.clear()  # type: ignore[attr-defined]

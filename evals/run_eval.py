@@ -670,19 +670,30 @@ def generate_results_markdown(
     return "\n".join(lines)
 
 
-def generate_ablation_markdown(all_metrics: dict[str, dict]) -> str:
+def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]) -> str:
     """Generate a markdown ablation report comparing retriever configurations.
 
     Args:
         all_metrics: Mapping of retriever type ("vector", "bm25", "hybrid") to
             its custom_metrics dict from `compute_custom_metrics`.
+        testset: The loaded test set, used to report its exact-term vs
+            conceptual composition.
     """
+    conceptual_count = sum(1 for item in testset if item.get("category") == "conceptual")
+    exact_term_count = len(testset) - conceptual_count
+
     lines = ["# Retrieval Ablation\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(
         "Same test set (`evals/testset.json`), same LLM, same top_k — only the retriever "
         "feeding the RAG chain changes. Full per-question detail for each configuration is "
         "in `results_<retriever>.md`.\n"
+    )
+    lines.append(
+        f"Test set composition: {exact_term_count} exact-term (keyword/lookup) questions, "
+        f"{conceptual_count} conceptual/paraphrased questions ({len(testset)} total). The "
+        "conceptual questions avoid quoting source identifiers, so a retriever's hit rate "
+        "on them reflects semantic matching rather than keyword overlap.\n"
     )
     lines.append(
         f"The hybrid arm applies the production cosine relevance cutoff "
@@ -893,7 +904,7 @@ def main() -> None:
                 print(f"  {k}: {v:.4f}{cov_str}" if isinstance(v, float) else f"  {k}: {v}{cov_str}")
         print("=" * 60)
 
-    ablation_md = generate_ablation_markdown(all_custom_metrics)
+    ablation_md = generate_ablation_markdown(all_custom_metrics, testset)
     ablation_path = EVALS_DIR / "ablation.md"
     with open(ablation_path, "w") as f:
         f.write(ablation_md)
