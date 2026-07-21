@@ -23,33 +23,53 @@ The "large model" column is a past run with `qwen3-coder:30b`, kept here as a hi
 
 ## Retrieval Ablation
 
-The app uses the hybrid retriever by default. To check whether that holds up, the eval runs the same 16-question test set through vector-only and BM25-only retrieval as well. Full results: [evals/ablation.md](../evals/ablation.md), [evals/results_vector.md](../evals/results_vector.md), [evals/results_bm25.md](../evals/results_bm25.md).
+The app's default retriever is BM25-only (see "Default retriever decision" below). To measure the alternatives, the eval runs the full test set through vector-only, BM25-only, and hybrid (RRF) retrieval. The test set is now 30 questions: 16 exact-term lookups (function/class/enum names, the original set) plus 14 conceptual/paraphrased questions added to stop the comparison being biased toward BM25's home turf. Full results: [evals/ablation.md](../evals/ablation.md), [evals/results_vector.md](../evals/results_vector.md), [evals/results_bm25.md](../evals/results_bm25.md), [evals/results_hybrid.md](../evals/results_hybrid.md).
 
 | Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Avg Latency |
 |-----------|----------|-----|----------------|------------------|-------------|
-| Vector-only | 0.4000 | 0.2967 | 0.4074 | 0.1875 | 0.8s |
-| BM25-only | 0.4000 | 0.2244 | 0.4473 | 0.1750 | 0.9s |
-| Hybrid | 0.2667 | 0.2333 | 0.3406 | 0.1750 | 0.8s |
+| Vector-only | 0.6207 | 0.5270 | 0.4298 | 0.2800 | 0.9s |
+| BM25-only | 0.6552 | 0.4534 | 0.4769 | 0.2333 | 1.0s |
+| Hybrid | 0.5862 | 0.5115 | 0.4689 | 0.2600 | 0.9s |
 
-Read this table by Hit Rate and MRR. Both score retrieval directly against each question's expected source files, with no LLM in the loop: Hit Rate is the fraction of questions where an expected source appears anywhere in the retrieved set, and MRR (mean reciprocal rank) rewards putting it near the top. The keyword-recall and source-precision columns are kept for continuity, but keyword recall is measured on the generated answer, so the 350M model's phrasing sits between the retriever and the score — which is why these retrieval-only metrics were added.
+Read this table by Hit Rate and MRR, same as before: both score retrieval directly against each question's expected source files, with no LLM in the loop. Hit Rate is what actually reaches the LLM's context at `top_k=5` (every retrieved document is passed in, not just the top one), so it is the metric that should drive the default-retriever decision; MRR matters more for a caller that only uses the top result.
 
-These numbers were produced against the current Reciprocal Rank Fusion code, so they replace the pre-fusion ablation that used to sit here (the earlier version fused with a fixed 0.7/0.3 vector/BM25 blend and max-normalized BM25 per query, which could let a middling keyword match outrank a document BM25 alone would have put first; RRF fuses on rank order and removes that skew). They do not make the case for hybrid. On Hit Rate, vector-only and BM25-only tie at 0.40 while hybrid trails both at 0.27; on MRR, vector-only leads. As shipped, the hybrid arm applies the production vector relevance threshold to its vector component, and on this test set that fused, filtered path surfaces the expected file less often than either component alone. RRF fixed the old normalization skew, but it did not turn fusion into a win here.
+Broken out by question category, the picture is more specific than "hybrid loses":
 
-Two caveats before drawing conclusions. The test set is 16 questions weighted toward exact-term lookups (function, class, and enum names), which is BM25's home turf and does not exercise the paraphrased or conceptual queries where vector search is meant to earn its place in the blend. And 16 questions is a thin basis for flipping a shipped default. So the default stays hybrid for now, but as a provisional call rather than a vindicated one: the current evidence argues against hybrid, and what it really points to is the need for a broader test set with conceptual questions before keeping or changing the default. The retrieval-only metrics added here exist so that call can rest on retrieval evidence rather than answer-phrasing proxies.
+| Retriever | Conceptual Hit Rate | Conceptual MRR | Exact-term Hit Rate | Exact-term MRR |
+|-----------|---------------------|-----------------|----------------------|------------------|
+| Vector-only | 0.8571 | 0.7738 | 0.4000 | 0.2967 |
+| BM25-only | 0.9286 | 0.6988 | 0.4000 | 0.2244 |
+| Hybrid | 0.9286 | 0.8095 | 0.2667 | 0.2333 |
+
+Conceptual is 14 questions; exact-term is 15 of the 16 exact-term questions, excluding the one question flagged `expected_failure` in `testset.json` (a known confusable case, excluded from Hit Rate/MRR the same way the headline table's 0.6207/0.6552/0.5862 figures exclude it — both tables are on the 29-question basis). Hybrid actually leads on conceptual questions (ties BM25's hit rate, beats both on MRR) — RRF fusion does what it's meant to do there. Its overall deficit comes entirely from exact-term questions, where it trails both single components, which tie at 0.40.
+
+### Diagnosis: why hybrid underperforms on exact-term lookups
+
+5 of the 29 questions (excluding `expected_failure`, same basis as the tables above) have hybrid missing while a single component hits (4 exact-term, 1 conceptual). For every one of those 5, the expected document was present in the winning component's raw top-10 — at rank 3-9, never dropped by `VECTOR_SCORE_THRESHOLD` — but the *other* component never surfaced it at all. RRF's rank-only score (`weight / (rrf_k + rank)`) gives that mid-single-digit rank a small contribution; because it only comes from one list, it loses to documents that both lists rank moderately (or that one list ranks in the top 1-2), so it falls out of the fused top 5. That's the "RRF's rank-only blend discards a strong single-retriever signal" candidate from `design.md`, confirmed as the operative cause: 5/5, not the threshold and not `top_k`.
+
+As a control, vector-only was also run with `VECTOR_SCORE_THRESHOLD=0.25` applied. That threshold pass was a separate run, not re-scored onto the 29-question basis the tables above use, so it does not yield a clean same-basis delta; on its own terms it lowered vector's hit rate by roughly one question (about 2 percentage points), with a similarly small MRR change. The threshold is a real but minor cost; it is not what drags hybrid below its components.
+
+### Default retriever decision
+
+**The default retriever is now BM25-only**, changed from hybrid in `AppRuntime`. BM25-only has the best overall Hit Rate (0.6552) and ties or leads hybrid in both categories on Hit Rate, which is what determines whether the right file reaches the model's context at `top_k=5`. Vector-only is a reasonable second choice (best MRR, close behind on Hit Rate); hybrid is the weakest choice on the metric that matters most for this app's context-window usage, despite genuinely helping on conceptual queries, because its exact-term regression is larger than its conceptual gain.
+
+The RRF fusion weakness diagnosed above looks fixable in principle (e.g. don't let a single strong ranker's mid-rank hit be outscored by two weak-but-present ranks), but `design.md`'s decision was to fix fusion only if the cause is both found and safe to change quickly — guessing at fusion weights is what caused the earlier hybrid implementation's problems. A fusion algorithm change is a large enough behavior change, with its own risk of regressing the conceptual-query win it currently has, that it belongs in its own change rather than being bolted onto this one. No `retrieval-relevance` delta was written as part of this change; `HybridRetriever` and its RRF fusion code are unchanged and remain available (used directly by the ingestion pipeline's duplicate-detection search), just no longer the app's default RAG retriever.
+
+This replaces the "provisional, pending a broader test set" caveat that used to sit here: the broader (30-question, category-balanced) set now exists, and the decision above is what it supports.
 
 ### RAGAS judge quality
 
 This run was judged by a fixed `qwen3.5:9b` (reasoning disabled) rather than the self-judging 350M default, so the scores below are more trustworthy than earlier self-judged numbers — but read them with their coverage, which the harness now records and gates on, refusing to publish a metric that completed on fewer than 90% of questions.
 
-| Retriever | Faithfulness | Answer Relevancy |
-|-----------|--------------|------------------|
-| Vector-only | 0.54 (16/16) | 0.80 (16/16) |
-| BM25-only | 0.59 (15/16) | 0.78 (16/16) |
-| Hybrid | not published (13/16) | 0.83 (16/16) |
+| Retriever | Answer Relevancy |
+|-----------|-------------------|
+| Vector-only | 0.81 (30/30) |
+| BM25-only | 0.8681 (29/30) |
+| Hybrid | 0.8166 (30/30) |
 
-Context recall is absent: the local judge cannot produce the structured output that metric's parser expects, so it was skipped rather than averaged from a few surviving samples. Hybrid's Faithfulness is shown as unpublished because only 13 of 16 judge calls parsed, below the coverage gate; the three failures were the judge mis-formatting otherwise-valid verdicts, not low scores (the 13 that parsed averaged 0.58, in line with the other two retrievers).
+Faithfulness and Context Recall are both absent from this run. Context recall still can't be scored: the local judge cannot produce the structured output that metric's parser expects. Faithfulness's coverage gate failed on the hybrid arm again on the grown 30-question set (the same judge output-parsing limitation as before, not a retrieval or answer-quality regression), and the harness now hard-exits on a gate failure rather than publishing a partial average — so both metrics were skipped (`--skip-metric context_recall --skip-metric faithfulness`) to get a result for every arm on this run. Only Answer Relevancy is reported here as a result; it cleared 30/30 coverage on every retriever.
 
-These scores are not comparable to the older baseline that reported Faithfulness 0.9048 and Context Recall 0.625 for vector. That baseline was self-judged by the 350M model and its coverage was never recorded, so the move to 0.54 here reflects the judge changing from a 350M self-judge to a fixed 9B judge at least as much as anything about the answers. A separate change also landed in between — the eval chain stopped rendering "No previous conversation." into every prompt once `use_conversation_memory=False` — but its isolated effect can't be separated from the judge swap, and the number it would be measured against was never trustworthy in the first place. No clean before/after delta can be claimed, so none is.
+Answer Relevancy is not directly comparable to older baselines from before the fixed-judge switch either: those were self-judged by the 350M model with coverage never recorded, so any delta reflects the judge changing from a 350M self-judge to a fixed 9B judge at least as much as anything about the answers. A separate change also landed in between — the eval chain stopped rendering "No previous conversation." into every prompt once `use_conversation_memory=False` — but its isolated effect can't be separated from the judge swap, and the numbers it would be measured against were never trustworthy in the first place. No clean before/after delta can be claimed, so none is.
 
 These figures come from a run whose judge was served by a native macOS Ollama with Metal acceleration; generation still used the shipped 350M model. Latencies here reflect that GPU path and are not comparable to Docker-deployment latencies elsewhere in this doc.
 

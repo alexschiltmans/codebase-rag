@@ -45,7 +45,7 @@ class TestAppRuntimeConstruction:
         runtime, _ = _build_runtime(_config())
         assert runtime.qdrant_store is not None
         assert runtime.vector_retriever is not None
-        assert runtime.hybrid_retriever is not None
+        assert runtime.bm25_retriever is not None
         assert runtime.llm is not None
         assert runtime.folder_picker is not None
         assert runtime.ingestion is not None
@@ -68,14 +68,13 @@ class TestAppRuntimeConstruction:
 
 
 class TestSwapBm25:
-    def test_updates_both_bm25_and_hybrid_retriever(self) -> None:
+    def test_updates_bm25_retriever(self) -> None:
         runtime, _ = _build_runtime(_config())
         new_index = MagicMock()
 
         runtime.swap_bm25(new_index)
 
         assert runtime.bm25_retriever is new_index
-        assert runtime.hybrid_retriever.bm25_retriever is new_index
 
 
 class TestDeleteRepo:
@@ -101,7 +100,7 @@ class TestNewRagChain:
         with patch("codebase_rag.app.runtime.RAGChain") as mock_rag_chain_cls:
             runtime.new_rag_chain()
             mock_rag_chain_cls.assert_called_once_with(
-                retriever=runtime.hybrid_retriever,
+                retriever=runtime.bm25_retriever,
                 llm=runtime.llm,
                 use_conversation_memory=True,
                 max_conversation_history=10,
