@@ -134,15 +134,15 @@ test-all: venv ## Run all tests (including performance + evaluation)
 # ── Linting / type-checking ──────────────────────────────────────────────────
 .PHONY: lint
 lint: venv ## Run ruff linter
-	$(PYTHON) -m ruff check src/ tests/ scripts/
+	$(PYTHON) -m ruff check src/ tests/ scripts/ evals/
 
 .PHONY: format
 format: venv ## Auto-format with ruff
-	$(PYTHON) -m ruff format src/ tests/ scripts/
+	$(PYTHON) -m ruff format src/ tests/ scripts/ evals/
 
 .PHONY: format-check
 format-check: venv ## Check formatting without rewriting files (matches CI)
-	$(PYTHON) -m ruff format --check src/ tests/ scripts/
+	$(PYTHON) -m ruff format --check src/ tests/ scripts/ evals/
 
 .PHONY: typecheck
 typecheck: venv ## Run mypy

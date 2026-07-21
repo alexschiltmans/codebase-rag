@@ -17,8 +17,11 @@ from evals.run_eval import (
     RAGAS_METRIC_NAMES,
     build_ragas_metrics,
     check_coverage_gate,
+    compute_custom_metrics,
     compute_ragas_scores_and_coverage,
+    compute_retrieval_hit_and_reciprocal_rank,
     publish_retriever_results,
+    resolve_judge_timeout_s,
     resolve_max_workers,
     resolve_min_coverage,
     resolve_skip_metrics,
@@ -59,6 +62,92 @@ class TestComputeRagasScoresAndCoverage:
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert set(scores) == {"faithfulness"}
         assert set(coverage) == {"faithfulness"}
+
+
+class TestComputeRetrievalHitAndReciprocalRank:
+    """1.3: hit rate / MRR math against hand-built expected/actual source lists."""
+
+    def test_match_at_rank_two_scores_half_mrr(self):
+        hit, rr = compute_retrieval_hit_and_reciprocal_rank(["enum.py"], ["data-model.md", "enum.py", "node.hpp"])
+        assert hit == 1
+        assert rr == pytest.approx(0.5)
+
+    def test_match_at_rank_one_scores_full_mrr(self):
+        hit, rr = compute_retrieval_hit_and_reciprocal_rank(["enum.py"], ["enum.py", "node.hpp"])
+        assert hit == 1
+        assert rr == pytest.approx(1.0)
+
+    def test_no_match_scores_zero(self):
+        hit, rr = compute_retrieval_hit_and_reciprocal_rank(["enum.py"], ["data-model.md", "node.hpp"])
+        assert hit == 0
+        assert rr == 0.0
+
+    def test_match_is_case_insensitive_substring(self):
+        hit, rr = compute_retrieval_hit_and_reciprocal_rank(["Enum.py"], ["src/ENUM.PY"])
+        assert hit == 1
+        assert rr == pytest.approx(1.0)
+
+
+class TestComputeCustomMetricsRetrieval:
+    """1.3: avg_hit_rate/avg_mrr aggregation, including exclusion rules."""
+
+    def _result(self, sources_expected=None, sources_actual=None, expected_failure=False, error=None):
+        return {
+            "question": "q",
+            "answer": "a",
+            "keywords": [],
+            "sources_expected": sources_expected if sources_expected is not None else [],
+            "sources_actual": sources_actual if sources_actual is not None else [],
+            "expected_failure": expected_failure,
+            "elapsed": 1.0,
+            "error": error,
+        }
+
+    def test_rank_two_match_averages_to_half_mrr(self):
+        results = [self._result(["enum.py"], ["data-model.md", "enum.py"])]
+        metrics = compute_custom_metrics(results)
+        assert metrics["avg_hit_rate"] == pytest.approx(1.0)
+        assert metrics["avg_mrr"] == pytest.approx(0.5)
+
+    def test_no_match_averages_to_zero(self):
+        results = [self._result(["enum.py"], ["node.hpp"])]
+        metrics = compute_custom_metrics(results)
+        assert metrics["avg_hit_rate"] == pytest.approx(0.0)
+        assert metrics["avg_mrr"] == pytest.approx(0.0)
+
+    def test_empty_sources_expected_is_excluded_from_average(self):
+        results = [
+            self._result([], ["node.hpp"]),
+            self._result(["enum.py"], ["enum.py"]),
+        ]
+        metrics = compute_custom_metrics(results)
+        # Only the second question (with sources_expected) contributes.
+        assert metrics["avg_hit_rate"] == pytest.approx(1.0)
+        assert metrics["avg_mrr"] == pytest.approx(1.0)
+
+    def test_expected_failure_question_is_excluded_from_average(self):
+        results = [
+            self._result(["enum.py"], ["node.hpp"], expected_failure=True),
+            self._result(["enum.py"], ["enum.py"]),
+        ]
+        metrics = compute_custom_metrics(results)
+        assert metrics["avg_hit_rate"] == pytest.approx(1.0)
+        assert metrics["avg_mrr"] == pytest.approx(1.0)
+
+    def test_errored_result_is_excluded_from_average(self):
+        results = [
+            self._result(["enum.py"], [], error="boom"),
+            self._result(["enum.py"], ["enum.py"]),
+        ]
+        metrics = compute_custom_metrics(results)
+        assert metrics["avg_hit_rate"] == pytest.approx(1.0)
+        assert metrics["avg_mrr"] == pytest.approx(1.0)
+
+    def test_no_eligible_questions_defaults_to_zero(self):
+        results = [self._result([], [])]
+        metrics = compute_custom_metrics(results)
+        assert metrics["avg_hit_rate"] == 0
+        assert metrics["avg_mrr"] == 0
 
 
 class TestCheckCoverageGate:
@@ -265,3 +354,23 @@ class TestResolveConfigValueFlagForms:
         monkeypatch.setattr(sys, "argv", ["run_eval.py"])
         monkeypatch.delenv("RAGAS_MAX_WORKERS", raising=False)
         assert resolve_max_workers() == 1
+
+
+class TestResolveJudgeTimeout:
+    def test_default_is_1200(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["run_eval.py"])
+        monkeypatch.delenv("RAGAS_JUDGE_TIMEOUT", raising=False)
+        assert resolve_judge_timeout_s() == 1200
+
+    def test_flag_overrides_default(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["run_eval.py", "--judge-timeout", "1800"])
+        assert resolve_judge_timeout_s() == 1800
+
+    def test_equals_form(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["run_eval.py", "--judge-timeout=900"])
+        assert resolve_judge_timeout_s() == 900
+
+    def test_env_var_overrides_default(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["run_eval.py"])
+        monkeypatch.setenv("RAGAS_JUDGE_TIMEOUT", "600")
+        assert resolve_judge_timeout_s() == 600
