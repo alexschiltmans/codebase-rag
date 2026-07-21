@@ -9,8 +9,9 @@ Usage:
 
     # By default RAGAS judges answers with the same model that generated them
     # (self-judged, caveated in the reports). Pass a fixed, larger judge model
-    # via --judge-model or RAGAS_JUDGE_MODEL to avoid that:
-    uv run python evals/run_eval.py --judge-model qwen3-coder:30b
+    # via --judge-model or RAGAS_JUDGE_MODEL to avoid that. Local models are
+    # capped at 9B, so 9B is the largest judge to use here:
+    uv run python evals/run_eval.py --judge-model qwen3.5:9b
 
     # Judge concurrency is bounded to what one local Ollama serves in parallel
     # (default 1) via --max-workers or RAGAS_MAX_WORKERS; a run whose coverage
@@ -18,10 +19,21 @@ Usage:
     # than publishing. Disable a metric outright with a repeatable --skip-metric:
     uv run python evals/run_eval.py --max-workers 2 --skip-metric context_recall
 
+    # Per-judge-job timeout (both the Ollama client and ragas's RunConfig),
+    # default 1200s: --judge-timeout <seconds> or RAGAS_JUDGE_TIMEOUT.
+    uv run python evals/run_eval.py --judge-timeout 1800
+
 Operational precondition: this harness must not share its Ollama instance with
 the running app or another eval — both compete for the same single-threaded
 server and inflate every latency figure with queueing time. Run
 `docker stop codebase-rag-app` before an eval to guarantee that.
+
+Judge reasoning is explicitly disabled (`reasoning=False` on the judge
+ChatOllama, see `run_ragas_evaluation`) regardless of which judge model is
+picked. A "thinking" model like `qwen3.5:9b` otherwise burns most of a judge
+call's time on a chain-of-thought that ragas discards, and on CPU-only Docker
+Ollama (no GPU passthrough) that turned one judge job into ~10 minutes with a
+~7h50m projection for a single retriever's judging.
 """
 
 import json
@@ -135,6 +147,21 @@ def resolve_min_coverage() -> float:
     default 0.9.
     """
     return _resolve_config_value("--min-coverage", "RAGAS_MIN_COVERAGE", 0.9, float)
+
+
+def resolve_judge_timeout_s() -> int:
+    """Determine the per-judge-job timeout, in seconds, for both the Ollama client and ragas's `RunConfig`.
+
+    A 9B-class judge model run CPU-only in Docker (no GPU passthrough on this
+    Mac) is far slower per call than the 350M generation model; a single
+    ragas job chains several LLM calls (statement generation, NLI
+    classification, output-format retries) that each take real time even
+    with `reasoning=False`. Configurable via `--judge-timeout <seconds>` or
+    `RAGAS_JUDGE_TIMEOUT`, default 1200 (20 minutes) — chosen after the
+    previous 600s default was hit mid-call by `qwen3.5:9b` with reasoning
+    still enabled (see `run_ragas_evaluation`'s `reasoning=False`).
+    """
+    return _resolve_config_value("--judge-timeout", "RAGAS_JUDGE_TIMEOUT", 1200, int)
 
 
 def resolve_skip_metrics() -> set[str]:
@@ -278,10 +305,33 @@ def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict]) -> list[dict]:
     return results
 
 
+def compute_retrieval_hit_and_reciprocal_rank(expected: list[str], actual: list[str]) -> tuple[int, float]:
+    """Score one question's retrieval against its expected sources, independent of the generated answer.
+
+    Args:
+        expected: Expected source patterns (e.g. `"enum.py"`), matched as
+            case-insensitive substrings, same convention as source precision.
+        actual: Retrieved document paths, in rank order.
+
+    Returns:
+        `(hit, reciprocal_rank)` — hit is 1 if any expected source matches any
+        retrieved document, else 0; reciprocal_rank is `1 / (1-based rank of
+        the first match)`, or 0 if there is no match.
+    """
+    expected_lower = [s.lower() for s in expected]
+    for rank, src in enumerate(actual, start=1):
+        src_lower = src.lower()
+        if any(exp in src_lower for exp in expected_lower):
+            return 1, 1 / rank
+    return 0, 0.0
+
+
 def compute_custom_metrics(results: list[dict]) -> dict:
     """Compute custom keyword-based metrics (no LLM judge required)."""
     keyword_recalls = []
     source_precisions = []
+    hit_rates = []
+    reciprocal_ranks = []
 
     for r in results:
         if r.get("error"):
@@ -301,9 +351,17 @@ def compute_custom_metrics(results: list[dict]) -> dict:
             matching = sum(1 for src in actual if any(exp in src.lower() for exp in expected_lower))
             source_precisions.append(matching / len(actual))
 
+        # Hit rate / MRR: retrieval-only, scored against sources_expected regardless of the answer
+        if expected and not r.get("expected_failure", False):
+            hit, reciprocal_rank = compute_retrieval_hit_and_reciprocal_rank(expected, actual)
+            hit_rates.append(hit)
+            reciprocal_ranks.append(reciprocal_rank)
+
     return {
         "avg_keyword_recall": sum(keyword_recalls) / len(keyword_recalls) if keyword_recalls else 0,
         "avg_source_precision": sum(source_precisions) / len(source_precisions) if source_precisions else 0,
+        "avg_hit_rate": sum(hit_rates) / len(hit_rates) if hit_rates else 0,
+        "avg_mrr": sum(reciprocal_ranks) / len(reciprocal_ranks) if reciprocal_ranks else 0,
         "questions_answered": sum(1 for r in results if not r.get("error")),
         "questions_failed": sum(1 for r in results if r.get("error")),
         "avg_latency_s": sum(r.get("elapsed", 0) for r in results if not r.get("error"))
@@ -370,6 +428,7 @@ def run_ragas_evaluation(
     judge_model_name: str,
     max_workers: int,
     skip_metrics: set[str],
+    judge_timeout_s: int,
 ) -> dict:
     """Run ragas evaluation metrics on the results.
 
@@ -380,6 +439,8 @@ def run_ragas_evaluation(
             model that generated the answers being judged.
         max_workers: Maximum concurrent judge calls. See `resolve_max_workers`.
         skip_metrics: Metric names to exclude entirely. See `resolve_skip_metrics`.
+        judge_timeout_s: Per-call and per-job timeout in seconds. See
+            `resolve_judge_timeout_s`.
 
     Returns:
         A dict with `scores` (metric -> score, `None` for an enabled metric
@@ -388,6 +449,16 @@ def run_ragas_evaluation(
         names that weren't skipped — what this run was supposed to measure,
         used by `check_coverage_gate` to catch a wholesale judge-phase failure
         that leaves `coverage` empty).
+
+    The judge LLM is built with `reasoning=False`. For a "thinking" model
+    (e.g. `qwen3.5:9b`), Ollama's default is to emit a full chain-of-thought
+    before the structured answer ragas actually parses; ragas never reads
+    that chain-of-thought, so keeping it only costs latency. Measured on this
+    CPU-only Docker Ollama (no GPU passthrough), one judge call with
+    reasoning left on took ~10 minutes and still hit the previous 600s
+    `RunConfig` timeout mid-thought, projecting ~7h50m for one retriever's 48
+    judge jobs. `reasoning=False` is harmless for non-reasoning judge models
+    too — Ollama ignores `think` for models that don't support it.
     """
     config = Config.get_instance()
 
@@ -395,7 +466,8 @@ def run_ragas_evaluation(
         model=judge_model_name,
         base_url=config.ollama_base_url,
         temperature=0.0,
-        timeout=300,
+        timeout=judge_timeout_s,
+        reasoning=False,
     )
     wrapped_llm = LangchainLLMWrapper(judge_llm)
 
@@ -434,7 +506,7 @@ def run_ragas_evaluation(
 
     logger.info("Running ragas evaluation with %d samples, max_workers=%d...", len(samples), max_workers)
     try:
-        run_config = RunConfig(timeout=600, max_retries=2, max_wait=120, max_workers=max_workers)
+        run_config = RunConfig(timeout=judge_timeout_s, max_retries=2, max_wait=120, max_workers=max_workers)
 
         eval_result = evaluate(
             dataset=eval_dataset,
@@ -555,15 +627,15 @@ def generate_results_markdown(
 
     # Per-question breakdown
     lines.append("\n## Per-Question Breakdown\n")
-    lines.append("| # | Difficulty | Category | Keyword Recall | Docs | Latency | Expected Failure |")
-    lines.append("|---|-----------|----------|----------------|------|---------|------------------|")
+    lines.append("| # | Difficulty | Category | Hit | RR | Keyword Recall | Docs | Latency | Expected Failure |")
+    lines.append("|---|-----------|----------|-----|----|-----------------|------|---------|------------------|")
 
     for i, r in enumerate(results):
         if r.get("error"):
             exp_fail = r.get("expected_failure", False)
             diff = r.get("difficulty", "")
             cat = r.get("category", "")
-            lines.append(f"| {i + 1} | {diff} | {cat} | ERROR | - | - | {exp_fail} |")
+            lines.append(f"| {i + 1} | {diff} | {cat} | - | - | ERROR | - | - | {exp_fail} |")
             continue
         keywords = r.get("keywords", [])
         answer_lower = r["answer"].lower()
@@ -573,7 +645,15 @@ def generate_results_markdown(
         exp_fail = r.get("expected_failure", False)
         diff = r.get("difficulty", "")
         cat = r.get("category", "")
-        lines.append(f"| {i + 1} | {diff} | {cat} | {kr:.2f} | {docs} | {lat:.1f}s | {exp_fail} |")
+        expected = r.get("sources_expected", [])
+        if expected and not exp_fail:
+            hit, rr = compute_retrieval_hit_and_reciprocal_rank(expected, r.get("sources_actual", []))
+            hit_str, rr_str = str(hit), f"{rr:.2f}"
+        else:
+            hit_str, rr_str = "-", "-"
+        lines.append(
+            f"| {i + 1} | {diff} | {cat} | {hit_str} | {rr_str} | {kr:.2f} | {docs} | {lat:.1f}s | {exp_fail} |"
+        )
 
     # Failure cases
     failures = [r for r in results if r.get("error") or r.get("expected_failure")]
@@ -615,12 +695,15 @@ def generate_ablation_markdown(all_metrics: dict[str, dict]) -> str:
         "Avg Latency figures are comparable only across runs with similar latency probes — see "
         "each configuration's `results_<retriever>.md` for its probe.\n"
     )
-    lines.append("| Retriever | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
-    lines.append("|-----------|----------------|-------------------|----------|--------|-------------|")
+    lines.append("| Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
+    lines.append(
+        "|-----------|----------|-----|----------------|-------------------|----------|--------|-------------|"
+    )
     for retriever_type in RETRIEVER_TYPES:
         m = all_metrics[retriever_type]
         lines.append(
-            f"| {retriever_type} | {m['avg_keyword_recall']:.4f} | {m['avg_source_precision']:.4f} | "
+            f"| {retriever_type} | {m['avg_hit_rate']:.4f} | {m['avg_mrr']:.4f} | "
+            f"{m['avg_keyword_recall']:.4f} | {m['avg_source_precision']:.4f} | "
             f"{m['questions_answered']} | {m['questions_failed']} | {m['avg_latency_s']:.1f}s |"
         )
     return "\n".join(lines)
@@ -720,11 +803,13 @@ def main() -> None:
     max_workers = resolve_max_workers()
     min_coverage = resolve_min_coverage()
     skip_metrics = resolve_skip_metrics()
+    judge_timeout_s = resolve_judge_timeout_s()
     logger.info(
-        "Resolved eval config: max_workers=%d, min_coverage=%.2f, skip_metrics=%s",
+        "Resolved eval config: max_workers=%d, min_coverage=%.2f, skip_metrics=%s, judge_timeout_s=%d",
         max_workers,
         min_coverage,
         sorted(skip_metrics),
+        judge_timeout_s,
     )
     if skip_metrics >= RAGAS_METRIC_NAMES:
         logger.error(
@@ -764,7 +849,7 @@ def main() -> None:
         all_custom_metrics[retriever_type] = custom_metrics
 
         logger.info("Running ragas evaluation...")
-        ragas_result = run_ragas_evaluation(results, judge_model_name, max_workers, skip_metrics)
+        ragas_result = run_ragas_evaluation(results, judge_model_name, max_workers, skip_metrics, judge_timeout_s)
         ragas_scores = ragas_result["scores"]
         ragas_coverage = ragas_result["coverage"]
         requested_metrics = ragas_result["requested_metrics"]
@@ -792,6 +877,8 @@ def main() -> None:
         print(f"Questions: {len(results)}")
         print(f"Answered:  {custom_metrics['questions_answered']}")
         print(f"Failed:    {custom_metrics['questions_failed']}")
+        print(f"Avg hit rate:          {custom_metrics['avg_hit_rate']:.4f}")
+        print(f"Avg MRR:               {custom_metrics['avg_mrr']:.4f}")
         print(f"Avg keyword recall:   {custom_metrics['avg_keyword_recall']:.4f}")
         print(f"Avg source precision: {custom_metrics['avg_source_precision']:.4f}")
         print(f"Avg latency:          {custom_metrics['avg_latency_s']:.1f}s")
