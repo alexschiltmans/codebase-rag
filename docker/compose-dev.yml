@@ -1,7 +1,8 @@
 services:
   qdrant:
     container_name: codebase-rag-qdrant
-    image: qdrant/qdrant:v1.12.6
+    # Match qdrant-client's minor (pyproject); a server downgrade needs a fresh volume, Qdrant won't read newer storage.
+    image: qdrant/qdrant:v1.17.0
     volumes:
       - codebase_rag_qdrant_data:/qdrant/storage
     ports:
