@@ -50,7 +50,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 uv venv --python 3.12 && uv sync --extra dev
-docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.12.6
+docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.17.0
 ollama pull sam860/LFM2:350m
 python scripts/ingest.py --repo https://github.com/<owner>/<repo>
 streamlit run src/codebase_rag/app/main.py
