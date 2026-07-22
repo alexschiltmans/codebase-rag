@@ -58,6 +58,65 @@ class TestRAGChainConversationMemory:
         result = chain._format_conversation_history()
         assert "No previous conversation" in result
 
+    def test_trim_removes_orphaned_assistant_reply(self) -> None:
+        chain = self._make_chain(max_conversation_history=2)
+        chain.conversation_history = [
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "u2"},
+            {"role": "assistant", "content": "a2"},
+            {"role": "user", "content": "u3"},
+            {"role": "assistant", "content": "a3"},
+        ]
+        chain._trim_conversation_history()
+        assert [m["content"] for m in chain.conversation_history] == ["u2", "a2", "u3", "a3"]
+
+    def test_trim_non_alternating_history(self) -> None:
+        chain = self._make_chain(max_conversation_history=2)
+        chain.conversation_history = [
+            {"role": "user", "content": "u1"},
+            {"role": "user", "content": "u2"},
+            {"role": "assistant", "content": "a2"},
+            {"role": "user", "content": "u3"},
+            {"role": "assistant", "content": "a3"},
+        ]
+        chain._trim_conversation_history()
+        assert [m["content"] for m in chain.conversation_history] == ["u2", "a2", "u3", "a3"]
+        assert chain.conversation_history[0]["role"] == "user"
+
+    def test_trim_short_history_untouched(self) -> None:
+        chain = self._make_chain(max_conversation_history=2)
+        chain.conversation_history = [
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},
+        ]
+        chain._trim_conversation_history()
+        assert [m["content"] for m in chain.conversation_history] == ["u1", "a1"]
+
+    def test_trim_max_conversation_history_one(self) -> None:
+        chain = self._make_chain(max_conversation_history=1)
+        chain.conversation_history = [
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "u2"},
+            {"role": "assistant", "content": "a2"},
+        ]
+        chain._trim_conversation_history()
+        assert [m["content"] for m in chain.conversation_history] == ["u2", "a2"]
+
+    def test_trim_history_starting_with_assistant_message(self) -> None:
+        chain = self._make_chain(max_conversation_history=1)
+        chain.conversation_history = [
+            {"role": "assistant", "content": "stray"},
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "u2"},
+            {"role": "assistant", "content": "a2"},
+        ]
+        chain._trim_conversation_history()
+        assert [m["content"] for m in chain.conversation_history] == ["u2", "a2"]
+        assert chain.conversation_history[0]["role"] == "user"
+
     def test_format_conversation_history_with_messages(self) -> None:
         chain = self._make_chain()
         chain.add_user_message("What is X?")
