@@ -96,6 +96,27 @@ class TestChatLifecycle:
         assert state.current_chat_id == first_chat_id
         assert state.messages == [{"role": "user", "content": "hello"}]
 
+    def test_start_new_chat_resets_query_lifecycle_after_failure(self) -> None:
+        state = _new_state()
+        state.submit_query("q")
+        state.query_failed("boom")
+        state.start_new_chat()
+        assert state.query_state == QueryLifecycle.IDLE
+        assert state.pending_query is None
+        assert state.query_error is None
+
+    def test_switch_chat_resets_query_lifecycle_after_failure(self) -> None:
+        state = _new_state()
+        state.append_message("user", "hello")
+        first_chat_id = state.current_chat_id
+        state.start_new_chat()
+        state.submit_query("q")
+        state.query_failed("boom")
+        state.switch_chat(first_chat_id)
+        assert state.query_state == QueryLifecycle.IDLE
+        assert state.pending_query is None
+        assert state.query_error is None
+
 
 class TestGetSession:
     def test_ensure_defaults_is_idempotent(self) -> None:
