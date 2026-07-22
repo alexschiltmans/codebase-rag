@@ -172,7 +172,10 @@ class AppRuntime:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.qdrant_store = QdrantStore(
-            host=config.qdrant_host, port=config.qdrant_port, collection_name=config.collection_name
+            host=config.qdrant_host,
+            port=config.qdrant_port,
+            collection_name=config.collection_name,
+            embedding_model=config.embedding_model,
         )
         if not self.qdrant_store.collection_exists():
             logger.warning(

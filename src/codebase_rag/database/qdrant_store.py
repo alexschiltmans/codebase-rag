@@ -33,7 +33,7 @@ class QdrantStore:
         host: str = "localhost",
         port: int = 6333,
         collection_name: str = "documents",
-        embedding_model: str = "sentence-transformers/all-mpnet-base-v2",
+        embedding_model: str | None = None,
         recreate_collection: bool = False,
     ) -> None:
         """Initialize the Qdrant vector store.
@@ -42,7 +42,8 @@ class QdrantStore:
             host: Qdrant server host.
             port: Qdrant server port.
             collection_name: Name of the collection in Qdrant.
-            embedding_model: Name of the HuggingFace model for embeddings.
+            embedding_model: Name of the HuggingFace model for embeddings. When None,
+                EmbeddingManager falls back to Config.embedding_model.
             recreate_collection: Whether to recreate the collection if it exists.
         """
         self.host = host

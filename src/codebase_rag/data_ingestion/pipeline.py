@@ -210,6 +210,7 @@ class IngestPipeline:
             host=self.config.qdrant_host,
             port=self.config.qdrant_port,
             collection_name=self.config.collection_name,
+            embedding_model=self.config.embedding_model,
             recreate_collection=drop_existing,
         )
 

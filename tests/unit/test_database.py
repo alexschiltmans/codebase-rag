@@ -188,6 +188,18 @@ class TestQdrantStore:
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_embedding_model_passed_through(self, mock_client_cls: MagicMock, mock_emb: MagicMock) -> None:
+        QdrantStore(embedding_model="sentence-transformers/other-model")
+        mock_emb.assert_called_once_with(model_name="sentence-transformers/other-model")
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_embedding_model_defaults_to_none(self, mock_client_cls: MagicMock, mock_emb: MagicMock) -> None:
+        QdrantStore()
+        mock_emb.assert_called_once_with(model_name=None)
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_collection_exists(self, mock_client_cls: MagicMock, mock_emb: MagicMock) -> None:
 
         mock_client = MagicMock()
