@@ -422,20 +422,11 @@ class RAGChain:
         if not self.conversation_history or self.max_conversation_history <= 0:
             return
 
-        user_count = sum(1 for msg in self.conversation_history if msg["role"] == "user")
+        user_indices = [i for i, msg in enumerate(self.conversation_history) if msg["role"] == "user"]
 
-        if user_count > self.max_conversation_history:
-            excess_count = user_count - self.max_conversation_history
-
-            removed_user_count = 0
-            i = 0
-            while i < len(self.conversation_history) and removed_user_count < excess_count:
-                if self.conversation_history[i]["role"] == "user":
-                    removed_user_count += 1
-                i += 1
-
-            if i > 0:
-                self.conversation_history = self.conversation_history[i:]
+        if len(user_indices) > self.max_conversation_history:
+            cutoff = user_indices[-self.max_conversation_history]
+            self.conversation_history = self.conversation_history[cutoff:]
 
     def _format_conversation_history(self, history: list[dict[str, Any]] | None = None) -> str:
         """Format the conversation history for inclusion in the prompt.
