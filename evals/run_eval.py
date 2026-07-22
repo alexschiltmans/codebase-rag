@@ -23,6 +23,15 @@ Usage:
     # default 1200s: --judge-timeout <seconds> or RAGAS_JUDGE_TIMEOUT.
     uv run python evals/run_eval.py --judge-timeout 1800
 
+Model backend: both the generation and judge clients use
+`config.ollama_base_url` (default `http://localhost:11434`), and the resolved
+endpoint is logged at run start so a run's own output proves which Ollama it
+hit. On a machine that runs both a native (Metal, GPU) Ollama and a Docker
+(CPU-only) Ollama on port 11434, a bare `localhost` can resolve to the Docker
+one and judge on CPU — turning one judge job into minutes. Set
+`OLLAMA_BASE_URL=http://127.0.0.1:11434` to force the native Metal endpoint;
+confirm from the logged base URL that the run used it.
+
 Operational precondition: this harness must not share its Ollama instance with
 the running app or another eval — both compete for the same single-threaded
 server and inflate every latency figure with queueing time. Run
@@ -34,8 +43,17 @@ picked. A "thinking" model like `qwen3.5:9b` otherwise burns most of a judge
 call's time on a chain-of-thought that ragas discards, and on CPU-only Docker
 Ollama (no GPU passthrough) that turned one judge job into ~10 minutes with a
 ~7h50m projection for a single retriever's judging.
+
+The judge decodes under a JSON schema constraint (`_SchemaConstrainedChatOllama`
+plus `_install_schema_constrained_judging`). Without it a 9B judge — the
+project's cap — echoes each metric's JSON schema instead of an instance, or
+truncates a verbose one; no tolerant parser recovers either. Constraining
+Ollama's decoding to the active RAGAS prompt's schema forbids the schema echo
+and, with a raised context/output budget, avoids the truncation, so all three
+metrics are producible without reaching for a larger judge.
 """
 
+import contextvars
 import json
 import logging
 import os
@@ -77,6 +95,72 @@ TESTSET_PATH = EVALS_DIR / "testset.json"
 
 RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
 
+# Judge context/output budget. RAGAS feeds the judge the full retrieved context
+# plus the answer plus its own scaffolding, which overruns Ollama's default 2048
+# num_ctx and truncates the response mid-JSON. Faithfulness is the demanding
+# case: it judges every statement in the answer, and a per-statement reason plus
+# verdict runs long — a 2048 output budget force-closed the JSON before the last
+# statement's verdict on the longest answers. These give headroom so a verbose
+# but valid verdict finishes instead of being cut off.
+JUDGE_NUM_CTX = 16384
+JUDGE_NUM_PREDICT = 4096
+
+# Active RAGAS output schema for the judge's next call. Set per prompt by the
+# wrapper installed in `_install_schema_constrained_judging`, read by
+# `_SchemaConstrainedChatOllama` — see that function for why this is a context
+# var rather than a constructor argument.
+_JUDGE_RESPONSE_SCHEMA: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "judge_response_schema", default=None
+)
+
+
+class _SchemaConstrainedChatOllama(ChatOllama):
+    """ChatOllama that constrains decoding to the active RAGAS prompt's schema.
+
+    Ollama can restrict generation to a JSON schema (`format=<schema>`), which
+    is the only lever that reliably stops a 9B judge from echoing the metric's
+    schema instead of an instance, or truncating a verbose one — a tolerant
+    output parser can recover neither. `_chat_params` already sources `format`
+    from a per-call kwarg falling back to `self.format`; this reads the active
+    schema from the context var instead, so each prompt constrains to its own
+    output model through the one shared judge client.
+    """
+
+    def _chat_params(self, messages: Any, stop: Any = None, **kwargs: Any) -> dict[str, Any]:
+        schema = _JUDGE_RESPONSE_SCHEMA.get()
+        if schema is not None and "format" not in kwargs:
+            kwargs["format"] = schema
+        return super()._chat_params(messages, stop, **kwargs)
+
+
+def _install_schema_constrained_judging() -> None:
+    """Make every RAGAS `PydanticPrompt` select its output schema for the judge.
+
+    RAGAS shares one judge client across prompts with different output models,
+    and doesn't thread the target schema down to the LLM call, so the client
+    can't know which schema to constrain to. This wraps `generate_multiple`
+    (which `generate` delegates to) so the active prompt's JSON schema is on
+    `_JUDGE_RESPONSE_SCHEMA` for the whole call — including RAGAS's own
+    fix-output-format retry, whose nested call re-sets it to that fixer's
+    `StringIO` model and restores it after. Idempotent.
+    """
+    from ragas.prompt.pydantic_prompt import PydanticPrompt
+
+    if getattr(PydanticPrompt, "_schema_constrained", False):
+        return
+
+    original_generate_multiple = PydanticPrompt.generate_multiple
+
+    async def generate_multiple(self: Any, *args: Any, **kwargs: Any) -> Any:
+        token = _JUDGE_RESPONSE_SCHEMA.set(self.output_model.model_json_schema())
+        try:
+            return await original_generate_multiple(self, *args, **kwargs)
+        finally:
+            _JUDGE_RESPONSE_SCHEMA.reset(token)
+
+    PydanticPrompt.generate_multiple = generate_multiple  # type: ignore[method-assign]
+    PydanticPrompt._schema_constrained = True  # type: ignore[attr-defined]
+
 
 def build_ragas_metrics(wrapped_llm: Any, wrapped_embeddings: Any) -> list:
     """Build the ragas metrics this harness scores, in report order.
@@ -86,6 +170,15 @@ def build_ragas_metrics(wrapped_llm: Any, wrapped_embeddings: Any) -> list:
     adding or removing a metric cannot leave the guard or the coverage gate
     out of sync with what actually runs. Passing `None` for the judge and
     embeddings is safe when only the metric names are needed.
+
+    All three metrics are producible because the judge decodes under a JSON
+    schema constraint (see `_SchemaConstrainedChatOllama`). Without it, a 9B
+    judge (the project's cap) echoes each metric's JSON schema instead of an
+    instance — `context_recall` failed on nearly every question and
+    `faithfulness` on a smaller fraction — which no tolerant output parser can
+    recover. Constraining the judge's decoding to the active prompt's schema
+    forbids the schema echo outright, so the set does not need trimming to what
+    an unconstrained judge happens to format correctly.
     """
     return [
         Faithfulness(llm=wrapped_llm),
@@ -216,12 +309,12 @@ def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     raise ValueError(f"Unknown retriever type: {retriever_type}")
 
 
-def build_rag_chain(retriever_type: str = "hybrid") -> RAGChain:
+def build_rag_chain(retriever_type: str = "bm25") -> RAGChain:
     """Initialize the RAG chain with live services.
 
     Args:
         retriever_type: One of "vector", "bm25", "hybrid" — which retriever
-            backs the chain. Defaults to "hybrid", matching the shipped app.
+            backs the chain. Defaults to "bm25", matching the shipped app.
     """
     config = Config.get_instance()
 
@@ -235,6 +328,7 @@ def build_rag_chain(retriever_type: str = "hybrid") -> RAGChain:
 
     retriever = build_retriever(retriever_type, qdrant_store)
 
+    logger.info("Generation client Ollama base URL: %s", config.ollama_base_url)
     llm = OllamaClient(
         model_name=config.llm_model_name,
         base_url=config.ollama_base_url,
@@ -462,12 +556,17 @@ def run_ragas_evaluation(
     """
     config = Config.get_instance()
 
-    judge_llm = ChatOllama(
+    _install_schema_constrained_judging()
+
+    logger.info("Judge client Ollama base URL: %s", config.ollama_base_url)
+    judge_llm = _SchemaConstrainedChatOllama(
         model=judge_model_name,
         base_url=config.ollama_base_url,
         temperature=0.0,
         timeout=judge_timeout_s,
         reasoning=False,
+        num_ctx=JUDGE_NUM_CTX,
+        num_predict=JUDGE_NUM_PREDICT,
     )
     wrapped_llm = LangchainLLMWrapper(judge_llm)
 
@@ -676,11 +775,12 @@ def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]
     Args:
         all_metrics: Mapping of retriever type ("vector", "bm25", "hybrid") to
             its custom_metrics dict from `compute_custom_metrics`.
-        testset: The loaded test set, used to report its exact-term vs
-            conceptual composition.
+        testset: The loaded test set, used to report its composition by
+            question category.
     """
     conceptual_count = sum(1 for item in testset if item.get("category") == "conceptual")
-    exact_term_count = len(testset) - conceptual_count
+    exact_term_count = sum(1 for item in testset if item.get("category") == "factual_lookup")
+    reasoning_count = len(testset) - conceptual_count - exact_term_count
 
     lines = ["# Retrieval Ablation\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
@@ -690,10 +790,11 @@ def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]
         "in `results_<retriever>.md`.\n"
     )
     lines.append(
-        f"Test set composition: {exact_term_count} exact-term (keyword/lookup) questions, "
-        f"{conceptual_count} conceptual/paraphrased questions ({len(testset)} total). The "
-        "conceptual questions avoid quoting source identifiers, so a retriever's hit rate "
-        "on them reflects semantic matching rather than keyword overlap.\n"
+        f"Test set composition ({len(testset)} questions): {exact_term_count} exact-term lookups "
+        f"(function/class/enum names), {reasoning_count} multi-file/how-it-works reasoning questions, "
+        f"and {conceptual_count} conceptual/paraphrased questions. The conceptual questions avoid "
+        "quoting source identifiers, so a retriever's hit rate on them reflects semantic matching "
+        "rather than keyword overlap.\n"
     )
     lines.append(
         f"The hybrid arm applies the production cosine relevance cutoff "

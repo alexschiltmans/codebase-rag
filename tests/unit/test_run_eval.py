@@ -10,11 +10,15 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from evals.run_eval import (
+    _JUDGE_RESPONSE_SCHEMA,
     RAGAS_METRIC_NAMES,
+    _install_schema_constrained_judging,
+    _SchemaConstrainedChatOllama,
     build_ragas_metrics,
     check_coverage_gate,
     compute_custom_metrics,
@@ -333,6 +337,84 @@ class TestRagasMetricNames:
 
     def test_names_are_nonempty(self):
         assert RAGAS_METRIC_NAMES
+
+    def test_default_set_is_the_full_producible_set(self):
+        # All three are producible because the judge decodes under a schema
+        # constraint (see TestSchemaConstrainedJudging), so none is trimmed.
+        assert {m.name for m in build_ragas_metrics(None, None)} == {
+            "faithfulness",
+            "answer_relevancy",
+            "context_recall",
+        }
+
+
+class TestSchemaConstrainedJudging:
+    """The judge constrains decoding to the active RAGAS prompt's JSON schema."""
+
+    def _client(self):
+        return _SchemaConstrainedChatOllama(model="qwen3.5:9b", base_url="http://127.0.0.1:11434")
+
+    def test_active_schema_is_injected_as_format(self):
+        from langchain_core.messages import HumanMessage
+
+        schema = {"type": "object", "properties": {"verdict": {"type": "integer"}}}
+        token = _JUDGE_RESPONSE_SCHEMA.set(schema)
+        try:
+            params = self._client()._chat_params([HumanMessage(content="hi")])
+        finally:
+            _JUDGE_RESPONSE_SCHEMA.reset(token)
+        assert params["format"] == schema
+
+    def test_no_active_schema_leaves_format_unconstrained(self):
+        from langchain_core.messages import HumanMessage
+
+        # Default context var is None, so nothing is forced onto `format`.
+        params = self._client()._chat_params([HumanMessage(content="hi")])
+        assert params["format"] is None
+
+    def test_install_wrapper_sets_active_schema_during_the_call(self):
+        import asyncio
+
+        from ragas.prompt.pydantic_prompt import PydanticPrompt
+
+        class _Model(BaseModel):
+            verdict: int
+
+        # Record what the context var holds when the wrapped inner method runs,
+        # standing in for the LLM call that reads it via _chat_params.
+        seen = {}
+        original = PydanticPrompt.generate_multiple
+
+        async def recorder(self, *args, **kwargs):
+            seen["schema"] = _JUDGE_RESPONSE_SCHEMA.get()
+
+        PydanticPrompt.generate_multiple = recorder
+        PydanticPrompt._schema_constrained = False
+        try:
+            _install_schema_constrained_judging()
+            prompt = PydanticPrompt.__new__(PydanticPrompt)
+            prompt.output_model = _Model
+            asyncio.run(prompt.generate_multiple(llm=None, data=None))
+        finally:
+            PydanticPrompt.generate_multiple = original
+            PydanticPrompt._schema_constrained = False
+
+        assert seen["schema"] == _Model.model_json_schema()
+        assert _JUDGE_RESPONSE_SCHEMA.get() is None  # reset after the call
+
+    def test_install_is_idempotent(self):
+        from ragas.prompt.pydantic_prompt import PydanticPrompt
+
+        original = PydanticPrompt.generate_multiple
+        was_installed = getattr(PydanticPrompt, "_schema_constrained", False)
+        try:
+            _install_schema_constrained_judging()
+            wrapped_once = PydanticPrompt.generate_multiple
+            _install_schema_constrained_judging()
+            assert PydanticPrompt.generate_multiple is wrapped_once
+        finally:
+            PydanticPrompt.generate_multiple = original
+            PydanticPrompt._schema_constrained = was_installed
 
 
 class TestResolveConfigValueFlagForms:
