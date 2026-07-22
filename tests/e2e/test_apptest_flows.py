@@ -8,6 +8,7 @@ Streamlit actually drives. Bugs at that layer don't show up in a plain
 function call test.
 """
 
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -134,6 +135,51 @@ def test_dismiss_failed_query_returns_to_idle_without_resubmitting(mocked_rag_ch
 
     assert at.session_state["query_state"] == "idle"
     mocked_rag_chain.stream.assert_not_called()
+
+
+@pytest.mark.e2e
+def test_new_chat_after_failure_clears_error_and_blocks_stale_retry(mocked_rag_chain: MagicMock) -> None:
+    """Regression test for UI-3: a failed query's error state must not
+    survive navigating to a new chat, and the new chat must not receive
+    an orphan assistant answer from the old chat's query."""
+    mocked_rag_chain.stream.side_effect = RuntimeError("backend unreachable")
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+    at.chat_input[0].set_value("this will fail").run()
+    assert at.session_state["query_state"] == "failed"
+    original_chat_id = at.session_state["current_chat_id"]
+    original_chat_length_after_failure = len(at.session_state["chat_histories"][original_chat_id])
+
+    new_chat_buttons = [b for b in at.sidebar.button if b.label == "Start New Chat"]
+    assert new_chat_buttons
+    new_chat_buttons[0].click().run()
+
+    assert not [b for b in at.button if b.key == "btn_retry_query"]
+    assert at.session_state["query_state"] == "idle"
+    assert at.session_state["pending_query"] is None
+    assert at.session_state["query_error"] is None
+
+    unique_question = f"a normal question {uuid.uuid4()}"
+    mocked_rag_chain.stream.side_effect = None
+    mocked_rag_chain.stream.return_value = iter(["Hello", " world"])
+    at.chat_input[0].set_value(unique_question).run()
+
+    # The failed query never resubmitted anywhere: the original chat gained
+    # no new messages (no orphan assistant answer landed there), and the new
+    # chat contains the exchange for the question just asked there instead.
+    original_chat_history = at.session_state["chat_histories"][original_chat_id]
+    assert len(original_chat_history) == original_chat_length_after_failure
+    assert not any(m["content"] == unique_question for m in original_chat_history)
+
+    current_chat_id = at.session_state["current_chat_id"]
+    assert current_chat_id != original_chat_id
+    new_chat_history = at.session_state["chat_histories"][current_chat_id]
+    assert not any(m["content"] == "this will fail" for m in new_chat_history)
+    assert any(m["content"] == unique_question for m in new_chat_history)
+    for i, message in enumerate(new_chat_history):
+        if message["role"] == "assistant":
+            assert i > 0
+            assert new_chat_history[i - 1]["role"] == "user"
 
 
 @pytest.mark.e2e

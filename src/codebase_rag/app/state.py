@@ -73,20 +73,22 @@ class SessionState:
 
     def query_succeeded(self) -> None:
         """Move PENDING -> IDLE after a successful (or already-rendered) answer."""
-        self._store["pending_query"] = None
-        self._store["query_error"] = None
-        self._store["query_state"] = QueryLifecycle.IDLE
+        self._reset_query_lifecycle()
 
     def query_failed(self, error: str) -> None:
         """Move PENDING -> FAILED, keeping the query so Retry can resubmit it."""
         self._store["query_error"] = error
         self._store["query_state"] = QueryLifecycle.FAILED
 
-    def dismiss_failure(self) -> None:
-        """Move FAILED -> IDLE without resubmitting."""
+    def _reset_query_lifecycle(self) -> None:
+        """Clear any pending query or error and move to IDLE."""
         self._store["pending_query"] = None
         self._store["query_error"] = None
         self._store["query_state"] = QueryLifecycle.IDLE
+
+    def dismiss_failure(self) -> None:
+        """Move FAILED -> IDLE without resubmitting."""
+        self._reset_query_lifecycle()
 
     def retry_failed_query(self) -> None:
         """Move FAILED -> PENDING, resubmitting the same query once."""
@@ -115,12 +117,14 @@ class SessionState:
         return chat_id  # type: ignore[no-any-return]
 
     def start_new_chat(self) -> None:
+        self._reset_query_lifecycle()
         new_chat_id = str(uuid.uuid4())
         self._store["chat_histories"][new_chat_id] = []
         self._store["current_chat_id"] = new_chat_id
         self._store["messages"] = []
 
     def switch_chat(self, chat_id: str) -> None:
+        self._reset_query_lifecycle()
         self._store["current_chat_id"] = chat_id
         self._store["messages"] = self._store["chat_histories"][chat_id].copy()
 
