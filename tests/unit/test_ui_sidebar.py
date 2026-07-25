@@ -11,6 +11,7 @@ from codebase_rag.app.ui_sidebar import (
     _display_local_folder_tab,
     _display_new_chat_button,
     _display_repo_list,
+    _folder_dialog_wait_fragment,
     _get_chat_title,
     _ordered_chats,
     _preview_local_folder,
@@ -179,22 +180,23 @@ class TestGithubTab:
 
 
 class TestPreviewLocalFolder:
-    def test_computes_and_caches_result(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_computes_result(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "main.py").write_text("print('hi')")
 
-        session_state: dict = {}
-        with patch("codebase_rag.app.ui_sidebar.st") as mock_st:
-            mock_st.session_state = session_state
-            dirs, count = _preview_local_folder(tmp_path)
-            assert count == 1
-            assert "src" in dirs
-            assert session_state["_folder_preview_cache"]["path"] == str(tmp_path)
+        dirs, count = _preview_local_folder(tmp_path)
+        assert count == 1
+        assert "src" in dirs
 
-            with patch("codebase_rag.data_ingestion.pipeline.count_ingestible_files") as mock_count:
-                dirs2, count2 = _preview_local_folder(tmp_path)
-                mock_count.assert_not_called()
-                assert (dirs2, count2) == (dirs, count)
+    def test_recomputes_when_folder_contents_change(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("print('hi')")
+        _, count = _preview_local_folder(tmp_path)
+        assert count == 1
+
+        (tmp_path / "src" / "second.py").write_text("print('bye')")
+        _, count2 = _preview_local_folder(tmp_path)
+        assert count2 == 2
 
 
 class TestLocalFolderTab:
@@ -224,6 +226,41 @@ class TestLocalFolderTab:
         _display_local_folder_tab(runtime, ingestion_running=False)
 
         assert mock_st.session_state["folder_dialog_error"] == "A folder dialog is already open."
+
+
+class TestFolderDialogWaitFragment:
+    """Exercises the fragment function directly (via ``__wrapped__``), since
+    AppTest never runs a standalone ``run_every`` fragment tick on its own —
+    only inline, the one time it's first encountered in a script run."""
+
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_reruns_when_a_pick_lands_even_if_still_open(self, mock_st: MagicMock) -> None:
+        """FolderPicker is process-wide: another session's dialog can keep
+        is_open() True for a session whose own pick already landed. The
+        fragment must still trigger a rerun so the new path gets redrawn."""
+        mock_st.session_state = _AttrDict(folder_dialog_token=object())
+
+        runtime = MagicMock()
+        runtime.folder_picker.is_open.return_value = True
+        runtime.folder_picker.poll.return_value = MagicMock(path="/picked/dir", error=None)
+
+        _folder_dialog_wait_fragment.__wrapped__(runtime)
+
+        assert mock_st.session_state["typed_folder_path"] == "/picked/dir"
+        mock_st.rerun.assert_called_once_with(scope="app")
+
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_shows_waiting_caption_when_nothing_landed_and_still_open(self, mock_st: MagicMock) -> None:
+        mock_st.session_state = _AttrDict(folder_dialog_token=object())
+
+        runtime = MagicMock()
+        runtime.folder_picker.is_open.return_value = True
+        runtime.folder_picker.poll.return_value = None
+
+        _folder_dialog_wait_fragment.__wrapped__(runtime)
+
+        mock_st.caption.assert_called_once()
+        mock_st.rerun.assert_not_called()
 
 
 class TestDisplayIngestionOutcome:
