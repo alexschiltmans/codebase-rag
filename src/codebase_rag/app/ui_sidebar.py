@@ -16,6 +16,7 @@ from codebase_rag.database.chat_storage import get_chat_history_manager
 logger = logging.getLogger(__name__)
 
 _LOGO_PATH = Path(__file__).parent / "logo.png"
+_INGEST_REFUSED_MESSAGE = "An ingestion is already running, wait for it to finish."
 
 
 def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
@@ -99,10 +100,11 @@ def _display_ingestion_outcome(runtime: AppRuntime) -> None:
 
     banner = st.session_state.get("ingestion_error_banner")
     if banner:
-        st.error(f"Ingestion of **{banner['source']}** failed: {banner['error']}")
-        if st.button("Dismiss", key="btn_dismiss_ingestion_error"):
-            del st.session_state["ingestion_error_banner"]
-            st.rerun()
+        _display_dismissible_error(
+            f"Ingestion of **{banner['source']}** failed: {banner['error']}",
+            "ingestion_error_banner",
+            "btn_dismiss_ingestion_error",
+        )
 
 
 def _display_repo_list(runtime: AppRuntime) -> None:
@@ -140,6 +142,13 @@ def _confirm_delete_repo_dialog(runtime: AppRuntime, repo_name: str) -> None:
         st.rerun()
 
 
+def _display_dismissible_error(message: str, session_key: str, dismiss_key: str) -> None:
+    st.error(message)
+    if st.button("Dismiss", key=dismiss_key):
+        st.session_state.pop(session_key, None)
+        st.rerun()
+
+
 def _display_add_repository(runtime: AppRuntime, *, ingestion_running: bool) -> None:
     with st.expander("Add Repository"):
         tab_github, tab_local = st.tabs(["GitHub URL", "Local Folder"])
@@ -154,33 +163,46 @@ def _display_github_tab(runtime: AppRuntime, ingestion_running: bool) -> None:
     if st.button("Ingest", key="btn_ingest_repo", disabled=bool(not new_repo_url or ingestion_running)):
         if new_repo_url and new_repo_url.startswith("https://github.com/"):
             st.session_state.pop("github_url_error", None)
-            runtime.ingestion.start(new_repo_url, kind="manual")
-            st.rerun()
+            if runtime.ingestion.start(new_repo_url, kind="manual"):
+                st.session_state.pop("github_ingest_refused_error", None)
+                st.rerun()
+            else:
+                st.session_state["github_ingest_refused_error"] = _INGEST_REFUSED_MESSAGE
+                st.rerun()
         else:
+            st.session_state.pop("github_ingest_refused_error", None)
             st.session_state["github_url_error"] = "Please enter a valid GitHub URL"
 
     if st.session_state.get("github_url_error"):
-        st.error(st.session_state["github_url_error"])
-        if st.button("Dismiss", key="btn_dismiss_github_url_error"):
-            del st.session_state["github_url_error"]
-            st.rerun()
+        _display_dismissible_error(
+            st.session_state["github_url_error"], "github_url_error", "btn_dismiss_github_url_error"
+        )
+
+    if st.session_state.get("github_ingest_refused_error"):
+        _display_dismissible_error(
+            st.session_state["github_ingest_refused_error"],
+            "github_ingest_refused_error",
+            "btn_dismiss_github_ingest_refused_error",
+        )
 
 
 def _display_local_folder_tab(runtime: AppRuntime, ingestion_running: bool) -> None:
-    if "selected_folder" not in st.session_state:
-        st.session_state.selected_folder = ""
+    if "_pending_clear_typed_folder_path" in st.session_state:
+        st.session_state["typed_folder_path"] = st.session_state.pop("_pending_clear_typed_folder_path")
 
-    _poll_folder_dialog(runtime)
+    just_picked_path = _poll_folder_dialog(runtime)
 
-    dialog_open = runtime.folder_picker.is_open()
-    if st.button("Browse…", key="btn_browse_folder", disabled=ingestion_running or dialog_open):
+    if st.button("Browse…", key="btn_browse_folder", disabled=ingestion_running or runtime.folder_picker.is_open()):
         st.session_state.pop("folder_dialog_error", None)
+        st.session_state.pop("_folder_dialog_stale_poll", None)
         token = runtime.folder_picker.open()
         st.session_state["folder_dialog_token"] = token
         if token is None:
             st.session_state["folder_dialog_error"] = "A folder dialog is already open."
 
-    if dialog_open:
+    # Gated on the token, not just is_open(): the picker thread can store its result and exit
+    # between the poll above and this check, leaving the token set with is_open() already False.
+    if st.session_state.get("folder_dialog_token") is not None or runtime.folder_picker.is_open():
         _folder_dialog_wait_fragment(runtime)
 
     if st.session_state.get("folder_dialog_error"):
@@ -188,13 +210,19 @@ def _display_local_folder_tab(runtime: AppRuntime, ingestion_running: bool) -> N
 
     st.caption("Or, if no native dialog is available (e.g. inside Docker), type a path directly:")
     typed_path = st.text_input("Folder path", key="typed_folder_path", label_visibility="collapsed")
-    prev_typed = st.session_state.get("_prev_typed_folder_path", "")
-    if typed_path and typed_path != prev_typed:
-        st.session_state.selected_folder = typed_path
-    st.session_state["_prev_typed_folder_path"] = typed_path
+
+    # `_poll_folder_dialog` already wrote a fresh pick into `typed_path`'s widget state above.
+    st.session_state.selected_folder = just_picked_path if just_picked_path is not None else typed_path
 
     if st.session_state.selected_folder:
         _display_selected_folder(runtime, ingestion_running)
+
+    if st.session_state.get("local_ingest_refused_error"):
+        _display_dismissible_error(
+            st.session_state["local_ingest_refused_error"],
+            "local_ingest_refused_error",
+            "btn_dismiss_local_ingest_refused_error",
+        )
 
 
 @st.fragment(run_every=1)
@@ -205,26 +233,52 @@ def _folder_dialog_wait_fragment(runtime: AppRuntime) -> None:
     interact with some other widget, since a background thread can't
     trigger a Streamlit rerun on its own.
     """
-    _poll_folder_dialog(runtime)
-    if runtime.folder_picker.is_open():
+    picked_path = _poll_folder_dialog(runtime, allow_self_terminate=True)
+    # A pick can land while `is_open()` is still True: FolderPicker is process-wide, so
+    # another session's dialog can keep it True for a session whose own pick already landed.
+    # Rerun on that too, not just "no longer open" — the widget holding the new path
+    # otherwise never gets redrawn until some unrelated interaction triggers a rerun.
+    if picked_path is None and runtime.folder_picker.is_open():
         st.caption("⏳ Folder dialog opened — waiting for your selection…")
     else:
         st.rerun(scope="app")
 
 
-def _poll_folder_dialog(runtime: AppRuntime) -> None:
+def _poll_folder_dialog(runtime: AppRuntime, *, allow_self_terminate: bool = False) -> str | None:
+    """Poll the picker; return the path if one just landed this render.
+
+    Writes the result into the typed-path widget's state directly. Safe even from the wait
+    fragment's own auto-rerun, where that widget already exists from the parent run, because
+    Streamlit resets widget_ids_this_run per fragment run.
+
+    ``allow_self_terminate`` lets a token that got no result and finds the dialog no longer
+    open (stranded, e.g. cancelled) be cleared, but only on the *second* such miss: a result
+    can still land between one poll and the next (the wait fragment's own poll can be the
+    first real attempt on a token the main body's poll ran too early to see), so a single miss
+    isn't enough signal — it's tracked with ``_folder_dialog_stale_poll`` across fragment ticks.
+    """
     token = st.session_state.get("folder_dialog_token")
     if token is None:
-        return
+        return None
     result = runtime.folder_picker.poll(token)
     if result is None:
-        return
+        if allow_self_terminate and not runtime.folder_picker.is_open():
+            if st.session_state.get("_folder_dialog_stale_poll"):
+                st.session_state["folder_dialog_token"] = None
+                st.session_state.pop("_folder_dialog_stale_poll", None)
+                st.session_state["folder_dialog_error"] = "The folder dialog closed without a selection."
+            else:
+                st.session_state["_folder_dialog_stale_poll"] = True
+        return None
     st.session_state["folder_dialog_token"] = None
+    st.session_state.pop("_folder_dialog_stale_poll", None)
     if result.path:
-        st.session_state.selected_folder = result.path
         st.session_state.pop("folder_dialog_error", None)
-    elif result.error:
+        st.session_state["typed_folder_path"] = result.path
+        return result.path
+    if result.error:
         st.session_state["folder_dialog_error"] = result.error
+    return None
 
 
 def _display_selected_folder(runtime: AppRuntime, ingestion_running: bool) -> None:
@@ -245,30 +299,26 @@ def _display_selected_folder(runtime: AppRuntime, ingestion_running: bool) -> No
         st.caption(f"📄 {file_count} file(s) found in: {dirs_label}")
 
     if st.button("Ingest", key="btn_ingest_local", disabled=ingestion_running or file_count == 0):
-        st.session_state.selected_folder = ""
-        st.session_state.pop("_folder_preview_cache", None)
-        runtime.ingestion.start(str(folder_path), kind="manual")
-        st.rerun()
+        if runtime.ingestion.start(str(folder_path), kind="manual"):
+            st.session_state.pop("local_ingest_refused_error", None)
+            # Queued instead of set directly: the widget's already instantiated this
+            # render, so touching its key now would raise; the next render's top-of-
+            # function pending-path check applies it before the widget is recreated.
+            st.session_state["_pending_clear_typed_folder_path"] = ""
+            st.rerun()
+        else:
+            st.session_state["local_ingest_refused_error"] = _INGEST_REFUSED_MESSAGE
+            st.rerun()
 
 
 def _preview_local_folder(folder_path: Path) -> tuple[list[str], int]:
-    """Return (and cache) the discovered dirs and file count for a folder,
-    so this isn't re-walked on every rerun while the expander is open.
+    """Return the discovered dirs and file count for a folder, re-walked on every render.
 
-    A zero-file result is never cached: it's cheap to recompute and caching
-    it would leave the Ingest button disabled forever if the user adds
-    files to the same folder without changing the path.
+    Deliberately uncached: added/removed files must show up on the very next rerun, which a TTL cache would delay.
     """
     from codebase_rag.data_ingestion.pipeline import count_ingestible_files
 
-    cache_key = str(folder_path)
-    cached = st.session_state.get("_folder_preview_cache")
-    if cached and cached.get("path") == cache_key and cached.get("count", 0) > 0:
-        return cached["dirs"], cached["count"]
-
-    included_dirs, file_count = count_ingestible_files(folder_path)
-    st.session_state["_folder_preview_cache"] = {"path": cache_key, "dirs": included_dirs, "count": file_count}
-    return included_dirs, file_count
+    return count_ingestible_files(folder_path)
 
 
 def _display_new_chat_button(state: SessionState) -> None:

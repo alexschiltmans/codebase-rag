@@ -242,3 +242,319 @@ def test_local_folder_valid_path_shows_file_count_and_ingest_button(
     captions = " ".join(c.value for c in at.sidebar.caption)
     assert "1 file(s)" in captions
     assert [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+
+@pytest.mark.e2e
+def test_refused_github_ingest_shows_banner_and_keeps_url(mocked_rag_chain: MagicMock) -> None:
+    """Regression test for UI-1: a refused start() must not be discarded —
+    the URL input must survive and an error banner must appear."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "new_repo_url"]
+    text_inputs[0].set_value("https://github.com/owner/repo").run()
+
+    with patch("codebase_rag.app.runtime.IngestionManager.start", return_value=False):
+        ingest_buttons = [b for b in at.sidebar.button if b.key == "btn_ingest_repo"]
+        ingest_buttons[0].click().run()
+
+    assert not at.exception
+    errors = " ".join(e.value for e in at.sidebar.error)
+    assert "already running" in errors
+    text_inputs = [ti for ti in at.sidebar.text_input if ti.key == "new_repo_url"]
+    assert text_inputs[0].value == "https://github.com/owner/repo"
+
+
+@pytest.mark.e2e
+def test_refused_local_ingest_shows_banner_and_keeps_selection(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """Regression test for UI-2: a refused local-folder start() must not
+    clear the folder selection or preview."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('hi')")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(tmp_path)).run()
+
+    with patch("codebase_rag.app.runtime.IngestionManager.start", return_value=False):
+        ingest_buttons = [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+        ingest_buttons[0].click().run()
+
+    assert not at.exception
+    errors = " ".join(e.value for e in at.sidebar.error)
+    assert "already running" in errors
+    assert at.session_state["selected_folder"] == str(tmp_path)
+    assert [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+
+@pytest.mark.e2e
+def test_same_local_path_resubmittable_after_ingest(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """Regression test for UI-5: the edge-triggered path sync used to make
+    the form one-shot — the same path couldn't be re-submitted after an
+    ingest cleared the selection."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('hi')")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(tmp_path)).run()
+
+    with patch("codebase_rag.app.runtime.IngestionManager.start", return_value=True):
+        ingest_buttons = [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+        ingest_buttons[0].click().run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == ""
+
+    text_inputs = [ti for ti in at.sidebar.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(tmp_path)).run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == str(tmp_path)
+    assert [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+
+@pytest.mark.e2e
+def test_clearing_typed_path_removes_preview(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """Regression test for UI-5: clearing the typed path must clear the
+    selection, preview, and Ingest button, not leave the stale state on
+    screen."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('hi')")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(tmp_path)).run()
+    assert [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+    text_inputs = [ti for ti in at.sidebar.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value("").run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == ""
+    assert not [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+
+
+@pytest.mark.e2e
+def test_preview_count_updates_after_adding_a_file(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """Regression test for the stale preview cache: adding a file to an
+    already-selected folder must be reflected on the next rerun."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('hi')")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(tmp_path)).run()
+
+    captions = " ".join(c.value for c in at.sidebar.caption)
+    assert "1 file(s)" in captions
+
+    (tmp_path / "src" / "second.py").write_text("print('bye')")
+    at.run()
+
+    assert not at.exception
+    captions = " ".join(c.value for c in at.sidebar.caption)
+    assert "2 file(s)" in captions
+
+
+@pytest.mark.e2e
+def test_picker_selection_wins_over_stale_typed_text(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """A folder just returned by the native picker must not be clobbered by
+    leftover text still sitting in the typed-path box on the same render."""
+    from codebase_rag.services.folder_picker import FolderPickResult
+
+    typed_dir = tmp_path / "typed"
+    typed_dir.mkdir()
+    picked_dir = tmp_path / "picked"
+    picked_dir.mkdir()
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(typed_dir)).run()
+    assert at.session_state["selected_folder"] == str(typed_dir)
+
+    at.session_state["folder_dialog_token"] = object()
+    with patch(
+        "codebase_rag.app.runtime.FolderPicker.poll",
+        return_value=FolderPickResult(path=str(picked_dir)),
+    ):
+        at.run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == str(picked_dir)
+
+    # The picked path must stay authoritative on the render after the pick too, not just
+    # the one where it landed — the stale text still sitting in the box must not revert it.
+    at.run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == str(picked_dir)
+
+
+@pytest.mark.e2e
+def test_browse_pick_through_wait_fragment_persists_and_clears_on_empty_input(
+    mocked_rag_chain: MagicMock, tmp_path: Path
+) -> None:
+    """Drives the real Browse flow (button -> open() -> wait fragment ->
+    poll() -> close) instead of injecting the token by hand, to catch bugs
+    that only show up when the fragment itself consumes the picker result."""
+    from codebase_rag.services.folder_picker import FolderPickResult
+
+    picked_dir = tmp_path / "picked"
+    picked_dir.mkdir()
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    browse_buttons = [b for b in expander.button if b.key == "btn_browse_folder"]
+    assert browse_buttons
+
+    picker_state = {"opened": False, "result_polled": False}
+
+    def fake_open() -> object:
+        picker_state["opened"] = True
+        return object()
+
+    def fake_is_open() -> bool:
+        return picker_state["opened"] and not picker_state["result_polled"]
+
+    def fake_poll(token: object) -> FolderPickResult:
+        picker_state["result_polled"] = True
+        return FolderPickResult(path=str(picked_dir))
+
+    with (
+        patch("codebase_rag.app.runtime.FolderPicker.open", side_effect=fake_open),
+        patch("codebase_rag.app.runtime.FolderPicker.is_open", side_effect=fake_is_open),
+        patch("codebase_rag.app.runtime.FolderPicker.poll", side_effect=fake_poll),
+    ):
+        browse_buttons[0].click().run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == str(picked_dir)
+
+    # A further, unrelated rerun must keep the picked folder selected.
+    at.run()
+    assert not at.exception
+    assert at.session_state["selected_folder"] == str(picked_dir)
+
+    # Clearing the text box afterward must clear the (now typed-editable) selection.
+    text_inputs = [ti for ti in at.sidebar.text_input if ti.key == "typed_folder_path"]
+    assert text_inputs[0].value == str(picked_dir)
+    text_inputs[0].set_value("").run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == ""
+
+
+@pytest.mark.e2e
+def test_wait_fragment_still_renders_when_picker_thread_exits_between_poll_and_gate(
+    mocked_rag_chain: MagicMock, tmp_path: Path
+) -> None:
+    """The picker thread can store its result and exit between the poll near
+    the top of `_display_local_folder_tab` and the `is_open()` gate below it,
+    so `is_open()` can already read False while the dialog token is still
+    set. The wait fragment must still render in that window (gated on the
+    token, not on `is_open()` alone), or a picked folder never appears until
+    the user happens to touch an unrelated widget."""
+    from codebase_rag.services.folder_picker import FolderPickResult
+
+    picked_dir = tmp_path / "picked"
+    picked_dir.mkdir()
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    browse_buttons = [b for b in expander.button if b.key == "btn_browse_folder"]
+    assert browse_buttons
+
+    poll_calls = {"n": 0}
+
+    def fake_poll(token: object) -> FolderPickResult | None:
+        # The first call, from the main body's poll, finds nothing yet: the thread hasn't
+        # stored its result. `is_open()` (always False here) simulates the thread already
+        # having exited by the time the gate checks it. The fragment's own poll call then
+        # picks up the result that landed in between.
+        poll_calls["n"] += 1
+        if poll_calls["n"] == 1:
+            return None
+        return FolderPickResult(path=str(picked_dir))
+
+    with (
+        patch("codebase_rag.app.runtime.FolderPicker.open", return_value=object()),
+        patch("codebase_rag.app.runtime.FolderPicker.is_open", return_value=False),
+        patch("codebase_rag.app.runtime.FolderPicker.poll", side_effect=fake_poll),
+    ):
+        browse_buttons[0].click().run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == str(picked_dir)
+
+
+@pytest.mark.e2e
+def test_stranded_dialog_token_is_cleared_instead_of_polled_forever(mocked_rag_chain: MagicMock) -> None:
+    """A token with no result and a dialog that isn't open is unrecoverable
+    (the picker thread is gone). `_poll_folder_dialog` must clear the token
+    and surface an error rather than leaving the wait fragment gated open
+    forever. Unlike the round-5 test, `poll()` never succeeds here — the
+    token can never resolve on its own."""
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    at.session_state["folder_dialog_token"] = object()
+
+    with (
+        patch("codebase_rag.app.runtime.FolderPicker.is_open", return_value=False),
+        patch("codebase_rag.app.runtime.FolderPicker.poll", return_value=None),
+    ):
+        at.run()
+
+    assert not at.exception
+    assert at.session_state["folder_dialog_token"] is None
+    assert at.session_state["folder_dialog_error"]
+
+
+@pytest.mark.e2e
+def test_successful_local_ingest_does_not_crash_the_sidebar(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
+    """A successful start() must clear the form without raising — assigning
+    directly to the already-instantiated text-input widget's session-state
+    key would otherwise crash the rerun."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('hi')")
+
+    at = AppTest.from_file(APP_PATH)
+    at.run()
+
+    expander = next(e for e in at.sidebar.expander if e.label == "Add Repository")
+    text_inputs = [ti for ti in expander.text_input if ti.key == "typed_folder_path"]
+    text_inputs[0].set_value(str(tmp_path)).run()
+
+    with patch("codebase_rag.app.runtime.IngestionManager.start", return_value=True):
+        ingest_buttons = [b for b in at.sidebar.button if b.key == "btn_ingest_local"]
+        ingest_buttons[0].click().run()
+
+    assert not at.exception
+    assert at.session_state["selected_folder"] == ""
+
+    at.run()
+
+    assert not at.exception
+    text_inputs = [ti for ti in at.sidebar.text_input if ti.key == "typed_folder_path"]
+    assert text_inputs[0].value == ""
