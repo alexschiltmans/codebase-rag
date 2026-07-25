@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Ask questions about any codebase. Runs entirely on your machine.</strong><br>
-  Built with LangChain · Qdrant · Ollama · Streamlit
+  Built with LangChain · Qdrant · Local LLMs · Streamlit
 </p>
 
 <p align="center">
@@ -34,12 +34,12 @@
 - **Source citations.** Every answer includes the source files and repositories it drew from, so answers are verifiable.
 
 **Infrastructure Choices**
-- **Fully local stack.** Ollama for inference, Qdrant for vectors, SQLite for chat history. No external API calls, no data egress.
+- **Fully local stack.** Ollama, LM Studio, llama.cpp, vLLM, or Jan for inference; Qdrant for vectors; SQLite for chat history. No external API calls, no data egress.
 - **Multi-repo ingestion.** Clone and index any public GitHub repository from the UI or CLI.
 - **Idempotent ingestion.** Content hashing and deterministic chunk IDs prevent duplicates on re-ingestion, safe to run repeatedly in scheduled jobs or CI.
 
 **Developer Experience**
-- **Local LLM inference.** Runs against Ollama with any model; ships with `sam860/LFM2:350m` by default.
+- **Local LLM inference.** Choose your backend: Ollama, LM Studio, llama.cpp, vLLM, or Jan. Supports any model these platforms can run.
 - **Conversation memory.** Multi-turn conversations with persistent SQLite-backed chat history.
 - **LLM observability.** Optional Langfuse integration for tracing retrieval and generation with per-span metrics.
 
@@ -50,7 +50,7 @@ graph TD
     UI["Streamlit UI<br/><i>chat, repo management</i>"]
     RAG["RAG Chain<br/><i>LangChain pipeline</i>"]
     HS["Hybrid Search<br/><i>Vector + BM25</i>"]
-    LLM["Ollama<br/><i>Local LLM</i>"]
+    LLM["Local LLM Backend<br/><i>Ollama, LM Studio, etc</i>"]
     QD["Qdrant<br/><i>Vector Database</i>"]
     LF["Langfuse<br/><i>LLM Observability</i>"]
 
@@ -67,7 +67,7 @@ graph TD
 
 1. **Ingest.** `GitLoader` clones a repo → `DocumentProcessor` splits files into chunks using language-specific strategies → chunks are embedded with `sentence-transformers/all-mpnet-base-v2` and stored in Qdrant, with a parallel BM25 index built for keyword search.
 2. **Retrieve.** User query hits the `HybridRetriever`, which merges vector and BM25 results, re-ranks, and returns the top-k documents above a relevance threshold.
-3. **Generate.** Retrieved documents are formatted into a context prompt and sent to Ollama. The `RAGChain` handles conversation memory, prompt construction, and Langfuse tracing.
+3. **Generate.** Retrieved documents are formatted into a context prompt and sent to the configured LLM backend (Ollama, LM Studio, llama.cpp, vLLM, or Jan). The `RAGChain` handles conversation memory, prompt construction, and Langfuse tracing.
 4. **Persist.** Chat history is stored in SQLite. Vector data lives in Qdrant. Both survive container restarts via Docker volumes.
 
 ## Project Structure
@@ -102,6 +102,108 @@ See the [setup guide](docs/getting-started.md) for Docker and local installation
 ## Configuration
 
 All settings are configured via environment variables or `.env`. See the full [configuration reference](docs/configuration.md).
+
+### LLM Backends
+
+By default, the app uses Ollama for inference. To use a different backend, set `LLM_PROVIDER`:
+
+**Ollama** (default)
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+**LM Studio**
+```bash
+LLM_PROVIDER=openai-compat
+LLM_BASE_URL=http://localhost:1234/v1
+# LLM_API_KEY is optional
+```
+
+**llama.cpp server**
+```bash
+LLM_PROVIDER=openai-compat
+LLM_BASE_URL=http://localhost:8000/v1
+```
+
+**vLLM**
+```bash
+LLM_PROVIDER=openai-compat
+LLM_BASE_URL=http://localhost:8000/v1
+LLM_API_KEY=token-abc123  # if authentication is enabled
+```
+
+**Jan**
+```bash
+LLM_PROVIDER=openai-compat
+LLM_BASE_URL=http://localhost:1337/v1
+```
+
+All OpenAI-compatible backends use the same interface, so you can switch between them by just changing `LLM_BASE_URL`.
+
+## Command-Line Interface
+
+Use `codebase-rag` to query and explore codebases from shell scripts, git hooks, and CI pipelines. All output goes to stdout (clean for piping), while diagnostics go to stderr.
+
+### Query Command
+
+Search for code snippets:
+
+```bash
+codebase-rag query "where is error handling implemented?"
+```
+
+Output in compact format (path:lines, snippet):
+
+```
+src/app/handlers.py:42-53 (0.95)
+def handle_error(error):
+    logger.error("Error occurred: %s", error)
+    return {"status": "error", "message": str(error)}
+```
+
+Output as JSON for programmatic use:
+
+```bash
+codebase-rag query "retry logic" --format json | jq '.[] | .path'
+```
+
+Limit results and filter by repository:
+
+```bash
+codebase-rag query "database query" --k 3 --repo my-repo
+```
+
+### Ask Command
+
+Get a full natural-language answer grounded in the codebase:
+
+```bash
+codebase-rag ask "explain the ingestion pipeline"
+```
+
+### Piping into LLM CLIs
+
+Compose codebase retrieval with other tools. Example with `claude-cli`:
+
+```bash
+codebase-rag query "where is authentication?" | claude "Explain this code and suggest security improvements"
+```
+
+### Using in Shell Scripts and Hooks
+
+Pre-commit hook that checks for debugging statements:
+
+```bash
+codebase-rag query "debugger" --format compact | grep -q pdb && echo "Debugger found!"
+```
+
+Git hook to add context to commit messages:
+
+```bash
+context=$(codebase-rag query "$(cat /tmp/commit-msg)" --k 2 --format compact)
+echo -e "\nContext:\n$context" >> /tmp/commit-msg
+```
 
 ## Development
 
