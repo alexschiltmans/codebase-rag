@@ -1,6 +1,7 @@
 """Unit tests for data_ingestion/pipeline.py."""
 
 import json
+import logging
 import pickle
 import sys
 import tempfile
@@ -73,14 +74,118 @@ class TestCountIngestibleFiles:
 class TestSetupLogging:
     """Tests for setup_logging."""
 
-    def test_valid_log_level(self, tmp_path: Path) -> None:
-        with patch("codebase_rag.data_ingestion.pipeline.Path", return_value=tmp_path / "logs"):
-            logger = setup_logging("DEBUG")
-        assert logger.name == "codebase_rag.ingest"
+    def test_valid_log_level(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        logger, log_file = setup_logging("DEBUG")
+        assert logger.name == "codebase_rag"
+        assert log_file.exists()
+        assert "ingest-" in log_file.name
 
     def test_invalid_log_level_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid log level"):
             setup_logging("BANANA")
+
+    def test_file_created_with_root_handlers(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        root_logger = logging.getLogger()
+        root_logger.addHandler(logging.StreamHandler())
+
+        logger, log_file = setup_logging("INFO", add_console=False)
+
+        assert log_file.exists()
+        assert (tmp_path / "logs").exists()
+
+    def test_calling_twice_leaves_one_handler(self, tmp_path: Path, monkeypatch) -> None:
+        import logging as log_module
+        import time as time_module
+
+        monkeypatch.chdir(tmp_path)
+        log_module.getLogger("codebase_rag").handlers.clear()
+
+        logger1, log_file1 = setup_logging("INFO")
+        logger1.info("First run message")
+        time_module.sleep(0.01)
+        logger2, log_file2 = setup_logging("INFO")
+        logger2.info("Second run message")
+
+        ingest_handlers = [h for h in logger2.handlers if h.name == "codebase_rag.ingest_file"]
+        assert len(ingest_handlers) == 1
+        assert log_file1.exists()
+        assert log_file2.exists()
+        assert log_file1 != log_file2
+
+        content1 = log_file1.read_text()
+        content2 = log_file2.read_text()
+        assert "First run message" in content1
+        assert "Second run message" in content2
+        assert "First run message" not in content2
+
+    def test_console_handler_explicit_true(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+
+        log_logger, log_file = setup_logging("INFO", add_console=True)
+
+        console_handlers = [
+            h
+            for h in log_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 1
+        assert console_handlers[0].name == "codebase_rag.ingest_console"
+
+    def test_no_console_handler_explicit_false(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+
+        log_logger, log_file = setup_logging("INFO", add_console=False)
+
+        console_handlers = [
+            h
+            for h in log_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 0
+
+    def test_default_no_console_when_root_has_handlers(self, tmp_path: Path, monkeypatch) -> None:
+        """The `add_console=None` default probes the root logger: app case (handlers present)."""
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+        root_logger = logging.getLogger()
+        root_logger.addHandler(logging.StreamHandler())
+
+        log_logger, log_file = setup_logging("INFO")
+
+        console_handlers = [
+            h
+            for h in log_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 0
+
+    def test_default_adds_console_when_root_has_no_handlers(self, tmp_path: Path, monkeypatch) -> None:
+        """The `add_console=None` default probes the root logger: CLI case (root cleared)."""
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+        root_logger = logging.getLogger()
+        saved_handlers = root_logger.handlers[:]
+        root_logger.handlers.clear()
+        try:
+            log_logger, log_file = setup_logging("INFO")
+
+            console_handlers = [
+                h
+                for h in log_logger.handlers
+                if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+            ]
+            assert len(console_handlers) == 1
+            assert console_handlers[0].name == "codebase_rag.ingest_console"
+        finally:
+            root_logger.handlers[:] = saved_handlers
 
 
 class TestDocumentCache:
@@ -149,7 +254,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline(repo_url="https://github.com/owner/my-repo.git")
 
@@ -169,7 +274,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline()
         path = pipeline._cache_path_for_repo("my-repo")
@@ -187,7 +292,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         mock_store = MagicMock()
         mock_qdrant_cls.return_value = mock_store
@@ -217,7 +322,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -243,7 +348,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -270,7 +375,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline()
 
@@ -289,7 +394,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline(repo_urls=["https://github.com/test/repo1"])
 
@@ -312,7 +417,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -344,7 +449,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline()
 
@@ -366,7 +471,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -401,7 +506,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -434,7 +539,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -455,7 +560,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline(repo_urls=["https://github.com/a/b", "https://github.com/c/d"])
         assert len(pipeline._repo_urls) == 2
@@ -479,7 +584,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         # Set up mock git loader to return a repo with a known HEAD SHA
         mock_git_loader = MagicMock()
