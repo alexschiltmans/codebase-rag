@@ -46,7 +46,7 @@ def mocked_rag_chain():
 
     with (
         patch("codebase_rag.app.runtime.QdrantStore", return_value=mock_qdrant),
-        patch("codebase_rag.app.runtime.OllamaClient", return_value=mock_llm),
+        patch("codebase_rag.app.runtime.create_llm_client", return_value=mock_llm),
         patch("codebase_rag.app.runtime.RAGChain", return_value=mock_rag_chain),
         patch("codebase_rag.app.runtime._load_or_create_bm25_retriever", return_value=MagicMock()),
     ):

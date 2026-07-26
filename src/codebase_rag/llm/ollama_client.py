@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from langchain_ollama import ChatOllama
@@ -116,7 +117,10 @@ class OllamaClient:
             }
         except requests.exceptions.ConnectionError:
             return {"status": "error", "message": f"Cannot connect to Ollama at {self.base_url}", "url": self.base_url}
-        except requests.exceptions.RequestException as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
+            # ValueError covers response.json()'s json.JSONDecodeError: a 200 with a
+            # non-JSON body (e.g. a proxy's HTML error page) must not escape as an
+            # uncaught exception into the caller's own health-check try/except.
             return {"status": "error", "message": f"Error checking Ollama connection: {e}", "url": self.base_url}
 
     def check_model_availability(self) -> dict[str, Any]:
@@ -130,14 +134,36 @@ class OllamaClient:
             if response.status_code == 200:
                 models = response.json().get("models", [])
                 model_names = [m.get("name") for m in models]
-                if self.model_name in model_names:
+                if self.model_name in model_names or (
+                    ":" not in self.model_name and f"{self.model_name}:latest" in model_names
+                ):
                     return {"status": "available", "model": self.model_name, "all_models": model_names}
+                docker_cmd = (
+                    f"docker exec codebase-rag-ollama ollama pull {self.model_name}"
+                    if self._is_ollama_containerized()
+                    else f"ollama pull {self.model_name}"
+                )
                 return {
                     "status": "not_found",
-                    "message": f"Model '{self.model_name}' not found in Ollama",
-                    "suggested_action": f"Run 'ollama pull {self.model_name}'",
+                    "message": f"Model '{self.model_name}' not found",
+                    "suggested_action": f"Run '{docker_cmd}'",
                     "available_models": model_names,
                 }
             return {"status": "error", "message": f"Failed to get model list: {response.status_code}"}
-        except requests.exceptions.RequestException as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             return {"status": "error", "message": f"Error checking model availability: {e}"}
+
+    def _is_ollama_containerized(self) -> bool:
+        """Detect whether the Ollama this client talks to runs in the compose network.
+
+        Based on `config.ollama_base_url`'s host rather than whether the app itself is
+        containerized: the app can run on the host against a compose-networked Ollama, or
+        against a native Ollama on localhost, so the remedy has to match where Ollama is.
+
+        Matches positively against the compose service's DNS name (`docker/compose-dev.yml`
+        sets `OLLAMA_BASE_URL=http://ollama:11434` for the app service) rather than excluding
+        loopback-like hosts, so a LAN-hosted Ollama (`http://192.168.1.20:11434`) correctly
+        gets the plain `ollama pull` remedy instead of a `docker exec codebase-rag-ollama`
+        command naming a container that only exists in the compose network.
+        """
+        return urlparse(self.base_url).hostname == "ollama"

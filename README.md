@@ -198,11 +198,15 @@ Pre-commit hook that checks for debugging statements:
 codebase-rag query "debugger" --format compact | grep -q pdb && echo "Debugger found!"
 ```
 
-Git hook to add context to commit messages:
+Git hook to add context to commit messages. Exit code 2 means "no results", not
+a failure, so a `set -e` hook has to tolerate it explicitly or it aborts the
+commit on the common case of a query that legitimately matches nothing:
 
 ```bash
-context=$(codebase-rag query "$(cat /tmp/commit-msg)" --k 2 --format compact)
-echo -e "\nContext:\n$context" >> /tmp/commit-msg
+context=$(codebase-rag query "$(cat /tmp/commit-msg)" --k 2 --format compact) || [ $? -eq 2 ]
+if [ -n "$context" ]; then
+    echo -e "\nContext:\n$context" >> /tmp/commit-msg
+fi
 ```
 
 ## Development

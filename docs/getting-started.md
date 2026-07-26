@@ -12,7 +12,7 @@ make services-start
 
 `make services-start` starts all Docker services and pulls the configured LLM model into Ollama automatically. Open http://localhost:8501 once the app container is healthy.
 
-> **Manual alternative:** `docker compose -f docker/compose-dev.yml up -d` starts the containers but does not pull the model, so you'll need to run `ollama pull sam860/LFM2:350m` separately.
+> **Manual alternative:** `docker compose -f docker/compose-dev.yml --env-file .env up -d` starts the containers but does not pull the model, so you'll need to run `ollama pull sam860/LFM2:350m` separately. `--env-file .env` matters here because, unlike `make services-start`, this command doesn't source `.env` into the shell first: without it, compose looks for `.env` next to the compose file (`docker/.env`, which doesn't exist) instead of the repo root, and every configured variable falls back to its default.
 
 **Useful services:**
 

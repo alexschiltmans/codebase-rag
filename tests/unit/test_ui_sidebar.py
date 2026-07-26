@@ -366,6 +366,7 @@ class TestDisplaySidebar:
     ) -> None:
         runtime = MagicMock()
         runtime.config.llm_model_name = "test-model"
+        runtime.health = {}
         state = _new_state()
 
         display_sidebar(runtime, state)
@@ -374,3 +375,45 @@ class TestDisplaySidebar:
         mock_repo_mgmt.assert_called_once_with(runtime)
         mock_new_chat.assert_called_once_with(state)
         mock_history.assert_called_once_with(state)
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_renders_model_warning_when_not_found(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {
+            "model": {
+                "status": "not_found",
+                "message": "Model 'my-model' not found",
+                "suggested_action": "Run 'docker exec codebase-rag-ollama ollama pull my-model'",
+            }
+        }
+        state = _new_state()
+
+        display_sidebar(runtime, state)
+
+        mock_st.sidebar.warning.assert_called_once()
+        warning_text = mock_st.sidebar.warning.call_args[0][0]
+        assert "my-model" in warning_text
+        assert "docker exec codebase-rag-ollama ollama pull my-model" in warning_text
+        assert "refreshes on app restart" in warning_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_no_warning_when_model_available(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {"model": {"status": "available"}}
+        state = _new_state()
+
+        display_sidebar(runtime, state)
+
+        mock_st.sidebar.warning.assert_not_called()

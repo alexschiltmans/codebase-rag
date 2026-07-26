@@ -20,7 +20,7 @@ import streamlit as st
 
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
-from codebase_rag.llm.ollama_client import OllamaClient
+from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
@@ -147,17 +147,26 @@ def _warm_up_vector_store(vector_retriever: VectorRetriever) -> None:
         logger.warning("Vector store warm-up failed: %s", e)
 
 
-def _run_health_checks(llm: OllamaClient, vector_retriever: VectorRetriever) -> None:
-    """Best-effort connectivity checks, logged only. Run off the main
-    thread so a slow/unreachable Ollama never blocks the first render.
+def _run_health_checks(runtime: AppRuntime) -> None:
+    """Best-effort connectivity checks, logged only. Run off the
+    main thread so a slow/unreachable server never blocks the first render.
     """
-    llm_status = llm.check_connection()
-    if llm_status["status"] != "connected":
-        logger.warning("LLM connection issue: %s", llm_status["message"])
-    model_status = llm.check_model_availability()
-    if model_status["status"] != "available":
-        logger.warning("Model availability issue: %s", model_status["message"])
-    _warm_up_vector_store(vector_retriever)
+    try:
+        llm_status = runtime.llm.check_connection()
+        if llm_status["status"] != "connected":
+            logger.warning("LLM connection issue: %s", llm_status["message"])
+        model_status = runtime.llm.check_model_availability()
+        if model_status["status"] != "available":
+            logger.warning("Model availability issue: %s", model_status["message"])
+        runtime.health = {"model": model_status, "checked_at": time.time()}
+    except Exception as e:  # noqa: BLE001
+        # Deliberately not `return`-ing here: the LLM check and the vector-store
+        # warm-up are independent, so a failure in one must not skip the other.
+        logger.warning("Health checks failed: %s", e)
+    try:
+        _warm_up_vector_store(runtime.vector_retriever)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Vector store warm-up failed: %s", e)
 
 
 MAX_CONVERSATION_HISTORY = 10
@@ -171,6 +180,7 @@ class AppRuntime:
 
     def __init__(self, config: Config) -> None:
         self.config = config
+        self.health: dict[str, Any] = {}
         self.qdrant_store = QdrantStore(
             host=config.qdrant_host,
             port=config.qdrant_port,
@@ -186,16 +196,16 @@ class AppRuntime:
         self.vector_retriever = VectorRetriever(self.qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
         self.bm25_retriever = _load_or_create_bm25_retriever()
 
-        self.llm = OllamaClient(
+        self.llm = create_llm_client(
             model_name=config.llm_model_name,
-            base_url=config.ollama_base_url,
             temperature=0.0,
             top_p=0.9,
             top_k=40,
             max_tokens=1024,
             timeout=120,
+            num_ctx=config.ollama_num_ctx,
         )
-        threading.Thread(target=_run_health_checks, args=(self.llm, self.vector_retriever), daemon=True).start()
+        threading.Thread(target=_run_health_checks, args=(self,), daemon=True).start()
 
         self.folder_picker = FolderPicker()
         self.ingestion = IngestionManager(on_success=self._on_ingest_success)

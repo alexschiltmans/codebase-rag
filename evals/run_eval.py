@@ -23,14 +23,19 @@ Usage:
     # default 1200s: --judge-timeout <seconds> or RAGAS_JUDGE_TIMEOUT.
     uv run python evals/run_eval.py --judge-timeout 1800
 
-Model backend: both the generation and judge clients use
-`config.ollama_base_url` (default `http://localhost:11434`), and the resolved
-endpoint is logged at run start so a run's own output proves which Ollama it
-hit. On a machine that runs both a native (Metal, GPU) Ollama and a Docker
-(CPU-only) Ollama on port 11434, a bare `localhost` can resolve to the Docker
-one and judge on CPU — turning one judge job into minutes. Set
-`OLLAMA_BASE_URL=http://127.0.0.1:11434` to force the native Metal endpoint;
-confirm from the logged base URL that the run used it.
+Model backend: the judge client is always `_SchemaConstrainedChatOllama` against
+`config.ollama_base_url` (default `http://localhost:11434`) — ragas's schema
+constraint is Ollama-specific, so the judge needs a running Ollama regardless
+of `LLM_PROVIDER`. The generation client honors `LLM_PROVIDER`: with
+`LLM_PROVIDER=openai-compat`, generation goes through `create_llm_client` to
+the configured OpenAI-compatible server instead of Ollama, so an eval run in
+that mode needs both backends up. The generation client's resolved endpoint is
+logged separately from the judge's (see `build_rag_chain`). On a machine that
+runs both a native (Metal, GPU) Ollama and a Docker (CPU-only) Ollama on port
+11434, a bare `localhost` can resolve to the Docker one and judge on CPU —
+turning one judge job into minutes. Set `OLLAMA_BASE_URL=http://127.0.0.1:11434`
+to force the native Metal endpoint; confirm from the logged base URL that the
+judge used it.
 
 Operational precondition: this harness must not share its Ollama instance with
 the running app or another eval — both compete for the same single-threaded
@@ -80,7 +85,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
-from codebase_rag.llm.ollama_client import OllamaClient
+from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever as Bm25Index
 from codebase_rag.retrieval.bm25_search import load_bm25_corpus
@@ -328,19 +333,23 @@ def build_rag_chain(retriever_type: str = "bm25") -> RAGChain:
 
     retriever = build_retriever(retriever_type, qdrant_store)
 
-    logger.info("Generation client Ollama base URL: %s", config.ollama_base_url)
-    llm = OllamaClient(
+    logger.info("Generation client LLM provider: %s", config.provider)
+    if config.provider == "ollama":
+        logger.info("Generation client Ollama base URL: %s", config.ollama_base_url)
+    else:
+        logger.info("Generation client base URL: %s", config.llm_base_url)
+    llm = create_llm_client(
         model_name=config.llm_model_name,
-        base_url=config.ollama_base_url,
         temperature=0.1,
         top_p=0.95,
         top_k=40,
         max_tokens=512,
         timeout=120,
+        num_ctx=config.ollama_num_ctx,
     )
     status = llm.check_connection()
     if status["status"] != "connected":
-        raise RuntimeError(f"Cannot connect to Ollama: {status['message']}")
+        raise RuntimeError(f"Cannot connect to {config.provider} backend: {status['message']}")
 
     return RAGChain(
         retriever=retriever,

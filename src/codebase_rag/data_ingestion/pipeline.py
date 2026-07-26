@@ -79,6 +79,16 @@ def count_ingestible_files(local_path: Path) -> tuple[list[str], int]:
     return included_dirs, len(file_paths)
 
 
+_INGEST_HANDLER_NAMES = ("codebase_rag.ingest_file", "codebase_rag.ingest_console")
+
+# The level the shared "codebase_rag" logger had before the most recent
+# setup_logging() call, restored by _teardown_logging() when the run ends.
+# A module global rather than a return value because the logger is a
+# process-wide singleton and IngestPipeline.run() is the only place that
+# needs to read it back, well after setup_logging() has returned.
+_prior_level: int | None = None
+
+
 def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> tuple[logging.Logger, Path]:
     """Set up logging configuration.
 
@@ -91,6 +101,8 @@ def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> t
     Returns:
         Tuple of configured logger and log file path.
     """
+    global _prior_level
+
     numeric_level = getattr(logging, log_level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError(f"Invalid log level: {log_level}")
@@ -109,12 +121,15 @@ def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> t
         log_file = logs_dir / f"ingest-{timestamp}-{microseconds:06d}-{suffix}.log"
 
     logger = logging.getLogger("codebase_rag")
-    logger.setLevel(numeric_level)
 
     for handler in logger.handlers[:]:
-        if handler.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console"):
+        if handler.name in _INGEST_HANDLER_NAMES:
             handler.close()
             logger.removeHandler(handler)
+
+    if _prior_level is None:
+        _prior_level = logger.level
+    logger.setLevel(numeric_level)
 
     format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     file_handler = logging.FileHandler(log_file)
@@ -133,6 +148,26 @@ def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> t
 
     logger.info(f"Logging initialized at level {log_level}, writing to {log_file}")
     return logger, log_file
+
+
+def _teardown_logging(logger: logging.Logger) -> None:
+    """Detach this run's ingest handlers and restore the logger's prior level.
+
+    Called when a pipeline run finishes, success or failure. Without this,
+    the file handler (and the level it forced) stay attached to the shared
+    "codebase_rag" logger until the *next* setup_logging() call, so every
+    other package logger's records in between land in this run's file and
+    its file descriptor is held open indefinitely.
+    """
+    global _prior_level
+
+    for handler in logger.handlers[:]:
+        if handler.name in _INGEST_HANDLER_NAMES:
+            handler.close()
+            logger.removeHandler(handler)
+
+    logger.setLevel(_prior_level if _prior_level is not None else logging.NOTSET)
+    _prior_level = None
 
 
 def save_documents_cache(documents: list, cache_path: Path) -> None:
@@ -216,36 +251,41 @@ class IngestPipeline:
         log_level = "DEBUG" if debug else "INFO"
         self.logger, self.log_file_path = setup_logging(log_level)
 
-        self.config = Config.get_instance()
-        self._explicit_included_dirs = included_dirs
-        self.included_dirs = included_dirs or ["docs", "src", "tests"]
-        self.included_files = included_files or ["README.md", "pyproject.toml"]
-        self.drop_existing = drop_existing
-        self.use_cache = use_cache
+        # A failure below (bad LLM_PROVIDER, unreachable Qdrant) would otherwise never reach run()'s finally.
+        try:
+            self.config = Config.get_instance()
+            self._explicit_included_dirs = included_dirs
+            self.included_dirs = included_dirs or ["docs", "src", "tests"]
+            self.included_files = included_files or ["README.md", "pyproject.toml"]
+            self.drop_existing = drop_existing
+            self.use_cache = use_cache
 
-        self._repo_urls: list[str] = []
-        if repo_urls:
-            self._repo_urls = list(repo_urls)
-        elif repo_url:
-            self._repo_urls = [repo_url]
+            self._repo_urls: list[str] = []
+            if repo_urls:
+                self._repo_urls = list(repo_urls)
+            elif repo_url:
+                self._repo_urls = [repo_url]
 
-        self.cache_dir = Path("data/cache")
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+            self.cache_dir = Path("data/cache")
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.vector_store = QdrantStore(
-            host=self.config.qdrant_host,
-            port=self.config.qdrant_port,
-            collection_name=self.config.collection_name,
-            embedding_model=self.config.embedding_model,
-            recreate_collection=drop_existing,
-        )
+            self.vector_store = QdrantStore(
+                host=self.config.qdrant_host,
+                port=self.config.qdrant_port,
+                collection_name=self.config.collection_name,
+                embedding_model=self.config.embedding_model,
+                recreate_collection=drop_existing,
+            )
 
-        self.stats: dict[str, int | float] = {
-            "processed_files": 0,
-            "chunks_created": 0,
-            "chunks_indexed": 0,
-            "elapsed_time": 0.0,
-        }
+            self.stats: dict[str, int | float] = {
+                "processed_files": 0,
+                "chunks_created": 0,
+                "chunks_indexed": 0,
+                "elapsed_time": 0.0,
+            }
+        except Exception:
+            _teardown_logging(self.logger)
+            raise
 
     def _repo_name_from_url(self, url: str) -> str:
         """Derive a short repo name from a URL."""
@@ -529,3 +569,5 @@ class IngestPipeline:
         except Exception as e:
             self.logger.error(f"Error in ingestion pipeline: {e}", exc_info=True)
             raise
+        finally:
+            _teardown_logging(self.logger)

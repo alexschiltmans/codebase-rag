@@ -24,6 +24,32 @@ def test_num_ctx_defaults_from_config(mock_config_cls: MagicMock, mock_chat_olla
     assert kwargs["num_ctx"] == 8192
 
 
+@patch("codebase_rag.llm.ollama_client.requests.get")
+@patch("codebase_rag.llm.ollama_client.ChatOllama")
+@patch("codebase_rag.llm.ollama_client.Config")
+def test_check_connection_handles_non_json_response(
+    mock_config_cls: MagicMock, mock_chat_ollama: MagicMock, mock_get: MagicMock
+) -> None:
+    """A 200 with a non-JSON body (e.g. a proxy's HTML error page) must return an error dict,
+    not raise json.JSONDecodeError out of check_connection into the caller's own handler.
+    """
+    mock_config = MagicMock()
+    mock_config.llm_model_name = "test-model"
+    mock_config.ollama_base_url = "http://localhost:11434"
+    mock_config.ollama_num_ctx = 8192
+    mock_config_cls.get_instance.return_value = mock_config
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("not JSON")
+    mock_get.return_value = mock_response
+
+    client = OllamaClient(model_name="test-model")
+    result = client.check_connection()
+
+    assert result["status"] == "error"
+
+
 @patch("codebase_rag.llm.ollama_client.ChatOllama")
 @patch("codebase_rag.llm.ollama_client.Config")
 def test_num_ctx_override(mock_config_cls: MagicMock, mock_chat_ollama: MagicMock) -> None:
@@ -201,6 +227,58 @@ class TestOllamaClient:
         mock_get.side_effect = [version_resp, tags_resp]
 
         client = OllamaClient(model_name="missing-model")
+        result = client.check_model_availability()
+
+        assert result["status"] == "not_found"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_check_model_untagged_matches_latest(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """An untagged model name matches only the `:latest` tag, not just any tag."""
+        mock_config = MagicMock()
+        mock_config.llm_model_name = "llama3"
+        mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
+        mock_config_cls.get_instance.return_value = mock_config
+
+        version_resp = MagicMock()
+        version_resp.status_code = 200
+        version_resp.json.return_value = {"version": "0.1.0"}
+
+        tags_resp = MagicMock()
+        tags_resp.status_code = 200
+        tags_resp.json.return_value = {"models": [{"name": "llama3:latest"}]}
+
+        mock_get.side_effect = [version_resp, tags_resp]
+
+        client = OllamaClient(model_name="llama3")
+        result = client.check_model_availability()
+
+        assert result["status"] == "available"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_check_model_untagged_does_not_match_other_tag(
+        self, mock_config_cls: MagicMock, mock_get: MagicMock
+    ) -> None:
+        """An untagged model name must not match an arbitrary stored tag like `:8b`."""
+        mock_config = MagicMock()
+        mock_config.llm_model_name = "llama3"
+        mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
+        mock_config_cls.get_instance.return_value = mock_config
+
+        version_resp = MagicMock()
+        version_resp.status_code = 200
+        version_resp.json.return_value = {"version": "0.1.0"}
+
+        tags_resp = MagicMock()
+        tags_resp.status_code = 200
+        tags_resp.json.return_value = {"models": [{"name": "llama3:8b"}]}
+
+        mock_get.side_effect = [version_resp, tags_resp]
+
+        client = OllamaClient(model_name="llama3")
         result = client.check_model_availability()
 
         assert result["status"] == "not_found"

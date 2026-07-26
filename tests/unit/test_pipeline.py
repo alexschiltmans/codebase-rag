@@ -14,6 +14,7 @@ from langchain_core.documents import Document
 
 from codebase_rag.data_ingestion.pipeline import (
     IngestPipeline,
+    _teardown_logging,
     count_ingestible_files,
     discover_included_dirs,
     display_progress,
@@ -186,6 +187,38 @@ class TestSetupLogging:
             assert console_handlers[0].name == "codebase_rag.ingest_console"
         finally:
             root_logger.handlers[:] = saved_handlers
+
+    def test_teardown_detaches_handlers_and_stops_capturing_other_loggers(self, tmp_path: Path, monkeypatch) -> None:
+        """After teardown, records from unrelated package loggers no longer land in the run's file."""
+        monkeypatch.chdir(tmp_path)
+        codebase_rag_logger = logging.getLogger("codebase_rag")
+        codebase_rag_logger.handlers.clear()
+
+        logger, log_file = setup_logging("DEBUG")
+        logger.info("run record")
+        _teardown_logging(logger)
+
+        other_logger = logging.getLogger("codebase_rag.app.ui_chat")
+        other_logger.warning("unrelated app log after ingest")
+
+        content = log_file.read_text()
+        assert "run record" in content
+        assert "unrelated app log after ingest" not in content
+        assert not any(h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in logger.handlers)
+
+    def test_teardown_restores_prior_logger_level(self, tmp_path: Path, monkeypatch) -> None:
+        """setup_logging must not leave its DEBUG level bleeding into all app logging after the run ends."""
+        monkeypatch.chdir(tmp_path)
+        codebase_rag_logger = logging.getLogger("codebase_rag")
+        codebase_rag_logger.handlers.clear()
+        codebase_rag_logger.setLevel(logging.NOTSET)
+
+        logger, _ = setup_logging("DEBUG")
+        assert logger.level == logging.DEBUG
+
+        _teardown_logging(logger)
+
+        assert logger.level == logging.NOTSET
 
 
 class TestDocumentCache:
@@ -458,6 +491,91 @@ class TestIngestPipeline:
             pytest.raises(RuntimeError, match="boom"),
         ):
             pipeline.run()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_run_detaches_ingest_handlers_on_success(
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+    ) -> None:
+        """run() must tear down the ingest handlers itself; a real (unmocked) logger proves it."""
+        monkeypatch.chdir(tmp_path)
+        logging.getLogger("codebase_rag").handlers.clear()
+
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+
+        pipeline = IngestPipeline()
+        docs = [Document(page_content="test", metadata={"source": "file.py"})]
+
+        with (
+            patch.object(pipeline, "process_documents", return_value=docs),
+            patch.object(pipeline, "index_documents"),
+            patch.object(pipeline, "save_bm25_index"),
+            patch.object(pipeline, "verify_hybrid_search"),
+        ):
+            pipeline.run()
+
+        assert not any(
+            h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in pipeline.logger.handlers
+        )
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_run_detaches_ingest_handlers_on_failure(
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The teardown must run even when the pipeline raises, not just on the success path."""
+        monkeypatch.chdir(tmp_path)
+        logging.getLogger("codebase_rag").handlers.clear()
+
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+
+        pipeline = IngestPipeline()
+
+        with (
+            patch.object(pipeline, "process_documents", side_effect=RuntimeError("boom")),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            pipeline.run()
+
+        assert not any(
+            h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in pipeline.logger.handlers
+        )
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_init_detaches_ingest_handlers_when_construction_fails(
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A constructor failure after setup_logging (e.g. QdrantStore unreachable) must not
+        leave the handler attached, since run()'s finally block is never reached in that case.
+        """
+        monkeypatch.chdir(tmp_path)
+        logging.getLogger("codebase_rag").handlers.clear()
+
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_qdrant_cls.side_effect = RuntimeError("qdrant unreachable")
+
+        with pytest.raises(RuntimeError, match="qdrant unreachable"):
+            IngestPipeline()
+
+        logger = logging.getLogger("codebase_rag")
+        assert not any(h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in logger.handlers)
+        assert logger.level == logging.NOTSET
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")

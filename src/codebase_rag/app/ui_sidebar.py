@@ -26,6 +26,7 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
     except Exception as e:  # FileNotFoundError, RuntimeError, etc.
         logger.debug("Skipping sidebar logo due to %s", e)
 
+    backend_label = "Ollama" if runtime.config.provider == "ollama" else "an OpenAI-compatible server"
     st.sidebar.title("About")
     st.sidebar.markdown(
         f"""
@@ -34,11 +35,23 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
         It helps users understand code by providing answers based on ingested documentation and source code.
 
         This application uses:
-        - A local LLM via Ollama (**{runtime.config.llm_model_name}**)
+        - A local LLM via {backend_label} (**{runtime.config.llm_model_name}**)
         - Hybrid search combining vector and BM25
         - Qdrant vector database
         """
     )
+
+    model_status = runtime.health.get("model", {})
+    if model_status.get("status") == "not_found":
+        st.sidebar.warning(
+            f"""
+            Model **{runtime.config.llm_model_name}** not found.
+
+            {model_status.get("suggested_action", "Please pull the model.")}
+
+            The check refreshes on app restart.
+            """
+        )
 
     with st.sidebar:
         _display_repo_management(runtime)
