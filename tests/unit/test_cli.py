@@ -7,7 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from codebase_rag.cli import _format_compact, _format_json, ask_command, main, query_command
+from codebase_rag.cli import (
+    _format_compact,
+    _format_json,
+    _trim_results_by_budget,
+    ask_command,
+    main,
+    query_command,
+)
 
 
 class TestFormatCompact:
@@ -34,7 +41,7 @@ class TestFormatCompact:
 
     def test_format_compact_empty(self) -> None:
         """Compact format with no results."""
-        results = []
+        results: list[tuple] = []
         output = _format_compact(results)
         assert output == ""
 
@@ -68,7 +75,7 @@ class TestFormatJson:
 
     def test_format_json_empty(self) -> None:
         """JSON format with no results."""
-        results = []
+        results: list[tuple] = []
         output = _format_json(results)
         data = json.loads(output)
         assert data == []
@@ -82,7 +89,7 @@ class TestQueryCommand:
         """Query fails with exit code 1 when index is missing."""
         mock_load_bm25.side_effect = FileNotFoundError("BM25 index not found")
 
-        args = MagicMock(question="test", k=5, format="compact")
+        args = MagicMock(question="test", k=5, format="compact", repo=None, budget=2000)
         result = query_command(args)
 
         assert result == 1
@@ -94,7 +101,7 @@ class TestQueryCommand:
         mock_bm25_instance.search.return_value = []
         mock_load_bm25.return_value = mock_bm25_instance
 
-        args = MagicMock(question="nonexistent", k=5, format="compact")
+        args = MagicMock(question="nonexistent", k=5, format="compact", repo=None, budget=2000)
         result = query_command(args)
 
         assert result == 0
@@ -110,7 +117,7 @@ class TestQueryCommand:
         mock_bm25_instance.search.return_value = [(mock_doc, 0.95)]
         mock_load_bm25.return_value = mock_bm25_instance
 
-        args = MagicMock(question="function", k=5, format="compact")
+        args = MagicMock(question="function", k=5, format="compact", repo=None, budget=2000)
         result = query_command(args)
 
         assert result == 0
@@ -127,7 +134,7 @@ class TestQueryCommand:
         mock_bm25_instance.search.return_value = [(mock_doc, 0.95)]
         mock_load_bm25.return_value = mock_bm25_instance
 
-        args = MagicMock(question="function", k=5, format="json")
+        args = MagicMock(question="function", k=5, format="json", repo=None, budget=2000)
         result = query_command(args)
 
         assert result == 0
@@ -139,7 +146,7 @@ class TestQueryCommand:
         mock_bm25_instance.search.return_value = []
         mock_load_bm25.return_value = mock_bm25_instance
 
-        args = MagicMock(question="test", k=10, format="compact")
+        args = MagicMock(question="test", k=10, format="compact", repo=None, budget=2000)
         query_command(args)
 
         mock_bm25_instance.search.assert_called_once_with("test", k=10)
@@ -160,18 +167,21 @@ class TestAskCommand:
 
     @patch("codebase_rag.cli._load_bm25_retriever")
     @patch("codebase_rag.cli.Config.get_instance")
-    @patch("codebase_rag.cli.OllamaClient")
+    @patch("codebase_rag.cli.create_llm_client")
     @patch("codebase_rag.cli.RAGChain")
     def test_ask_generates_answer(
         self,
         mock_rag_chain_class: MagicMock,
-        mock_ollama: MagicMock,
+        mock_create_llm: MagicMock,
         mock_config: MagicMock,
         mock_load_bm25: MagicMock,
     ) -> None:
         """Ask generates an answer via RAG chain."""
         mock_bm25_instance = MagicMock()
         mock_load_bm25.return_value = mock_bm25_instance
+
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
 
         mock_rag_chain_instance = MagicMock()
         mock_rag_chain_instance.stream.return_value = iter(["This ", "is ", "a ", "test"])
@@ -216,6 +226,75 @@ class TestMain:
         with patch("sys.argv", ["codebase-rag", "ask", "test question"]):
             result = main()
             assert result == 0
+
+
+class TestBudgetTrimming:
+    """Tests for budget-based result trimming."""
+
+    def test_trim_results_within_budget(self) -> None:
+        """Results that fit within budget are kept."""
+        results = [("src/app.py", 10, 20, 0.95, "short")]
+        trimmed = _trim_results_by_budget(results, 100)
+        assert len(trimmed) == 1
+
+    def test_trim_results_exceed_budget(self) -> None:
+        """Results exceeding budget are trimmed."""
+        results = [
+            ("src/app.py", 10, 20, 0.95, "a" * 30),
+            ("src/lib.py", 30, 40, 0.85, "b" * 100),
+        ]
+        trimmed = _trim_results_by_budget(results, 60)
+        assert len(trimmed) == 1
+        assert trimmed[0][0] == "src/app.py"
+
+    def test_trim_results_empty(self) -> None:
+        """Empty results remain empty."""
+        results: list[tuple] = []
+        trimmed = _trim_results_by_budget(results, 1000)
+        assert trimmed == []
+
+
+class TestRepoFiltering:
+    """Tests for repository filtering."""
+
+    @patch("codebase_rag.cli._load_bm25_retriever")
+    def test_query_with_repo_filter(self, mock_load_bm25: MagicMock) -> None:
+        """Query filters results by repository."""
+        mock_doc1 = MagicMock()
+        mock_doc1.metadata = {"source": "data/repos/foo/src/app.py", "start_line": 10, "end_line": 20}
+        mock_doc1.page_content = "snippet1"
+
+        mock_doc2 = MagicMock()
+        mock_doc2.metadata = {"source": "data/repos/bar/src/lib.py", "start_line": 30, "end_line": 40}
+        mock_doc2.page_content = "snippet2"
+
+        mock_bm25_instance = MagicMock()
+        mock_bm25_instance.search.return_value = [(mock_doc1, 0.95), (mock_doc2, 0.85)]
+        mock_load_bm25.return_value = mock_bm25_instance
+
+        args = MagicMock(question="test", k=5, format="compact", repo="foo", budget=2000)
+        result = query_command(args)
+
+        assert result == 0
+        mock_bm25_instance.search.assert_called_once_with("test", k=5)
+
+
+class TestKValidation:
+    """Tests for k parameter validation."""
+
+    @patch("codebase_rag.cli._load_bm25_retriever")
+    def test_query_with_negative_k(self, mock_load_bm25: MagicMock) -> None:
+        """Query rejects negative k values."""
+        args = MagicMock(question="test", k=-1, format="compact", repo=None, budget=2000)
+        result = query_command(args)
+        assert result == 1
+
+    @patch("codebase_rag.cli._load_bm25_retriever")
+    def test_query_with_zero_k(self, mock_load_bm25: MagicMock) -> None:
+        """Query rejects zero k values."""
+        args = MagicMock(question="test", k=0, format="compact", repo=None, budget=2000)
+        result = query_command(args)
+        assert result == 1
 
 
 class TestCLIIntegration:

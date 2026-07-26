@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from codebase_rag.config import Config
-from codebase_rag.llm.ollama_client import OllamaClient
+from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 
@@ -61,9 +61,36 @@ def _format_json(results: list[tuple]) -> str:
     return json.dumps(json_results, indent=2)
 
 
+def _count_chars(text: str) -> int:
+    """Approximate character count for token budgeting."""
+    return len(text)
+
+
+def _trim_results_by_budget(results: list[tuple], budget: int) -> list[tuple]:
+    """Trim results to fit within character budget."""
+    trimmed = []
+    total_chars = 0
+
+    for result in results:
+        result_text = f"{result[0]}:{result[1]}-{result[2]}\n{result[4]}"
+        chars = _count_chars(result_text)
+
+        if total_chars + chars <= budget:
+            trimmed.append(result)
+            total_chars += chars
+        else:
+            break
+
+    return trimmed
+
+
 def query_command(args: argparse.Namespace) -> int:
     """Execute the query subcommand."""
     try:
+        if args.k <= 0:
+            logger.error("--k must be greater than 0")
+            return 1
+
         bm25_retriever = _load_bm25_retriever()
 
         # Execute search
@@ -80,6 +107,13 @@ def query_command(args: argparse.Namespace) -> int:
             end_line = doc.metadata.get("end_line", 0)
             snippet = doc.page_content
             formatted_results.append((path, start_line, end_line, score, snippet))
+
+        # Filter by repo if specified
+        if args.repo:
+            formatted_results = [r for r in formatted_results if r[0].startswith(f"data/repos/{args.repo}/")]
+
+        # Apply budget trimming
+        formatted_results = _trim_results_by_budget(formatted_results, args.budget)
 
         # Format and output results
         output = _format_json(formatted_results) if args.format == "json" else _format_compact(formatted_results)
@@ -101,14 +135,14 @@ def ask_command(args: argparse.Namespace) -> int:
         bm25_retriever = _load_bm25_retriever()
 
         # Initialize LLM and RAG chain
-        llm = OllamaClient(
+        llm = create_llm_client(
             model_name=config.llm_model_name,
-            base_url=config.ollama_base_url,
             temperature=0.0,
             top_p=0.9,
             top_k=40,
             max_tokens=1024,
             timeout=120,
+            num_ctx=config.ollama_num_ctx,
         )
 
         rag_chain = RAGChain(
@@ -118,13 +152,20 @@ def ask_command(args: argparse.Namespace) -> int:
             prompt_budget_chars=llm.prompt_budget_chars,
         )
 
-        # Generate answer and stream to stdout
-        for chunk in rag_chain.stream(args.question):
-            print(chunk, end="", flush=True)  # noqa: T201
+        # Buffer answer generation to ensure stdout is clean on failure
+        answer_text = ""
+        try:
+            for chunk in rag_chain.stream(args.question):
+                answer_text += chunk
+        except Exception as e:  # noqa: BLE001
+            logger.error("Answer generation failed: %s", e)
+            return 1
 
-        print()  # noqa: T201 newline after streaming
+        # Only write to stdout if generation succeeded
+        print(answer_text)  # noqa: T201
+        print()  # noqa: T201 newline after answer
 
-        # Print sources from last result
+        # Print sources from last result to stderr
         if rag_chain.last_result:
             sources = rag_chain.last_result.get("sources", [])
             if sources:
@@ -161,6 +202,12 @@ def main() -> int:
     query_parser.add_argument("question", help="Search query")
     query_parser.add_argument("--repo", default=None, help="Filter results to a specific repository")
     query_parser.add_argument("--k", type=int, default=5, help="Number of results to return (default: 5)")
+    query_parser.add_argument(
+        "--budget",
+        type=int,
+        default=2000,
+        help="Character budget for results (default: 2000)",
+    )
     query_parser.add_argument(
         "--format",
         choices=["compact", "json"],
