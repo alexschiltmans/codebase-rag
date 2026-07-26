@@ -1,5 +1,8 @@
 """Tests for LLM provider factory and selection."""
 
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -318,3 +321,61 @@ class TestOpenAICompatClientBehavior:
         client = OpenAICompatClient()
 
         assert client.base_url == "http://localhost:1234/v1"
+
+
+class _CapturingChatCompletionHandler(BaseHTTPRequestHandler):
+    """Stub OpenAI-compatible /chat/completions endpoint that records the request body it received."""
+
+    captured_body: dict | None = None
+
+    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's naming convention
+        length = int(self.headers.get("Content-Length", 0))
+        type(self).captured_body = json.loads(self.rfile.read(length))
+        response = {
+            "id": "test",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "test-model",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        }
+        body = json.dumps(response).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args: object) -> None:  # noqa: ANN401 - silence request logging
+        pass
+
+
+class TestTokenCapReachesWire:
+    """Regression test for the max_tokens/max_completion_tokens rename: this is the second
+    consecutive round where a token cap did nothing on the wire and no test noticed, because
+    every other test in this file mocks BaseChatOpenAI itself. This one talks to a real stub
+    HTTP server and inspects the actual request body.
+    """
+
+    @patch("codebase_rag.llm.openai_compat_client.Config")
+    def test_max_tokens_reaches_wire_body(self, mock_config_cls: MagicMock) -> None:
+        mock_config = MagicMock()
+        mock_config.llm_model_name = "test-model"
+        mock_config.llm_api_key = ""
+        mock_config_cls.get_instance.return_value = mock_config
+
+        _CapturingChatCompletionHandler.captured_body = None
+        server = HTTPServer(("127.0.0.1", 0), _CapturingChatCompletionHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_port}/v1"
+            client = OpenAICompatClient(base_url=base_url, max_tokens=8)
+            client.invoke("hello")
+
+            assert _CapturingChatCompletionHandler.captured_body is not None
+            assert _CapturingChatCompletionHandler.captured_body.get("max_tokens") == 8
+            assert "max_completion_tokens" not in _CapturingChatCompletionHandler.captured_body
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)

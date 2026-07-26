@@ -171,6 +171,7 @@ check: lint format-check typecheck test-unit ## Fast gate: lint, format, types, 
 # works without live services, so it is safe to run anywhere and in a hook.
 .PHONY: verify
 verify: lint format-check typecheck ## Full offline gate: check + performance/evaluation tiers + OpenSpec validation
+	$(PYTHON) scripts/check_tracked_imports.py
 	$(PYTEST) tests/unit/ tests/performance/ tests/evaluation/ $(PYTEST_COV)
 	openspec validate --changes
 	openspec validate --specs
