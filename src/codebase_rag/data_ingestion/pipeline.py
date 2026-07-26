@@ -79,14 +79,17 @@ def count_ingestible_files(local_path: Path) -> tuple[list[str], int]:
     return included_dirs, len(file_paths)
 
 
-def setup_logging(log_level: str = "INFO") -> logging.Logger:
+def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> tuple[logging.Logger, Path]:
     """Set up logging configuration.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        add_console: Whether to add a console handler. If None (default), adds one only
+            if the root logger has no handlers (fresh CLI process). Set explicitly
+            in tests to control console output.
 
     Returns:
-        logging.Logger: Configured logger.
+        Tuple of configured logger and log file path.
     """
     numeric_level = getattr(logging, log_level.upper(), None)
     if not isinstance(numeric_level, int):
@@ -95,18 +98,41 @@ def setup_logging(log_level: str = "INFO") -> logging.Logger:
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
 
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    log_file = logs_dir / f"ingest-{timestamp}.log"
+    now = time.time()
+    timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now))
+    microseconds = int((now % 1) * 1_000_000)
+    log_file = logs_dir / f"ingest-{timestamp}-{microseconds:06d}.log"
 
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-    )
+    suffix = 0
+    while log_file.exists() and suffix < 1000:
+        suffix += 1
+        log_file = logs_dir / f"ingest-{timestamp}-{microseconds:06d}-{suffix}.log"
 
-    logger = logging.getLogger("codebase_rag.ingest")
+    logger = logging.getLogger("codebase_rag")
+    logger.setLevel(numeric_level)
+
+    for handler in logger.handlers[:]:
+        if handler.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console"):
+            handler.close()
+            logger.removeHandler(handler)
+
+    format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter(format_string))
+    file_handler.name = "codebase_rag.ingest_file"
+    logger.addHandler(file_handler)
+
+    if add_console is None:
+        add_console = not logging.getLogger().hasHandlers()
+
+    if add_console:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter(format_string))
+        stream_handler.name = "codebase_rag.ingest_console"
+        logger.addHandler(stream_handler)
+
     logger.info(f"Logging initialized at level {log_level}, writing to {log_file}")
-    return logger
+    return logger, log_file
 
 
 def save_documents_cache(documents: list, cache_path: Path) -> None:
@@ -188,7 +214,7 @@ class IngestPipeline:
             repo_urls: List of GitHub repository URLs to ingest.
         """
         log_level = "DEBUG" if debug else "INFO"
-        self.logger = setup_logging(log_level)
+        self.logger, self.log_file_path = setup_logging(log_level)
 
         self.config = Config.get_instance()
         self._explicit_included_dirs = included_dirs
