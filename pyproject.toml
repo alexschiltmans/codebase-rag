@@ -78,6 +78,9 @@ line-ending = "auto"
     "T201",   # print is expected in CLI evaluation scripts
     "ANN",    # type annotations not required
 ]
+"scripts/check_tracked_imports.py" = [
+    "T201",   # print is expected in a make-verify diagnostic script
+]
 "src/codebase_rag/cli.py" = [
     "T201",   # print is expected in CLI scripts
 ]

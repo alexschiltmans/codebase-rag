@@ -1,10 +1,20 @@
-"""OpenAI-compatible LLM client using LangChain's ChatOpenAI."""
+"""OpenAI-compatible LLM client using LangChain's BaseChatOpenAI."""
 
 import logging
 from collections.abc import Iterator
 from typing import Any
 
 import requests
+
+# BaseChatOpenAI, not the more commonly imported ChatOpenAI: ChatOpenAI._default_params
+# renames max_tokens to max_completion_tokens unconditionally, which plenty of
+# OpenAI-compatible servers (Ollama's own /v1, verified live) don't honor, so the
+# configured cap silently never reaches the wire. See test_max_tokens_reaches_wire_body
+# in tests/unit/test_provider_factory.py, which asserts on the actual request body sent,
+# not just that construction succeeds; that test is the guard against reverting this by
+# simplifying the import back to ChatOpenAI. BaseChatOpenAI isn't in langchain_openai's
+# public __all__ (only ChatOpenAI and AzureChatOpenAI are), so a future langchain-openai
+# release could relocate it; the payload test would catch that too, as an ImportError.
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from pydantic import SecretStr
 
