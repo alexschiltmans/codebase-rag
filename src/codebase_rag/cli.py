@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -12,6 +13,18 @@ from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 
 logger = logging.getLogger(__name__)
+
+# The BM25 index lives under this project's own data/cache, not wherever the
+# CLI happens to be invoked from. Anchoring to cwd broke the console script
+# for its stated use case (git hooks, CI, scripts) the moment it ran from
+# anywhere but the repo root: src/codebase_rag/cli.py -> repo root.
+#
+# This is right for an editable install and for the container's
+# PYTHONPATH=/app/src, but wrong for a plain non-editable `pip install .`:
+# __file__ then resolves under site-packages/, and three parents up lands in
+# lib/python3.12, not the project. CODEBASE_RAG_DATA_DIR overrides this for
+# that case (and gives tests a fixture data dir to point at).
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _setup_logging() -> None:
@@ -23,9 +36,15 @@ def _setup_logging() -> None:
     )
 
 
+def _data_dir() -> Path:
+    """Directory holding data/cache, overridable via CODEBASE_RAG_DATA_DIR."""
+    override = os.environ.get("CODEBASE_RAG_DATA_DIR")
+    return Path(override) if override else _PROJECT_ROOT
+
+
 def _load_bm25_retriever() -> BM25Retriever:
     """Load BM25 retriever from cache or return empty if missing."""
-    cache_dir = Path("data/cache")
+    cache_dir = _data_dir() / "data" / "cache"
     bm25_file = cache_dir / "bm25_retriever.json"
 
     if bm25_file.exists():
@@ -38,7 +57,7 @@ def _load_bm25_retriever() -> BM25Retriever:
 def _format_compact(results: list[tuple]) -> str:
     """Format search results in compact text form: path:start-end (score)\\nsnippet."""
     lines = []
-    for path, start_line, end_line, score, snippet in results:
+    for path, start_line, end_line, score, snippet, *_ in results:
         header = f"{path}:{start_line}-{end_line} ({score:.3f})"
         lines.append(header)
         lines.append(snippet)
@@ -48,7 +67,7 @@ def _format_compact(results: list[tuple]) -> str:
 def _format_json(results: list[tuple]) -> str:
     """Format search results as JSON array."""
     json_results = []
-    for path, start_line, end_line, score, snippet in results:
+    for path, start_line, end_line, score, snippet, *_ in results:
         json_results.append(
             {
                 "path": path,
@@ -61,43 +80,52 @@ def _format_json(results: list[tuple]) -> str:
     return json.dumps(json_results, indent=2)
 
 
-def _count_chars(text: str) -> int:
-    """Approximate character count for token budgeting."""
-    return len(text)
+def _trim_results_by_budget(results: list[tuple], budget: int, output_format: str) -> list[tuple]:
+    """Trim results to fit within the character budget of the requested output format.
 
+    Rendered length grows monotonically with the number of results, so the largest
+    fitting prefix is found by binary search: O(log n) renders instead of re-rendering
+    every candidate prefix from scratch.
+    """
+    render = _format_json if output_format == "json" else _format_compact
 
-def _trim_results_by_budget(results: list[tuple], budget: int) -> list[tuple]:
-    """Trim results to fit within character budget."""
-    trimmed = []
-    total_chars = 0
-
-    for result in results:
-        result_text = f"{result[0]}:{result[1]}-{result[2]}\n{result[4]}"
-        chars = _count_chars(result_text)
-
-        if total_chars + chars <= budget:
-            trimmed.append(result)
-            total_chars += chars
+    lo, hi = 0, len(results)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if len(render(results[:mid])) <= budget:
+            lo = mid
         else:
-            break
+            hi = mid - 1
 
-    return trimmed
+    return results[:lo]
 
 
 def query_command(args: argparse.Namespace) -> int:
-    """Execute the query subcommand."""
+    """Execute the query subcommand.
+
+    Exit codes: 0 success, 1 error (bad flags, missing index, unreachable backend),
+    2 no results (query, --repo filter, or --budget legitimately produced nothing
+    to print). Callers that treat "no results" as acceptable, such as a commit-msg
+    git hook, should check for 2 specifically rather than treating any non-zero
+    exit as a hard failure.
+    """
     try:
         if args.k <= 0:
             logger.error("--k must be greater than 0")
             return 1
+        if args.budget <= 0:
+            logger.error("--budget must be greater than 0")
+            return 1
 
         bm25_retriever = _load_bm25_retriever()
 
-        # Execute search
-        search_results = bm25_retriever.search(args.question, k=args.k)
+        # When filtering by repo, over-fetch across the whole index so --repo
+        # narrows the result set rather than truncating it before the filter runs.
+        search_k = len(bm25_retriever.documents) if args.repo else args.k
+        search_results = bm25_retriever.search(args.question, k=search_k)
         if not search_results:
             logger.info("No results found for query")
-            return 0
+            return 2
 
         # Convert LangChain Document tuples to our format for formatting
         formatted_results = []
@@ -106,14 +134,22 @@ def query_command(args: argparse.Namespace) -> int:
             start_line = doc.metadata.get("start_line", 0)
             end_line = doc.metadata.get("end_line", 0)
             snippet = doc.page_content
-            formatted_results.append((path, start_line, end_line, score, snippet))
+            repo = doc.metadata.get("repo")
+            formatted_results.append((path, start_line, end_line, score, snippet, repo))
 
-        # Filter by repo if specified
+        # Filter by repo if specified, then cap back to k (search results are already
+        # sorted by score, so the top k of the filtered set is the correct top k).
         if args.repo:
-            formatted_results = [r for r in formatted_results if r[0].startswith(f"data/repos/{args.repo}/")]
+            formatted_results = [r for r in formatted_results if r[5] == args.repo][: args.k]
+            if not formatted_results:
+                logger.info("No results found for repo '%s'", args.repo)
+                return 2
 
         # Apply budget trimming
-        formatted_results = _trim_results_by_budget(formatted_results, args.budget)
+        formatted_results = _trim_results_by_budget(formatted_results, args.budget, args.format)
+        if not formatted_results:
+            logger.error("--budget %d is too small to hold any result", args.budget)
+            return 2
 
         # Format and output results
         output = _format_json(formatted_results) if args.format == "json" else _format_compact(formatted_results)
@@ -152,18 +188,25 @@ def ask_command(args: argparse.Namespace) -> int:
             prompt_budget_chars=llm.prompt_budget_chars,
         )
 
-        # Buffer answer generation to ensure stdout is clean on failure
-        answer_text = ""
-        try:
-            for chunk in rag_chain.stream(args.question):
-                answer_text += chunk
-        except Exception as e:  # noqa: BLE001
-            logger.error("Answer generation failed: %s", e)
-            return 1
-
-        # Only write to stdout if generation succeeded
-        print(answer_text)  # noqa: T201
-        print()  # noqa: T201 newline after answer
+        if sys.stdout.isatty():
+            # Interactive: stream live so the user isn't staring at nothing.
+            try:
+                for chunk in rag_chain.stream(args.question):
+                    print(chunk, end="", flush=True)  # noqa: T201
+            except Exception as e:  # noqa: BLE001
+                logger.error("Answer generation failed: %s", e)
+                return 1
+            print()  # noqa: T201
+        else:
+            # Piped: buffer so a failure mid-generation leaves stdout empty.
+            answer_text = ""
+            try:
+                for chunk in rag_chain.stream(args.question):
+                    answer_text += chunk
+            except Exception as e:  # noqa: BLE001
+                logger.error("Answer generation failed: %s", e)
+                return 1
+            print(answer_text)  # noqa: T201
 
         # Print sources from last result to stderr
         if rag_chain.last_result:

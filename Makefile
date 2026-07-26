@@ -3,6 +3,18 @@ SHELL := /bin/bash
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 COMPOSE_FILE := docker/compose-dev.yml
+# --env-file makes compose read the root .env for ${VAR:-default} interpolation
+# regardless of cwd or the compose file's own directory (docker/, which has no
+# .env). Unlike --project-directory, this only affects variable interpolation:
+# it leaves the project name and relative-path resolution for build.context
+# and friends untouched, so it doesn't require compose-dev.yml's own paths to
+# be rewritten around it. The services-* targets below also `set -a; . ./.env`
+# the root file into the shell first, so real env vars are already set before
+# compose even looks at --env-file; --env-file matters for a bare
+# `docker compose -f $(COMPOSE_FILE)` run by hand outside these targets, and
+# for docs/getting-started.md's manual command.
+ENV_FILE_FLAG := $(if $(wildcard .env),--env-file .env,)
+COMPOSE      := docker compose -f $(COMPOSE_FILE) $(ENV_FILE_FLAG)
 VENV         := .venv
 PYTHON       := $(VENV)/bin/python
 PYTEST       := $(PYTHON) -m pytest
@@ -45,35 +57,39 @@ venv: $(VENV)/bin/activate ## Create venv and install all deps
 services-start: ## Start Docker services (Qdrant, Langfuse, Ollama)
 	@printf "$(BLUE)Starting services…$(NC)\n"
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-		docker compose -f $(COMPOSE_FILE) up -d
-	@printf "$(BLUE)Pulling LLM model (this may take a while on first run)…$(NC)\n"
+		$(COMPOSE) up -d
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-		MODEL=$${LLM_MODEL_NAME:-sam860/LFM2:350m}; \
-		printf "$(BLUE)Model: $$MODEL$(NC)\n"; \
-		docker exec codebase-rag-ollama ollama pull "$$MODEL"
+		if [ "$${LLM_PROVIDER:-ollama}" = "ollama" ]; then \
+			printf "$(BLUE)Pulling LLM model (this may take a while on first run)…$(NC)\n"; \
+			MODEL=$${LLM_MODEL_NAME:-sam860/LFM2:350m}; \
+			printf "$(BLUE)Model: $$MODEL$(NC)\n"; \
+			docker exec codebase-rag-ollama ollama pull "$$MODEL"; \
+		else \
+			printf "$(BLUE)LLM_PROVIDER=$${LLM_PROVIDER}: skipping Ollama model pull.$(NC)\n"; \
+		fi
 	@printf "$(GREEN)Services started.$(NC)\n"
 
 .PHONY: services-stop
 services-stop: ## Stop Docker services
-	docker compose -f $(COMPOSE_FILE) down
+	$(COMPOSE) down
 
 .PHONY: services-restart
 services-restart: services-stop services-start ## Restart Docker services
 
 .PHONY: services-status
 services-status: ## Show Docker service status
-	docker compose -f $(COMPOSE_FILE) ps
+	$(COMPOSE) ps
 
 .PHONY: services-logs
 services-logs: ## Tail Docker service logs
-	docker compose -f $(COMPOSE_FILE) logs -f
+	$(COMPOSE) logs -f
 
 .PHONY: services-clean
 services-clean: ## Remove all containers and volumes (destructive)
 	@printf "$(YELLOW)This will remove all containers and volumes. Data will be lost.$(NC)\n"
 	@read -p "Are you sure? (y/n) " -n 1 -r && echo && \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			docker compose -f $(COMPOSE_FILE) down -v; \
+			$(COMPOSE) down -v; \
 			printf "$(GREEN)Environment cleaned.$(NC)\n"; \
 		fi
 

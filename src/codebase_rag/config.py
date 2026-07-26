@@ -34,6 +34,8 @@ class Config:
     # LLM settings
     provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
     llm_model_name: str = "sam860/LFM2:350m"
     embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
     ollama_num_ctx: int = 8192
@@ -63,6 +65,22 @@ class Config:
             repo_urls_str = os.getenv("REPO_URLS", "")
             repo_urls = [u.strip() for u in repo_urls_str.split(",") if u.strip()] if repo_urls_str else []
 
+            # `or` rather than getenv's own default: an emptied .env line (LLM_PROVIDER=)
+            # sets the var to "" rather than unsetting it, and getenv's default only
+            # applies when the var is absent, so "" would sail through and raise below.
+            # Without this, that raise happens on every subsequent get_instance() call
+            # too, since cls._instance is never assigned when construction fails here.
+            provider = os.getenv("LLM_PROVIDER") or cls.provider
+            if provider not in ("ollama", "openai-compat"):
+                raise ValueError(f"LLM_PROVIDER must be 'ollama' or 'openai-compat', got '{provider}'")
+
+            llm_base_url = os.getenv("LLM_BASE_URL", cls.llm_base_url)
+            if provider == "openai-compat" and not llm_base_url:
+                # Otherwise this passes here and dies inside OpenAICompatClient.__init__ instead,
+                # which for the app means an uncaught exception surfacing as a raw Streamlit
+                # traceback rather than the same clear config-time error LLM_PROVIDER gets above.
+                raise ValueError("LLM_BASE_URL must be set when LLM_PROVIDER=openai-compat")
+
             cls._instance = cls(
                 repo_urls=repo_urls,
                 repo_local_path=Path(os.getenv("REPO_LOCAL_PATH", str(cls.repo_local_path))),
@@ -70,8 +88,10 @@ class Config:
                 qdrant_port=int(os.getenv("QDRANT_PORT", str(cls.qdrant_port))),
                 collection_name=os.getenv("COLLECTION_NAME", cls.collection_name),
                 chat_storage_path=Path(os.getenv("CHAT_STORAGE_PATH", str(cls.chat_storage_path))),
-                provider=os.getenv("LLM_PROVIDER", cls.provider),
+                provider=provider,
                 ollama_base_url=os.getenv("OLLAMA_BASE_URL", cls.ollama_base_url),
+                llm_base_url=llm_base_url,
+                llm_api_key=os.getenv("LLM_API_KEY", cls.llm_api_key),
                 llm_model_name=os.getenv("LLM_MODEL_NAME", cls.llm_model_name),
                 embedding_model=os.getenv("EMBEDDING_MODEL", cls.embedding_model),
                 ollama_num_ctx=int(os.getenv("OLLAMA_NUM_CTX", str(cls.ollama_num_ctx))),
