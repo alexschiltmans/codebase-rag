@@ -174,12 +174,17 @@ def _display_repo_list(runtime: AppRuntime) -> None:
             st.session_state["confirm_delete_repo"] = repo_name
             st.rerun()
 
+    # Read from the flag every run, not just the click run, so a finishing ingest can't close an open dialog.
     pending = st.session_state.get("confirm_delete_repo")
     if pending in repos:
         _confirm_delete_repo_dialog(runtime, pending)
 
 
-@st.dialog("Remove repository")
+def _clear_confirm_delete_repo() -> None:
+    st.session_state.pop("confirm_delete_repo", None)
+
+
+@st.dialog("Remove repository", on_dismiss=_clear_confirm_delete_repo)
 def _confirm_delete_repo_dialog(runtime: AppRuntime, repo_name: str) -> None:
     st.write(f"Remove **{repo_name}** and all of its indexed chunks? This can't be undone.")
     cols = st.columns(2)
@@ -424,7 +429,11 @@ def _ordered_chats(state: SessionState) -> list[tuple[str, list[dict[str, Any]]]
     return [(cid, state.chat_histories[cid]) for cid in ordered_ids]
 
 
-@st.dialog("Delete chat")
+def _clear_confirm_delete_chat() -> None:
+    st.session_state.pop("confirm_delete_chat", None)
+
+
+@st.dialog("Delete chat", on_dismiss=_clear_confirm_delete_chat)
 def _confirm_delete_chat_dialog(state: SessionState, chat_id: str) -> None:
     st.write("Delete this chat? This can't be undone.")
     cols = st.columns(2)
