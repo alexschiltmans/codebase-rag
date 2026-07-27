@@ -55,10 +55,10 @@ def _load_bm25_retriever() -> BM25Retriever:
 
 
 def _format_compact(results: list[tuple]) -> str:
-    """Format search results in compact text form: path:start-end (score)\\nsnippet."""
+    """Format search results in compact text form: path (score)\\nsnippet."""
     lines = []
-    for path, start_line, end_line, score, snippet, *_ in results:
-        header = f"{path}:{start_line}-{end_line} ({score:.3f})"
+    for path, score, snippet, *_ in results:
+        header = f"{path} ({score:.3f})"
         lines.append(header)
         lines.append(snippet)
     return "\n".join(lines)
@@ -67,12 +67,10 @@ def _format_compact(results: list[tuple]) -> str:
 def _format_json(results: list[tuple]) -> str:
     """Format search results as JSON array."""
     json_results = []
-    for path, start_line, end_line, score, snippet, *_ in results:
+    for path, score, snippet, *_ in results:
         json_results.append(
             {
                 "path": path,
-                "start_line": start_line,
-                "end_line": end_line,
                 "score": float(score),
                 "snippet": snippet,
             }
@@ -131,16 +129,14 @@ def query_command(args: argparse.Namespace) -> int:
         formatted_results = []
         for doc, score in search_results:
             path = doc.metadata.get("source", "unknown")
-            start_line = doc.metadata.get("start_line", 0)
-            end_line = doc.metadata.get("end_line", 0)
             snippet = doc.page_content
             repo = doc.metadata.get("repo")
-            formatted_results.append((path, start_line, end_line, score, snippet, repo))
+            formatted_results.append((path, score, snippet, repo))
 
         # Filter by repo if specified, then cap back to k (search results are already
         # sorted by score, so the top k of the filtered set is the correct top k).
         if args.repo:
-            formatted_results = [r for r in formatted_results if r[5] == args.repo][: args.k]
+            formatted_results = [r for r in formatted_results if r[3] == args.repo][: args.k]
             if not formatted_results:
                 logger.info("No results found for repo '%s'", args.repo)
                 return 2
@@ -208,16 +204,15 @@ def ask_command(args: argparse.Namespace) -> int:
                 return 1
             print(answer_text)  # noqa: T201
 
-        # Print sources from last result to stderr
+        # Print sources from last result to stderr. RAGChain._format_sources yields plain
+        # dicts, not Documents, so these are subscripts rather than .metadata lookups.
         if rag_chain.last_result:
             sources = rag_chain.last_result.get("sources", [])
             if sources:
                 print("\nSources:", file=sys.stderr)  # noqa: T201
                 for source in sources:
-                    path = source.metadata.get("source", "unknown")
-                    start_line = source.metadata.get("start_line", 0)
-                    end_line = source.metadata.get("end_line", 0)
-                    print(f"  {path}:{start_line}-{end_line}", file=sys.stderr)  # noqa: T201
+                    path = source.get("file_path", "unknown")
+                    print(f"  {path}", file=sys.stderr)  # noqa: T201
 
         return 0
 

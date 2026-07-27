@@ -153,10 +153,10 @@ Search for code snippets:
 codebase-rag query "where is error handling implemented?"
 ```
 
-Output in compact format (path:lines, snippet):
+Output in compact format (path, score, snippet):
 
 ```
-src/app/handlers.py:42-53 (0.95)
+src/app/handlers.py (0.95)
 def handle_error(error):
     logger.error("Error occurred: %s", error)
     return {"status": "error", "message": str(error)}

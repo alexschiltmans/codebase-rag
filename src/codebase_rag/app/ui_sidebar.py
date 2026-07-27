@@ -41,8 +41,35 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
         """
     )
 
+    if runtime.health:
+        _display_model_health(runtime)
+    else:
+        # Health runs on a background thread, and nothing else triggers a rerun when it lands,
+        # so on a cold start with no auto-ingest the first paint would show no banner at all
+        # until some unrelated interaction. Torn down the moment health is populated, so this
+        # is not the standing poll the design ruled out.
+        _model_health_fragment(runtime)
+
+    with st.sidebar:
+        _display_repo_management(runtime)
+
+    _display_new_chat_button(state)
+    _display_chat_history_list(state)
+
+
+@st.fragment(run_every=2)
+def _model_health_fragment(runtime: AppRuntime) -> None:
+    """Wait for the health thread's first result, then hand off to a plain render."""
+    if runtime.health:
+        st.rerun(scope="app")
+        return
+
+
+def _display_model_health(runtime: AppRuntime) -> None:
+    """Warn about the configured model, once the health check has reported."""
     model_status = runtime.health.get("model", {})
-    if model_status.get("status") == "not_found":
+    model_health_status = model_status.get("status")
+    if model_health_status == "not_found":
         st.sidebar.warning(
             f"""
             Model **{runtime.config.llm_model_name}** not found.
@@ -52,12 +79,24 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
             The check refreshes on app restart.
             """
         )
+    elif model_health_status == "error":
+        # The most common failure (backend unreachable) previously showed nothing at all:
+        # check_model_availability returns {"status": "error", ...} on any failure to check,
+        # not "not_found", so this case fell through the check above silently. This covers
+        # both an actually-unreachable server and one that reached but rejected the request
+        # (e.g. a 401 on a misconfigured LLM_API_KEY), so the heading can't claim "can't
+        # reach" specifically; the check's own message carries whichever it was.
+        is_ollama = runtime.config.provider == "ollama"
+        backend_url = runtime.config.ollama_base_url if is_ollama else runtime.config.llm_base_url
+        st.sidebar.warning(
+            f"""
+            Problem with the configured LLM backend at **{backend_url}**.
 
-    with st.sidebar:
-        _display_repo_management(runtime)
+            {model_status.get("message", "Connection failed.")}
 
-    _display_new_chat_button(state)
-    _display_chat_history_list(state)
+            The check refreshes on app restart.
+            """
+        )
 
 
 def _display_repo_management(runtime: AppRuntime) -> None:

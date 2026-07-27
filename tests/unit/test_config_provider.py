@@ -46,6 +46,16 @@ class TestProviderValidation:
             assert config.provider == "ollama"
 
     @patch("codebase_rag.config.load_dotenv")
+    def test_empty_llm_model_name_falls_back_to_default(self, mock_load_dotenv: MagicMock) -> None:
+        """An emptied LLM_MODEL_NAME= must not ship a request with "model": "" and fail at
+        generation time instead of here, the same failure class as the LLM_PROVIDER fix.
+        """
+        Config._instance = None
+        with patch.dict(os.environ, {"LLM_MODEL_NAME": ""}):
+            config = Config.get_instance()
+            assert config.llm_model_name == Config.llm_model_name
+
+    @patch("codebase_rag.config.load_dotenv")
     def test_llm_base_url_config(self, mock_load_dotenv: MagicMock) -> None:
         """LLM_BASE_URL is loaded into config."""
         Config._instance = None

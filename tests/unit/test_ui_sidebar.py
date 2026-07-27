@@ -406,6 +406,31 @@ class TestDisplaySidebar:
     @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
     @patch("codebase_rag.app.ui_sidebar._display_repo_management")
     @patch("codebase_rag.app.ui_sidebar.st")
+    def test_renders_warning_when_backend_unreachable(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """The most common failure (backend down) previously showed nothing: check_model_availability
+        returns status "error" in this case, not "not_found", which the sidebar didn't handle at all.
+        """
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.ollama_base_url = "http://localhost:11434"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {"model": {"status": "error", "message": "Cannot connect to Ollama at http://x"}}
+        state = _new_state()
+
+        display_sidebar(runtime, state)
+
+        mock_st.sidebar.warning.assert_called_once()
+        warning_text = mock_st.sidebar.warning.call_args[0][0]
+        assert "http://localhost:11434" in warning_text
+        assert "Cannot connect to Ollama at http://x" in warning_text
+        assert "refreshes on app restart" in warning_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
     def test_no_warning_when_model_available(
         self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
     ) -> None:
@@ -417,3 +442,57 @@ class TestDisplaySidebar:
         display_sidebar(runtime, state)
 
         mock_st.sidebar.warning.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar._display_model_health")
+    @patch("codebase_rag.app.ui_sidebar._model_health_fragment")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_polls_for_health_until_the_check_reports(
+        self,
+        mock_st: MagicMock,
+        mock_fragment: MagicMock,
+        mock_display_health: MagicMock,
+        mock_repo_mgmt: MagicMock,
+        mock_new_chat: MagicMock,
+        mock_history: MagicMock,
+    ) -> None:
+        """First paint beats the health thread, so something has to bring the banner back.
+
+        Without the fragment a cold start with a missing model shows no banner until an
+        unrelated interaction reruns the script, which the change's own capability rules out.
+        """
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {}
+
+        display_sidebar(runtime, _new_state())
+
+        mock_fragment.assert_called_once_with(runtime)
+        mock_display_health.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar._display_model_health")
+    @patch("codebase_rag.app.ui_sidebar._model_health_fragment")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_stops_polling_once_health_is_populated(
+        self,
+        mock_st: MagicMock,
+        mock_fragment: MagicMock,
+        mock_display_health: MagicMock,
+        mock_repo_mgmt: MagicMock,
+        mock_new_chat: MagicMock,
+        mock_history: MagicMock,
+    ) -> None:
+        """The poll is bounded: no run_every fragment survives the first result."""
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {"model": {"status": "available"}}
+
+        display_sidebar(runtime, _new_state())
+
+        mock_fragment.assert_not_called()
+        mock_display_health.assert_called_once_with(runtime)

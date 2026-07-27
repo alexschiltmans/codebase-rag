@@ -61,6 +61,14 @@ class TestProviderFactory:
         with pytest.raises(ValueError, match="Unknown LLM_PROVIDER: invalid-provider"):
             create_llm_client()
 
+    def test_unknown_provider_kwarg_raises_error(self) -> None:
+        """A typo'd provider kwarg (num_ctxx) must raise, not silently fall back to a default:
+        it's otherwise indistinguishable from a provider-specific kwarg the current provider
+        legitimately ignores.
+        """
+        with pytest.raises(ValueError, match=r"Unknown provider_kwargs: \['num_ctxx'\]"):
+            create_llm_client(num_ctxx=32768)
+
 
 class TestOpenAICompatClientBehavior:
     """Behavioral conformance tests for OpenAICompatClient with HTTP mocking."""
@@ -368,10 +376,25 @@ class TestTokenCapReachesWire:
         server = HTTPServer(("127.0.0.1", 0), _CapturingChatCompletionHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
+        # Route around any ambient proxy the dev's shell or CI runner has set: the underlying
+        # openai SDK's httpx client honors these by default, which would send this request to a
+        # real proxy instead of the loopback stub server and hang or 502. ALL_PROXY counts too,
+        # and NO_PROXY pins the bypass rather than relying on httpx to exempt loopback itself.
+        no_proxy_env = {
+            "HTTP_PROXY": "",
+            "HTTPS_PROXY": "",
+            "ALL_PROXY": "",
+            "http_proxy": "",
+            "https_proxy": "",
+            "all_proxy": "",
+            "NO_PROXY": "127.0.0.1",
+            "no_proxy": "127.0.0.1",
+        }
         try:
-            base_url = f"http://127.0.0.1:{server.server_port}/v1"
-            client = OpenAICompatClient(base_url=base_url, max_tokens=8)
-            client.invoke("hello")
+            with patch.dict("os.environ", no_proxy_env):
+                base_url = f"http://127.0.0.1:{server.server_port}/v1"
+                client = OpenAICompatClient(base_url=base_url, max_tokens=8)
+                client.invoke("hello")
 
             assert _CapturingChatCompletionHandler.captured_body is not None
             assert _CapturingChatCompletionHandler.captured_body.get("max_tokens") == 8
@@ -379,3 +402,4 @@ class TestTokenCapReachesWire:
         finally:
             server.shutdown()
             thread.join(timeout=5)
+            server.server_close()
