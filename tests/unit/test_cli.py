@@ -27,21 +27,21 @@ class TestFormatCompact:
 
     def test_format_compact_single_result(self) -> None:
         """Compact format with one result."""
-        results = [("src/app.py", 10, 20, 0.95, "def foo():\n    pass")]
+        results = [("src/app.py", 0.95, "def foo():\n    pass")]
         output = _format_compact(results)
-        assert "src/app.py:10-20 (0.950)" in output
+        assert "src/app.py (0.950)" in output
         assert "def foo():" in output
 
     def test_format_compact_multiple_results(self) -> None:
         """Compact format with multiple results."""
         results = [
-            ("src/app.py", 10, 20, 0.95, "snippet1"),
-            ("src/lib.py", 30, 40, 0.85, "snippet2"),
+            ("src/app.py", 0.95, "snippet1"),
+            ("src/lib.py", 0.85, "snippet2"),
         ]
         output = _format_compact(results)
-        assert "src/app.py:10-20 (0.950)" in output
+        assert "src/app.py (0.950)" in output
         assert "snippet1" in output
-        assert "src/lib.py:30-40 (0.850)" in output
+        assert "src/lib.py (0.850)" in output
         assert "snippet2" in output
 
     def test_format_compact_empty(self) -> None:
@@ -56,21 +56,19 @@ class TestFormatJson:
 
     def test_format_json_single_result(self) -> None:
         """JSON format with one result."""
-        results = [("src/app.py", 10, 20, 0.95, "def foo():\n    pass")]
+        results = [("src/app.py", 0.95, "def foo():\n    pass")]
         output = _format_json(results)
         data = json.loads(output)
         assert len(data) == 1
         assert data[0]["path"] == "src/app.py"
-        assert data[0]["start_line"] == 10
-        assert data[0]["end_line"] == 20
         assert data[0]["score"] == 0.95
         assert "def foo():" in data[0]["snippet"]
 
     def test_format_json_multiple_results(self) -> None:
         """JSON format with multiple results."""
         results = [
-            ("src/app.py", 10, 20, 0.95, "snippet1"),
-            ("src/lib.py", 30, 40, 0.85, "snippet2"),
+            ("src/app.py", 0.95, "snippet1"),
+            ("src/lib.py", 0.85, "snippet2"),
         ]
         output = _format_json(results)
         data = json.loads(output)
@@ -115,7 +113,7 @@ class TestQueryCommand:
     def test_query_with_results_compact(self, mock_load_bm25: MagicMock) -> None:
         """Query returns results in compact format."""
         mock_doc = MagicMock()
-        mock_doc.metadata = {"source": "src/app.py", "start_line": 10, "end_line": 20}
+        mock_doc.metadata = {"source": "src/app.py"}
         mock_doc.page_content = "def foo():\n    pass"
 
         mock_bm25_instance = MagicMock()
@@ -132,7 +130,7 @@ class TestQueryCommand:
     def test_query_with_results_json(self, mock_load_bm25: MagicMock) -> None:
         """Query returns results in JSON format."""
         mock_doc = MagicMock()
-        mock_doc.metadata = {"source": "src/app.py", "start_line": 10, "end_line": 20}
+        mock_doc.metadata = {"source": "src/app.py"}
         mock_doc.page_content = "def foo():\n    pass"
 
         mock_bm25_instance = MagicMock()
@@ -233,6 +231,47 @@ class TestAskCommand:
         printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list if call.args)
         assert "This is a test" in printed
 
+    @patch("codebase_rag.cli._load_bm25_retriever")
+    @patch("codebase_rag.cli.Config.get_instance")
+    @patch("codebase_rag.cli.create_llm_client")
+    @patch("codebase_rag.cli.RAGChain")
+    def test_ask_prints_sources_and_still_exits_zero(
+        self,
+        mock_rag_chain_class: MagicMock,
+        mock_create_llm: MagicMock,
+        mock_config: MagicMock,
+        mock_load_bm25: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A non-empty sources list must not fail the command.
+
+        Every other ask test sets ``last_result = {"sources": []}``, so the branch that renders
+        sources never ran and shipped a ``.metadata`` lookup against the plain dicts that
+        ``RAGChain._format_sources`` actually returns. That exited 1 after a correct answer.
+        The literal below is that real shape, not a Document.
+        """
+        mock_load_bm25.return_value = MagicMock()
+        mock_create_llm.return_value = MagicMock()
+
+        mock_rag_chain_instance = MagicMock()
+        mock_rag_chain_instance.stream.return_value = iter(["the ", "answer"])
+        mock_rag_chain_instance.last_result = {
+            "sources": [
+                {"id": "1", "file_path": "data/repos/demo/src/mod.py", "file_name": "[DEMO] mod.py"},
+                {"id": "2", "file_path": "data/repos/demo/README.md", "file_name": "[DEMO] README.md"},
+            ]
+        }
+        mock_rag_chain_class.return_value = mock_rag_chain_instance
+
+        result = ask_command(MagicMock(question="explain the architecture"))
+
+        captured = capsys.readouterr()
+        assert result == 0
+        assert "the answer" in captured.out
+        assert "data/repos/demo/src/mod.py" in captured.err
+        assert "data/repos/demo/README.md" in captured.err
+        assert "Answer generation failed" not in captured.err
+
 
 class TestMain:
     """Tests for the main CLI entry point."""
@@ -272,15 +311,15 @@ class TestBudgetTrimming:
 
     def test_trim_results_within_budget(self) -> None:
         """Results that fit within budget are kept."""
-        results = [("src/app.py", 10, 20, 0.95, "short")]
+        results = [("src/app.py", 0.95, "short")]
         trimmed = _trim_results_by_budget(results, 100, "compact")
         assert len(trimmed) == 1
 
     def test_trim_results_exceed_budget(self) -> None:
         """Results exceeding budget are trimmed."""
         results = [
-            ("src/app.py", 10, 20, 0.95, "a" * 30),
-            ("src/lib.py", 30, 40, 0.85, "b" * 100),
+            ("src/app.py", 0.95, "a" * 30),
+            ("src/lib.py", 0.85, "b" * 100),
         ]
         trimmed = _trim_results_by_budget(results, 60, "compact")
         assert len(trimmed) == 1
@@ -294,7 +333,7 @@ class TestBudgetTrimming:
 
     def test_trim_results_json_budget_matches_rendered_output(self) -> None:
         """JSON budget is measured against actual JSON output, not compact-shaped text."""
-        results = [("src/app.py", 10, 20, 0.95, "x" * 50, "repo")]
+        results = [("src/app.py", 0.95, "x" * 50, "repo")]
         trimmed = _trim_results_by_budget(results, 2000, "json")
         rendered = _format_json(trimmed)
         assert len(rendered) <= 2000
@@ -309,8 +348,6 @@ class TestRepoFiltering:
         mock_doc1 = MagicMock()
         mock_doc1.metadata = {
             "source": "data/repos/foo/src/app.py",
-            "start_line": 10,
-            "end_line": 20,
             "repo": "foo",
         }
         mock_doc1.page_content = "snippet1"
@@ -318,8 +355,6 @@ class TestRepoFiltering:
         mock_doc2 = MagicMock()
         mock_doc2.metadata = {
             "source": "/Users/dev/local-folder/src/lib.py",
-            "start_line": 30,
-            "end_line": 40,
             "repo": "bar",
         }
         mock_doc2.page_content = "snippet2"
@@ -339,7 +374,7 @@ class TestRepoFiltering:
     def test_query_with_repo_filter_no_match(self, mock_load_bm25: MagicMock) -> None:
         """Query exits 2 (not 1) when --repo matches nothing, instead of a bare newline."""
         mock_doc = MagicMock()
-        mock_doc.metadata = {"source": "data/repos/foo/src/app.py", "start_line": 10, "end_line": 20, "repo": "foo"}
+        mock_doc.metadata = {"source": "data/repos/foo/src/app.py", "repo": "foo"}
         mock_doc.page_content = "snippet1"
 
         mock_bm25_instance = MagicMock()
@@ -357,12 +392,12 @@ class TestRepoFiltering:
         foo_docs = []
         for i in range(6):
             doc = MagicMock()
-            doc.metadata = {"source": f"data/repos/foo/src/f{i}.py", "start_line": 1, "end_line": 2, "repo": "foo"}
+            doc.metadata = {"source": f"data/repos/foo/src/f{i}.py", "repo": "foo"}
             doc.page_content = f"snippet{i}"
             foo_docs.append((doc, 0.9 - i * 0.01))
 
         bar_doc = MagicMock()
-        bar_doc.metadata = {"source": "data/repos/bar/src/g.py", "start_line": 1, "end_line": 2, "repo": "bar"}
+        bar_doc.metadata = {"source": "data/repos/bar/src/g.py", "repo": "bar"}
         bar_doc.page_content = "bar snippet"
 
         all_results = [(bar_doc, 0.95), *foo_docs]
@@ -418,7 +453,7 @@ class TestBudgetValidation:
     def test_query_with_budget_too_small_for_any_result(self, mock_load_bm25: MagicMock) -> None:
         """A positive but too-small budget is 'no results', exit 2, not a usage error."""
         mock_doc = MagicMock()
-        mock_doc.metadata = {"source": "src/app.py", "start_line": 10, "end_line": 20}
+        mock_doc.metadata = {"source": "src/app.py"}
         mock_doc.page_content = "x" * 500
 
         mock_bm25_instance = MagicMock()

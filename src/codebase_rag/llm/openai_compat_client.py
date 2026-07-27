@@ -28,7 +28,7 @@ MIN_PROMPT_BUDGET_CHARS = 2000
 
 
 class OpenAICompatClient:
-    """Client for OpenAI-compatible LLM APIs using ChatOpenAI.
+    """Client for OpenAI-compatible LLM APIs using BaseChatOpenAI.
 
     Supports LM Studio, llama.cpp server, vLLM, Jan, and other servers
     implementing the OpenAI chat-completions API.
@@ -114,9 +114,9 @@ class OpenAICompatClient:
                 yield text
 
     def _auth_headers(self) -> dict[str, str]:
-        """Headers for the /models probes. ChatOpenAI already sends this key on generation
+        """Headers for the /models probes. BaseChatOpenAI already sends this key on generation
         requests; without it here, a server started with an API key requirement (e.g. vLLM's
-        --api-key) 401s these checks while generation through ChatOpenAI works fine.
+        --api-key) 401s these checks while generation through BaseChatOpenAI works fine.
         """
         return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 

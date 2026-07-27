@@ -32,7 +32,9 @@ def restore_root_logger_state():
             handler.close()
             root_logger.removeHandler(handler)
 
-    root_logger.level = original_level
+    # setLevel(), not `.level =`: only the former clears the per-logger isEnabledFor cache,
+    # so a direct assignment leaves children answering from a cache built at the test's level.
+    root_logger.setLevel(original_level)
 
 
 @pytest.fixture(autouse=True)
@@ -62,5 +64,5 @@ def restore_codebase_rag_logger_state():
             handler.close()
             logger.removeHandler(handler)
 
-    logger.level = original_level
+    logger.setLevel(original_level)
     pipeline_module._prior_level = original_prior_level

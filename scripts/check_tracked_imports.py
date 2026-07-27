@@ -41,14 +41,21 @@ def _git(*args: str) -> str:
     ).stdout
 
 
-def tracked_files() -> set[Path]:
+def all_tracked_py_files() -> set[Path]:
     # `git ls-files "scripts/**/*.py"` silently misses scripts/ingest.py: `**` there requires
     # at least one intervening directory, so a file directly inside the tree root doesn't
-    # match. List every tracked .py file and filter by tree prefix instead of trusting the glob.
+    # match. List every tracked .py file rather than trusting a per-tree glob.
     output = _git("ls-files", "--", "*.py")
-    all_py = (REPO_ROOT / line for line in output.splitlines() if line)
+    return {REPO_ROOT / line for line in output.splitlines() if line}
+
+
+def tracked_files() -> set[Path]:
+    """Tracked .py files under the trees whose imports get checked. A narrower view than
+    `all_tracked_py_files`, used for `check_imports`; `check_makefile_scripts` needs the
+    unfiltered set, since a script the Makefile invokes need not live in one of these trees.
+    """
     tree_roots = tuple(REPO_ROOT / tree for tree in PYTHON_TREES)
-    return {p for p in all_py if any(root == p.parent or root in p.parents for root in tree_roots)}
+    return {p for p in all_tracked_py_files() if any(root == p.parent or root in p.parents for root in tree_roots)}
 
 
 def module_to_path(module: str) -> Path | None:
@@ -89,7 +96,20 @@ def resolve_relative(file_path: Path, level: int, module: str | None) -> list[st
 
 
 def imported_modules(file_path: Path) -> set[str]:
-    tree = ast.parse(file_path.read_text(), filename=str(file_path))
+    """Parse a file's imports.
+
+    Returns an empty set (rather than raising) if the file is gone (deleted with `rm`
+    instead of `git rm`, still listed by `git ls-files`) or mid-edit and currently
+    unparseable: this script's job is to catch untracked-file references, not to
+    re-litigate file existence or syntax, which ruff/mypy already do later in the same
+    `make verify` run. Crashing here instead would take the whole gate down before those
+    tools get a chance to give the actual, more specific error.
+    """
+    try:
+        source = file_path.read_text()
+        tree = ast.parse(source, filename=str(file_path))
+    except (OSError, SyntaxError, ValueError):
+        return set()
     modules: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -127,7 +147,7 @@ def check_imports(tracked: set[Path]) -> list[str]:
     return problems
 
 
-def check_makefile_scripts(tracked: set[Path]) -> list[str]:
+def check_makefile_scripts() -> list[str]:
     makefile = REPO_ROOT / "Makefile"
     if not makefile.is_file():
         return []
@@ -135,6 +155,11 @@ def check_makefile_scripts(tracked: set[Path]) -> list[str]:
     if makefile not in tracked_makefile_paths:
         return []
 
+    # The full tracked set, not the tree-filtered one `check_imports` uses: a script the
+    # Makefile invokes doesn't have to live under src/evals/scripts/tests to be legitimately
+    # tracked (e.g. a top-level tools/ directory), and testing membership against the
+    # narrower set would misreport a correctly committed script as untracked.
+    tracked = all_tracked_py_files()
     problems = []
     for match in re.finditer(r"\b([\w./-]+\.py)\b", makefile.read_text()):
         rel_path = match.group(1)
@@ -152,7 +177,7 @@ def main() -> int:
         print("check_tracked_imports: no tracked Python files found, skipping")
         return 0
 
-    problems = check_imports(tracked) + check_makefile_scripts(tracked)
+    problems = check_imports(tracked) + check_makefile_scripts()
 
     if problems:
         print("check_tracked_imports: found references to untracked files:")

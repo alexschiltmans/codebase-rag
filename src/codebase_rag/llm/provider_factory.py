@@ -6,6 +6,8 @@ from codebase_rag.config import Config
 from codebase_rag.llm.ollama_client import OllamaClient
 from codebase_rag.llm.openai_compat_client import OpenAICompatClient
 
+_KNOWN_PROVIDER_KWARGS = frozenset({"num_ctx", "top_k"})
+
 
 def create_llm_client(
     model_name: str | None = None,
@@ -23,14 +25,24 @@ def create_llm_client(
         top_p: Nucleus sampling parameter
         max_tokens: Maximum tokens to generate
         timeout: Request timeout in seconds
-        **provider_kwargs: Provider-specific arguments (top_k for Ollama, etc.)
+        **provider_kwargs: Provider-specific arguments (top_k for Ollama, num_ctx for both).
+            Only reads `num_ctx`/`top_k`; every other key is silently unused by the provider
+            it doesn't apply to, by design (top_k isn't part of the OpenAI API and
+            BaseChatOpenAI has no such parameter). Anything not in this set is rejected below,
+            since a typo (num_ctxx) is otherwise indistinguishable from "provider-specific
+            and legitimately unused" and would fall back to a default with no error.
 
     Returns:
         OllamaClient or OpenAICompatClient depending on LLM_PROVIDER
 
     Raises:
-        ValueError: If LLM_PROVIDER is invalid (already caught in config validation)
+        ValueError: If LLM_PROVIDER is invalid (already caught in config validation), or if
+            provider_kwargs contains a key outside `_KNOWN_PROVIDER_KWARGS`
     """
+    unknown = set(provider_kwargs) - _KNOWN_PROVIDER_KWARGS
+    if unknown:
+        raise ValueError(f"Unknown provider_kwargs: {sorted(unknown)}. Known: {sorted(_KNOWN_PROVIDER_KWARGS)}")
+
     config = Config.get_instance()
 
     if config.provider == "ollama":
