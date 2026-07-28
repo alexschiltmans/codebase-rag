@@ -1,9 +1,11 @@
 """Unit tests for data_ingestion/pipeline.py."""
 
 import json
+import logging
 import pickle
 import sys
 import tempfile
+import threading
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -12,7 +14,9 @@ import pytest
 from langchain_core.documents import Document
 
 from codebase_rag.data_ingestion.pipeline import (
+    IngestCancelled,
     IngestPipeline,
+    _teardown_logging,
     count_ingestible_files,
     discover_included_dirs,
     display_progress,
@@ -73,14 +77,150 @@ class TestCountIngestibleFiles:
 class TestSetupLogging:
     """Tests for setup_logging."""
 
-    def test_valid_log_level(self, tmp_path: Path) -> None:
-        with patch("codebase_rag.data_ingestion.pipeline.Path", return_value=tmp_path / "logs"):
-            logger = setup_logging("DEBUG")
-        assert logger.name == "codebase_rag.ingest"
+    def test_valid_log_level(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        logger, log_file = setup_logging("DEBUG")
+        assert logger.name == "codebase_rag"
+        assert log_file.exists()
+        assert "ingest-" in log_file.name
 
     def test_invalid_log_level_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid log level"):
             setup_logging("BANANA")
+
+    def test_file_created_with_root_handlers(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        root_logger = logging.getLogger()
+        root_logger.addHandler(logging.StreamHandler())
+
+        logger, log_file = setup_logging("INFO", add_console=False)
+
+        assert log_file.exists()
+        assert (tmp_path / "logs").exists()
+
+    def test_calling_twice_leaves_one_handler(self, tmp_path: Path, monkeypatch) -> None:
+        import logging as log_module
+        import time as time_module
+
+        monkeypatch.chdir(tmp_path)
+        log_module.getLogger("codebase_rag").handlers.clear()
+
+        logger1, log_file1 = setup_logging("INFO")
+        logger1.info("First run message")
+        time_module.sleep(0.01)
+        logger2, log_file2 = setup_logging("INFO")
+        logger2.info("Second run message")
+
+        ingest_handlers = [h for h in logger2.handlers if h.name == "codebase_rag.ingest_file"]
+        assert len(ingest_handlers) == 1
+        assert log_file1.exists()
+        assert log_file2.exists()
+        assert log_file1 != log_file2
+
+        content1 = log_file1.read_text()
+        content2 = log_file2.read_text()
+        assert "First run message" in content1
+        assert "Second run message" in content2
+        assert "First run message" not in content2
+
+    def test_console_handler_explicit_true(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+
+        log_logger, log_file = setup_logging("INFO", add_console=True)
+
+        console_handlers = [
+            h
+            for h in log_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 1
+        assert console_handlers[0].name == "codebase_rag.ingest_console"
+
+    def test_no_console_handler_explicit_false(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+
+        log_logger, log_file = setup_logging("INFO", add_console=False)
+
+        console_handlers = [
+            h
+            for h in log_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 0
+
+    def test_default_no_console_when_root_has_handlers(self, tmp_path: Path, monkeypatch) -> None:
+        """The `add_console=None` default probes the root logger: app case (handlers present)."""
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+        root_logger = logging.getLogger()
+        root_logger.addHandler(logging.StreamHandler())
+
+        log_logger, log_file = setup_logging("INFO")
+
+        console_handlers = [
+            h
+            for h in log_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 0
+
+    def test_default_adds_console_when_root_has_no_handlers(self, tmp_path: Path, monkeypatch) -> None:
+        """The `add_console=None` default probes the root logger: CLI case (root cleared)."""
+        monkeypatch.chdir(tmp_path)
+        logger = logging.getLogger("codebase_rag")
+        logger.handlers.clear()
+        root_logger = logging.getLogger()
+        saved_handlers = root_logger.handlers[:]
+        root_logger.handlers.clear()
+        try:
+            log_logger, log_file = setup_logging("INFO")
+
+            console_handlers = [
+                h
+                for h in log_logger.handlers
+                if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+            ]
+            assert len(console_handlers) == 1
+            assert console_handlers[0].name == "codebase_rag.ingest_console"
+        finally:
+            root_logger.handlers[:] = saved_handlers
+
+    def test_teardown_detaches_handlers_and_stops_capturing_other_loggers(self, tmp_path: Path, monkeypatch) -> None:
+        """After teardown, records from unrelated package loggers no longer land in the run's file."""
+        monkeypatch.chdir(tmp_path)
+        codebase_rag_logger = logging.getLogger("codebase_rag")
+        codebase_rag_logger.handlers.clear()
+
+        logger, log_file = setup_logging("DEBUG")
+        logger.info("run record")
+        _teardown_logging(logger)
+
+        other_logger = logging.getLogger("codebase_rag.app.ui_chat")
+        other_logger.warning("unrelated app log after ingest")
+
+        content = log_file.read_text()
+        assert "run record" in content
+        assert "unrelated app log after ingest" not in content
+        assert not any(h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in logger.handlers)
+
+    def test_teardown_restores_prior_logger_level(self, tmp_path: Path, monkeypatch) -> None:
+        """setup_logging must not leave its DEBUG level bleeding into all app logging after the run ends."""
+        monkeypatch.chdir(tmp_path)
+        codebase_rag_logger = logging.getLogger("codebase_rag")
+        codebase_rag_logger.handlers.clear()
+        codebase_rag_logger.setLevel(logging.NOTSET)
+
+        logger, _ = setup_logging("DEBUG")
+        assert logger.level == logging.DEBUG
+
+        _teardown_logging(logger)
+
+        assert logger.level == logging.NOTSET
 
 
 class TestDocumentCache:
@@ -149,7 +289,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline(repo_url="https://github.com/owner/my-repo.git")
 
@@ -169,7 +309,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline()
         path = pipeline._cache_path_for_repo("my-repo")
@@ -187,7 +327,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         mock_store = MagicMock()
         mock_qdrant_cls.return_value = mock_store
@@ -208,6 +348,112 @@ class TestIngestPipeline:
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
     @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_reports_monotonic_progress(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        calls: list[tuple[str, int, int]] = []
+        pipeline = IngestPipeline(progress_callback=lambda phase, current, total: calls.append((phase, current, total)))
+
+        docs = [
+            Document(page_content=f"content{i}", metadata={"source": f"{i}.py", "repo": "my-repo"}) for i in range(250)
+        ]
+
+        pipeline.index_documents(docs)
+
+        assert calls == [("indexing", 1, 3), ("indexing", 2, 3), ("indexing", 3, 3)]
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_raises_ingest_cancelled_when_event_set(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        cancel_event = threading.Event()
+        cancel_event.set()
+        pipeline = IngestPipeline(cancel_event=cancel_event)
+        docs = [Document(page_content="content", metadata={"source": "a.py", "repo": "my-repo"})]
+
+        with pytest.raises(IngestCancelled):
+            pipeline.index_documents(docs)
+
+        pipeline.vector_store.add_documents.assert_not_called()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_cancelled_before_delete_leaves_existing_chunks_untouched(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        """A cancel that lands right as indexing starts must not run
+        delete_by_repo — otherwise a re-ingest's existing chunks are wiped
+        with nothing indexed to replace them."""
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        cancel_event = threading.Event()
+        cancel_event.set()
+        pipeline = IngestPipeline(cancel_event=cancel_event)
+        docs = [Document(page_content="content", metadata={"source": "a.py", "repo": "my-repo"})]
+
+        with pytest.raises(IngestCancelled):
+            pipeline.index_documents(docs)
+
+        pipeline.vector_store.delete_by_repo.assert_not_called()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_stops_at_next_batch_boundary_once_cancelled(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        cancel_event = threading.Event()
+
+        def _maybe_cancel(phase: str, current: int, total: int) -> None:
+            if current == 1:
+                cancel_event.set()
+
+        pipeline = IngestPipeline(progress_callback=_maybe_cancel, cancel_event=cancel_event)
+        docs = [
+            Document(page_content=f"content{i}", metadata={"source": f"{i}.py", "repo": "my-repo"}) for i in range(250)
+        ]
+
+        with pytest.raises(IngestCancelled):
+            pipeline.index_documents(docs)
+
+        assert pipeline.vector_store.add_documents.call_count == 1
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
     def test_save_bm25_index(
         self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
     ) -> None:
@@ -217,7 +463,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -243,7 +489,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -270,7 +516,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline()
 
@@ -289,7 +535,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline(repo_urls=["https://github.com/test/repo1"])
 
@@ -312,7 +558,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -344,7 +590,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline()
 
@@ -353,6 +599,91 @@ class TestIngestPipeline:
             pytest.raises(RuntimeError, match="boom"),
         ):
             pipeline.run()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_run_detaches_ingest_handlers_on_success(
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+    ) -> None:
+        """run() must tear down the ingest handlers itself; a real (unmocked) logger proves it."""
+        monkeypatch.chdir(tmp_path)
+        logging.getLogger("codebase_rag").handlers.clear()
+
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+
+        pipeline = IngestPipeline()
+        docs = [Document(page_content="test", metadata={"source": "file.py"})]
+
+        with (
+            patch.object(pipeline, "process_documents", return_value=docs),
+            patch.object(pipeline, "index_documents"),
+            patch.object(pipeline, "save_bm25_index"),
+            patch.object(pipeline, "verify_hybrid_search"),
+        ):
+            pipeline.run()
+
+        assert not any(
+            h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in pipeline.logger.handlers
+        )
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_run_detaches_ingest_handlers_on_failure(
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The teardown must run even when the pipeline raises, not just on the success path."""
+        monkeypatch.chdir(tmp_path)
+        logging.getLogger("codebase_rag").handlers.clear()
+
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+
+        pipeline = IngestPipeline()
+
+        with (
+            patch.object(pipeline, "process_documents", side_effect=RuntimeError("boom")),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            pipeline.run()
+
+        assert not any(
+            h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in pipeline.logger.handlers
+        )
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_init_detaches_ingest_handlers_when_construction_fails(
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A constructor failure after setup_logging (e.g. QdrantStore unreachable) must not
+        leave the handler attached, since run()'s finally block is never reached in that case.
+        """
+        monkeypatch.chdir(tmp_path)
+        logging.getLogger("codebase_rag").handlers.clear()
+
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_qdrant_cls.side_effect = RuntimeError("qdrant unreachable")
+
+        with pytest.raises(RuntimeError, match="qdrant unreachable"):
+            IngestPipeline()
+
+        logger = logging.getLogger("codebase_rag")
+        assert not any(h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in logger.handlers)
+        assert logger.level == logging.NOTSET
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
@@ -366,7 +697,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -401,7 +732,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -434,7 +765,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -455,7 +786,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         pipeline = IngestPipeline(repo_urls=["https://github.com/a/b", "https://github.com/c/d"])
         assert len(pipeline._repo_urls) == 2
@@ -479,7 +810,7 @@ class TestIngestPipeline:
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
-        mock_logging.return_value = MagicMock()
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         # Set up mock git loader to return a repo with a known HEAD SHA
         mock_git_loader = MagicMock()

@@ -8,6 +8,31 @@ from typing import ClassVar, Optional
 from dotenv import load_dotenv
 
 
+def _env(name: str, default: str) -> str:
+    """Read an env var, treating an empty value as unset.
+
+    An emptied .env line (LLM_PROVIDER=) sets the variable to "" rather than removing it, and
+    os.getenv's own default only applies when the variable is absent. Commenting a value out by
+    blanking it is an ordinary edit, so every setting reads through here rather than some of them.
+    """
+    return os.getenv(name) or default
+
+
+def _env_int(name: str, default: int) -> int:
+    """Read an int env var, treating an empty value as unset.
+
+    Worse than the string case if left unguarded: int("") raises, and because the singleton is
+    never assigned when construction fails, that raise repeats on every later get_instance().
+    """
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got '{raw}'") from None
+
+
 @dataclass
 class Config:
     """Configuration settings for the application.
@@ -34,8 +59,11 @@ class Config:
     # LLM settings
     provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
     llm_model_name: str = "sam860/LFM2:350m"
     embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
+    ollama_num_ctx: int = 8192
 
     # Default repository for auto-ingestion on first startup
     default_repo_url: str = ""
@@ -66,25 +94,39 @@ class Config:
             repo_urls_str = os.getenv("REPO_URLS", "")
             repo_urls = [u.strip() for u in repo_urls_str.split(",") if u.strip()] if repo_urls_str else []
 
+            provider = _env("LLM_PROVIDER", cls.provider)
+            if provider not in ("ollama", "openai-compat"):
+                raise ValueError(f"LLM_PROVIDER must be 'ollama' or 'openai-compat', got '{provider}'")
+
+            llm_base_url = _env("LLM_BASE_URL", cls.llm_base_url)
+            if provider == "openai-compat" and not llm_base_url:
+                # Otherwise this passes here and dies inside OpenAICompatClient.__init__ instead,
+                # which for the app means an uncaught exception surfacing as a raw Streamlit
+                # traceback rather than the same clear config-time error LLM_PROVIDER gets above.
+                raise ValueError("LLM_BASE_URL must be set when LLM_PROVIDER=openai-compat")
+
             cls._instance = cls(
                 repo_urls=repo_urls,
-                repo_local_path=Path(os.getenv("REPO_LOCAL_PATH", str(cls.repo_local_path))),
-                qdrant_host=os.getenv("QDRANT_HOST", cls.qdrant_host),
-                qdrant_port=int(os.getenv("QDRANT_PORT", str(cls.qdrant_port))),
-                collection_name=os.getenv("COLLECTION_NAME", cls.collection_name),
-                chat_storage_path=Path(os.getenv("CHAT_STORAGE_PATH", str(cls.chat_storage_path))),
-                provider=os.getenv("LLM_PROVIDER", cls.provider),
-                ollama_base_url=os.getenv("OLLAMA_BASE_URL", cls.ollama_base_url),
-                llm_model_name=os.getenv("LLM_MODEL_NAME", cls.llm_model_name),
-                embedding_model=os.getenv("EMBEDDING_MODEL", cls.embedding_model),
-                default_repo_url=os.getenv("DEFAULT_REPO_URL", cls.default_repo_url),
-                log_level=os.getenv("LOG_LEVEL", cls.log_level),
-                api_host=os.getenv("API_HOST", cls.api_host),
-                api_port=int(os.getenv("API_PORT", str(cls.api_port))),
-                langfuse_enabled=os.getenv("LANGFUSE_ENABLED", "false").lower() == "true",
-                langfuse_public_key=os.getenv("LANGFUSE_PUBLIC_KEY", cls.langfuse_public_key),
-                langfuse_secret_key=os.getenv("LANGFUSE_SECRET_KEY", cls.langfuse_secret_key),
-                langfuse_host=os.getenv("LANGFUSE_HOST", cls.langfuse_host),
+                repo_local_path=Path(_env("REPO_LOCAL_PATH", str(cls.repo_local_path))),
+                qdrant_host=_env("QDRANT_HOST", cls.qdrant_host),
+                qdrant_port=_env_int("QDRANT_PORT", cls.qdrant_port),
+                collection_name=_env("COLLECTION_NAME", cls.collection_name),
+                chat_storage_path=Path(_env("CHAT_STORAGE_PATH", str(cls.chat_storage_path))),
+                provider=provider,
+                ollama_base_url=_env("OLLAMA_BASE_URL", cls.ollama_base_url),
+                llm_base_url=llm_base_url,
+                llm_api_key=_env("LLM_API_KEY", cls.llm_api_key),
+                llm_model_name=_env("LLM_MODEL_NAME", cls.llm_model_name),
+                embedding_model=_env("EMBEDDING_MODEL", cls.embedding_model),
+                ollama_num_ctx=_env_int("OLLAMA_NUM_CTX", cls.ollama_num_ctx),
+                default_repo_url=_env("DEFAULT_REPO_URL", cls.default_repo_url),
+                log_level=_env("LOG_LEVEL", cls.log_level),
+                api_host=_env("API_HOST", cls.api_host),
+                api_port=_env_int("API_PORT", cls.api_port),
+                langfuse_enabled=_env("LANGFUSE_ENABLED", "false").lower() == "true",
+                langfuse_public_key=_env("LANGFUSE_PUBLIC_KEY", cls.langfuse_public_key),
+                langfuse_secret_key=_env("LANGFUSE_SECRET_KEY", cls.langfuse_secret_key),
+                langfuse_host=_env("LANGFUSE_HOST", cls.langfuse_host),
             )
 
             cls._instance.repo_local_path.mkdir(parents=True, exist_ok=True)

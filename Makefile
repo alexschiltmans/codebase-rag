@@ -3,6 +3,18 @@ SHELL := /bin/bash
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 COMPOSE_FILE := docker/compose-dev.yml
+# --env-file makes compose read the root .env for ${VAR:-default} interpolation
+# regardless of cwd or the compose file's own directory (docker/, which has no
+# .env). Unlike --project-directory, this only affects variable interpolation:
+# it leaves the project name and relative-path resolution for build.context
+# and friends untouched, so it doesn't require compose-dev.yml's own paths to
+# be rewritten around it. The services-* targets below also `set -a; . ./.env`
+# the root file into the shell first, so real env vars are already set before
+# compose even looks at --env-file; --env-file matters for a bare
+# `docker compose -f $(COMPOSE_FILE)` run by hand outside these targets, and
+# for docs/getting-started.md's manual command.
+ENV_FILE_FLAG := $(if $(wildcard .env),--env-file .env,)
+COMPOSE      := docker compose -f $(COMPOSE_FILE) $(ENV_FILE_FLAG)
 VENV         := .venv
 PYTHON       := $(VENV)/bin/python
 PYTEST       := $(PYTHON) -m pytest
@@ -45,35 +57,39 @@ venv: $(VENV)/bin/activate ## Create venv and install all deps
 services-start: ## Start Docker services (Qdrant, Langfuse, Ollama)
 	@printf "$(BLUE)Starting services…$(NC)\n"
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-		docker compose -f $(COMPOSE_FILE) up -d
-	@printf "$(BLUE)Pulling LLM model (this may take a while on first run)…$(NC)\n"
+		$(COMPOSE) up -d
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-		MODEL=$${LLM_MODEL_NAME:-sam860/LFM2:350m}; \
-		printf "$(BLUE)Model: $$MODEL$(NC)\n"; \
-		docker exec codebase-rag-ollama ollama pull "$$MODEL"
+		if [ "$${LLM_PROVIDER:-ollama}" = "ollama" ]; then \
+			printf "$(BLUE)Pulling LLM model (this may take a while on first run)…$(NC)\n"; \
+			MODEL=$${LLM_MODEL_NAME:-sam860/LFM2:350m}; \
+			printf "$(BLUE)Model: $$MODEL$(NC)\n"; \
+			docker exec codebase-rag-ollama ollama pull "$$MODEL"; \
+		else \
+			printf "$(BLUE)LLM_PROVIDER=$${LLM_PROVIDER}: skipping Ollama model pull.$(NC)\n"; \
+		fi
 	@printf "$(GREEN)Services started.$(NC)\n"
 
 .PHONY: services-stop
 services-stop: ## Stop Docker services
-	docker compose -f $(COMPOSE_FILE) down
+	$(COMPOSE) down
 
 .PHONY: services-restart
 services-restart: services-stop services-start ## Restart Docker services
 
 .PHONY: services-status
 services-status: ## Show Docker service status
-	docker compose -f $(COMPOSE_FILE) ps
+	$(COMPOSE) ps
 
 .PHONY: services-logs
 services-logs: ## Tail Docker service logs
-	docker compose -f $(COMPOSE_FILE) logs -f
+	$(COMPOSE) logs -f
 
 .PHONY: services-clean
 services-clean: ## Remove all containers and volumes (destructive)
 	@printf "$(YELLOW)This will remove all containers and volumes. Data will be lost.$(NC)\n"
 	@read -p "Are you sure? (y/n) " -n 1 -r && echo && \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			docker compose -f $(COMPOSE_FILE) down -v; \
+			$(COMPOSE) down -v; \
 			printf "$(GREEN)Environment cleaned.$(NC)\n"; \
 		fi
 
@@ -108,8 +124,8 @@ endif
 PYTEST_COV := --cov=src/codebase_rag --cov-report=term --cov-report=xml:coverage.xml
 
 .PHONY: test
-test: venv ## Run unit + integration + e2e tests with coverage
-	$(PYTEST) tests/unit/ tests/integration/ -m "not performance and not evaluation" $(PYTEST_COV)
+test: venv ## Run unit + integration + e2e tests (needs make services-start)
+	$(PYTEST) tests/unit/ tests/integration/ tests/e2e/ -m "not performance and not evaluation" $(PYTEST_COV)
 
 .PHONY: test-unit
 test-unit: venv ## Run unit tests only
@@ -138,23 +154,38 @@ test-all: venv ## Run all tests (including performance + evaluation)
 # ── Linting / type-checking ──────────────────────────────────────────────────
 .PHONY: lint
 lint: venv ## Run ruff linter
-	$(PYTHON) -m ruff check src/ tests/ scripts/
+	$(PYTHON) -m ruff check src/ tests/ scripts/ evals/
 
 .PHONY: format
 format: venv ## Auto-format with ruff
-	$(PYTHON) -m ruff format src/ tests/ scripts/
+	$(PYTHON) -m ruff format src/ tests/ scripts/ evals/
+
+.PHONY: format-check
+format-check: venv ## Check formatting without rewriting files (matches CI)
+	$(PYTHON) -m ruff format --check src/ tests/ scripts/ evals/
 
 .PHONY: typecheck
 typecheck: venv ## Run mypy
 	$(PYTHON) -m mypy src/
 
 .PHONY: check
-check: lint typecheck test-unit ## Run lint, typecheck, and unit tests
+check: lint format-check typecheck test-unit ## Fast gate: lint, format, types, unit tests
+
+# The gate to run before review, commit, and push. Covers every tier that
+# works without live services, so it is safe to run anywhere and in a hook.
+.PHONY: verify
+verify: lint format-check typecheck ## Full offline gate: check + performance/evaluation tiers + OpenSpec validation
+	$(PYTHON) scripts/check_tracked_imports.py
+	$(PYTEST) tests/unit/ tests/performance/ tests/evaluation/ $(PYTEST_COV)
+	openspec validate --changes
+	openspec validate --specs
 
 # ── Pre-commit ───────────────────────────────────────────────────────────────
 .PHONY: pre-commit-install
-pre-commit-install: venv ## Install pre-commit hooks
+pre-commit-install: venv ## Install pre-commit hooks (commit, commit-msg, pre-push)
 	$(VENV)/bin/pre-commit install
+	$(VENV)/bin/pre-commit install --hook-type commit-msg
+	$(VENV)/bin/pre-commit install --hook-type pre-push
 
 .PHONY: pre-commit-run
 pre-commit-run: venv ## Run all pre-commit hooks on all files

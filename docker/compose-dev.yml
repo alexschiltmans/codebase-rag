@@ -1,7 +1,8 @@
 services:
   qdrant:
     container_name: codebase-rag-qdrant
-    image: qdrant/qdrant:v1.12.6
+    # Match qdrant-client's minor (pyproject); a server downgrade needs a fresh volume, Qdrant won't read newer storage.
+    image: qdrant/qdrant:v1.17.0
     volumes:
       - codebase_rag_qdrant_data:/qdrant/storage
     ports:
@@ -74,7 +75,10 @@ services:
     environment:
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       OLLAMA_BASE_URL: http://ollama:11434
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL_NAME: ${LLM_MODEL_NAME:-sam860/LFM2:350m}
       DEFAULT_REPO_URL: ${DEFAULT_REPO_URL:-}
       LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
@@ -86,8 +90,16 @@ services:
     volumes:
       - codebase_rag_app_data:/app/data
       - codebase_rag_app_cache:/app/cache
+    extra_hosts:
+      # Docker Desktop (Mac/Windows) provides this automatically; Linux Docker Engine
+      # doesn't, so an LLM_BASE_URL pointed at host.docker.internal (the documented
+      # remedy for a host-run OpenAI-compatible server) silently fails to resolve there
+      # without this.
+      - "host.docker.internal:host-gateway"
     depends_on:
       qdrant:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     networks:
       - codebase_rag_network

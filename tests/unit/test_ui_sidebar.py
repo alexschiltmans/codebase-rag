@@ -11,7 +11,9 @@ from codebase_rag.app.ui_sidebar import (
     _display_local_folder_tab,
     _display_new_chat_button,
     _display_repo_list,
+    _folder_dialog_wait_fragment,
     _get_chat_title,
+    _ingestion_progress_fragment,
     _ordered_chats,
     _preview_local_folder,
     display_sidebar,
@@ -179,22 +181,23 @@ class TestGithubTab:
 
 
 class TestPreviewLocalFolder:
-    def test_computes_and_caches_result(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_computes_result(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "main.py").write_text("print('hi')")
 
-        session_state: dict = {}
-        with patch("codebase_rag.app.ui_sidebar.st") as mock_st:
-            mock_st.session_state = session_state
-            dirs, count = _preview_local_folder(tmp_path)
-            assert count == 1
-            assert "src" in dirs
-            assert session_state["_folder_preview_cache"]["path"] == str(tmp_path)
+        dirs, count = _preview_local_folder(tmp_path)
+        assert count == 1
+        assert "src" in dirs
 
-            with patch("codebase_rag.data_ingestion.pipeline.count_ingestible_files") as mock_count:
-                dirs2, count2 = _preview_local_folder(tmp_path)
-                mock_count.assert_not_called()
-                assert (dirs2, count2) == (dirs, count)
+    def test_recomputes_when_folder_contents_change(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("print('hi')")
+        _, count = _preview_local_folder(tmp_path)
+        assert count == 1
+
+        (tmp_path / "src" / "second.py").write_text("print('bye')")
+        _, count2 = _preview_local_folder(tmp_path)
+        assert count2 == 2
 
 
 class TestLocalFolderTab:
@@ -224,6 +227,41 @@ class TestLocalFolderTab:
         _display_local_folder_tab(runtime, ingestion_running=False)
 
         assert mock_st.session_state["folder_dialog_error"] == "A folder dialog is already open."
+
+
+class TestFolderDialogWaitFragment:
+    """Exercises the fragment function directly (via ``__wrapped__``), since
+    AppTest never runs a standalone ``run_every`` fragment tick on its own —
+    only inline, the one time it's first encountered in a script run."""
+
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_reruns_when_a_pick_lands_even_if_still_open(self, mock_st: MagicMock) -> None:
+        """FolderPicker is process-wide: another session's dialog can keep
+        is_open() True for a session whose own pick already landed. The
+        fragment must still trigger a rerun so the new path gets redrawn."""
+        mock_st.session_state = _AttrDict(folder_dialog_token=object())
+
+        runtime = MagicMock()
+        runtime.folder_picker.is_open.return_value = True
+        runtime.folder_picker.poll.return_value = MagicMock(path="/picked/dir", error=None)
+
+        _folder_dialog_wait_fragment.__wrapped__(runtime)
+
+        assert mock_st.session_state["typed_folder_path"] == "/picked/dir"
+        mock_st.rerun.assert_called_once_with(scope="app")
+
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_shows_waiting_caption_when_nothing_landed_and_still_open(self, mock_st: MagicMock) -> None:
+        mock_st.session_state = _AttrDict(folder_dialog_token=object())
+
+        runtime = MagicMock()
+        runtime.folder_picker.is_open.return_value = True
+        runtime.folder_picker.poll.return_value = None
+
+        _folder_dialog_wait_fragment.__wrapped__(runtime)
+
+        mock_st.caption.assert_called_once()
+        mock_st.rerun.assert_not_called()
 
 
 class TestDisplayIngestionOutcome:
@@ -264,6 +302,73 @@ class TestDisplayIngestionOutcome:
 
         assert "ingestion_error_banner" not in mock_st.session_state
         mock_st.rerun.assert_called_once()
+
+
+class TestIngestionProgressFragment:
+    """Exercises the fragment directly (via ``__wrapped__``), same pattern as
+    ``TestFolderDialogWaitFragment``."""
+
+    @patch("codebase_rag.app.ui_sidebar._display_add_repository")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_list")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_renders_proportional_bar_with_phase_and_counts(
+        self, mock_st: MagicMock, mock_repo_list: MagicMock, mock_add_repo: MagicMock
+    ) -> None:
+        mock_status = MagicMock()
+        mock_status.__enter__ = MagicMock(return_value=mock_status)
+        mock_status.__exit__ = MagicMock(return_value=False)
+        mock_st.status.return_value = mock_status
+        mock_st.button.return_value = False
+
+        runtime = MagicMock()
+        job = MagicMock(source="owner/repo", started_at=0, phase="indexing", progress_current=3, progress_total=10)
+        runtime.ingestion.current_job.return_value = job
+
+        _ingestion_progress_fragment.__wrapped__(runtime)
+
+        mock_st.progress.assert_called_once_with(0.3)
+        mock_st.caption.assert_called_once_with("indexing - 3/10")
+
+    @patch("codebase_rag.app.ui_sidebar._display_add_repository")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_list")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_guards_zero_total_by_skipping_the_bar(
+        self, mock_st: MagicMock, mock_repo_list: MagicMock, mock_add_repo: MagicMock
+    ) -> None:
+        mock_status = MagicMock()
+        mock_status.__enter__ = MagicMock(return_value=mock_status)
+        mock_status.__exit__ = MagicMock(return_value=False)
+        mock_st.status.return_value = mock_status
+        mock_st.button.return_value = False
+
+        runtime = MagicMock()
+        job = MagicMock(source="owner/repo", started_at=0, phase="", progress_current=0, progress_total=0)
+        runtime.ingestion.current_job.return_value = job
+
+        _ingestion_progress_fragment.__wrapped__(runtime)
+
+        mock_st.progress.assert_not_called()
+        mock_st.caption.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_add_repository")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_list")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_cancel_button_calls_manager_cancel(
+        self, mock_st: MagicMock, mock_repo_list: MagicMock, mock_add_repo: MagicMock
+    ) -> None:
+        mock_status = MagicMock()
+        mock_status.__enter__ = MagicMock(return_value=mock_status)
+        mock_status.__exit__ = MagicMock(return_value=False)
+        mock_st.status.return_value = mock_status
+        mock_st.button.return_value = True
+
+        runtime = MagicMock()
+        job = MagicMock(source="owner/repo", started_at=0, phase="processing", progress_current=1, progress_total=2)
+        runtime.ingestion.current_job.return_value = job
+
+        _ingestion_progress_fragment.__wrapped__(runtime)
+
+        runtime.ingestion.cancel.assert_called_once()
 
 
 class TestNewChatButton:
@@ -329,6 +434,7 @@ class TestDisplaySidebar:
     ) -> None:
         runtime = MagicMock()
         runtime.config.llm_model_name = "test-model"
+        runtime.health = {}
         state = _new_state()
 
         display_sidebar(runtime, state)
@@ -337,3 +443,124 @@ class TestDisplaySidebar:
         mock_repo_mgmt.assert_called_once_with(runtime)
         mock_new_chat.assert_called_once_with(state)
         mock_history.assert_called_once_with(state)
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_renders_model_warning_when_not_found(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {
+            "model": {
+                "status": "not_found",
+                "message": "Model 'my-model' not found",
+                "suggested_action": "Run 'docker exec codebase-rag-ollama ollama pull my-model'",
+            }
+        }
+        state = _new_state()
+
+        display_sidebar(runtime, state)
+
+        mock_st.sidebar.warning.assert_called_once()
+        warning_text = mock_st.sidebar.warning.call_args[0][0]
+        assert "my-model" in warning_text
+        assert "docker exec codebase-rag-ollama ollama pull my-model" in warning_text
+        assert "refreshes on app restart" in warning_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_renders_warning_when_backend_unreachable(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """The most common failure (backend down) previously showed nothing: check_model_availability
+        returns status "error" in this case, not "not_found", which the sidebar didn't handle at all.
+        """
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.ollama_base_url = "http://localhost:11434"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {"model": {"status": "error", "message": "Cannot connect to Ollama at http://x"}}
+        state = _new_state()
+
+        display_sidebar(runtime, state)
+
+        mock_st.sidebar.warning.assert_called_once()
+        warning_text = mock_st.sidebar.warning.call_args[0][0]
+        assert "http://localhost:11434" in warning_text
+        assert "Cannot connect to Ollama at http://x" in warning_text
+        assert "refreshes on app restart" in warning_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_no_warning_when_model_available(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {"model": {"status": "available"}}
+        state = _new_state()
+
+        display_sidebar(runtime, state)
+
+        mock_st.sidebar.warning.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar._display_model_health")
+    @patch("codebase_rag.app.ui_sidebar._model_health_fragment")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_polls_for_health_until_the_check_reports(
+        self,
+        mock_st: MagicMock,
+        mock_fragment: MagicMock,
+        mock_display_health: MagicMock,
+        mock_repo_mgmt: MagicMock,
+        mock_new_chat: MagicMock,
+        mock_history: MagicMock,
+    ) -> None:
+        """First paint beats the health thread, so something has to bring the banner back.
+
+        Without the fragment a cold start with a missing model shows no banner until an
+        unrelated interaction reruns the script, which the change's own capability rules out.
+        """
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {}
+
+        display_sidebar(runtime, _new_state())
+
+        mock_fragment.assert_called_once_with(runtime)
+        mock_display_health.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar._display_model_health")
+    @patch("codebase_rag.app.ui_sidebar._model_health_fragment")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_stops_polling_once_health_is_populated(
+        self,
+        mock_st: MagicMock,
+        mock_fragment: MagicMock,
+        mock_display_health: MagicMock,
+        mock_repo_mgmt: MagicMock,
+        mock_new_chat: MagicMock,
+        mock_history: MagicMock,
+    ) -> None:
+        """The poll is bounded: no run_every fragment survives the first result."""
+        runtime = MagicMock()
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {"model": {"status": "available"}}
+
+        display_sidebar(runtime, _new_state())
+
+        mock_fragment.assert_not_called()
+        mock_display_health.assert_called_once_with(runtime)

@@ -1,6 +1,8 @@
 """Module for processing documents from repositories."""
 
 import logging
+import threading
+from collections.abc import Callable
 
 from langchain_core.documents import Document
 
@@ -36,12 +38,18 @@ class DocumentProcessor:
         self,
         included_dirs: list[str] | None = None,
         included_files: list[str] | None = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> list[Document]:
         """Process all relevant files from the repository.
 
         Args:
             included_dirs: List of directory paths to include.
             included_files: List of specific files to include.
+            progress_callback: Optional hook called as ``("processing", current, total)``
+                after each file is processed.
+            cancel_event: Optional event checked before each file; raises
+                ``IngestCancelled`` when set.
 
         Returns:
             List[Document]: Processed and chunked documents ready for indexing.
@@ -49,13 +57,22 @@ class DocumentProcessor:
         self.git_loader.clone_or_pull()
 
         file_paths = self.git_loader.get_file_paths(included_dirs, included_files)
+        total = len(file_paths)
 
         all_documents = []
-        for file_path in file_paths:
+        for i, file_path in enumerate(file_paths, start=1):
+            if cancel_event is not None and cancel_event.is_set():
+                from codebase_rag.data_ingestion.pipeline import IngestCancelled
+
+                raise IngestCancelled("Ingestion cancelled during file processing")
+
             logger.info("Processing %s", file_path)
             documents = self.document_chunker.process_file(file_path)
             all_documents.extend(documents)
             logger.debug("Added %d chunks from %s", len(documents), file_path)
+
+            if progress_callback is not None:
+                progress_callback("processing", i, total)
 
         logger.info("Processed %d files into %d chunks", len(file_paths), len(all_documents))
         return all_documents

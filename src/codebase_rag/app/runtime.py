@@ -20,17 +20,16 @@ import streamlit as st
 
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
-from codebase_rag.llm.ollama_client import OllamaClient
+from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
-from codebase_rag.retrieval.hybrid_search import HybridRetriever
-from codebase_rag.retrieval.vector_search import VectorRetriever
+from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
 from codebase_rag.services.folder_picker import FolderPicker
 
 logger = logging.getLogger(__name__)
 
 IngestKind = Literal["auto", "manual"]
-IngestState = Literal["running", "succeeded", "failed"]
+IngestState = Literal["running", "succeeded", "failed", "cancelled"]
 
 
 @dataclass
@@ -42,6 +41,9 @@ class IngestJob:
     finished_at: float | None = None
     error: str | None = None
     acknowledged: bool = False
+    phase: str = ""
+    progress_current: int = 0
+    progress_total: int = 0
 
 
 class IngestionManager:
@@ -57,22 +59,44 @@ class IngestionManager:
     def __init__(self, on_success: Callable[[IngestJob], None] | None = None) -> None:
         self._lock = threading.Lock()
         self._job: IngestJob | None = None
+        self._cancel_event: threading.Event | None = None
         self._on_success = on_success
 
     def start(self, source: str, kind: IngestKind) -> bool:
         """Claim the single ingestion slot, or refuse if one is running."""
+        from codebase_rag.data_ingestion.pipeline import IngestCancelled
+
         with self._lock:
             if self._job is not None and self._job.state == "running":
                 return False
             job = IngestJob(kind=kind, source=source)
             self._job = job
+            cancel_event = threading.Event()
+            self._cancel_event = cancel_event
+
+        def _progress_callback(phase: str, current: int, total: int) -> None:
+            with self._lock:
+                job.phase = phase
+                job.progress_current = current
+                job.progress_total = total
 
         def _run() -> None:
             from codebase_rag.data_ingestion.pipeline import IngestPipeline
 
             try:
-                pipeline = IngestPipeline(repo_urls=[source], use_cache=False)
+                pipeline = IngestPipeline(
+                    repo_urls=[source],
+                    use_cache=False,
+                    progress_callback=_progress_callback,
+                    cancel_event=cancel_event,
+                )
                 pipeline.run()
+            except IngestCancelled:
+                logger.info("Ingestion cancelled for %s", source)
+                with self._lock:
+                    job.state = "cancelled"
+                    job.finished_at = time.time()
+                return
             except Exception as exc:  # noqa: BLE001 - surfaced via IngestJob.error, not swallowed
                 logger.error("Ingestion error for %s: %s", source, exc)
                 with self._lock:
@@ -93,6 +117,12 @@ class IngestionManager:
 
         threading.Thread(target=_run, daemon=True).start()
         return True
+
+    def cancel(self) -> None:
+        """Signal the running job's cancel event, if any."""
+        with self._lock:
+            if self._cancel_event is not None and self._job is not None and self._job.state == "running":
+                self._cancel_event.set()
 
     def current_job(self) -> IngestJob | None:
         """Return the running job, if any."""
@@ -125,6 +155,17 @@ class IngestionManager:
                 return self._job.error
             return None
 
+    def auto_job_cancelled(self) -> bool:
+        """Whether the most recent auto job ended cancelled, kept visible
+        past acknowledgement for the same reason as ``auto_job_error``.
+
+        Kept separate from ``auto_job_error`` (rather than folding a synthetic
+        message into it) so the ungating gate can word a cancellation without
+        borrowing "failed" phrasing.
+        """
+        with self._lock:
+            return self._job is not None and self._job.kind == "auto" and self._job.state == "cancelled"
+
 
 def _load_or_create_bm25_retriever() -> BM25Retriever:
     """Load BM25 retriever from cache or create a new (empty) one."""
@@ -148,17 +189,26 @@ def _warm_up_vector_store(vector_retriever: VectorRetriever) -> None:
         logger.warning("Vector store warm-up failed: %s", e)
 
 
-def _run_health_checks(llm: OllamaClient, vector_retriever: VectorRetriever) -> None:
-    """Best-effort connectivity checks, logged only. Run off the main
-    thread so a slow/unreachable Ollama never blocks the first render.
+def _run_health_checks(runtime: AppRuntime) -> None:
+    """Best-effort connectivity checks, logged only. Run off the
+    main thread so a slow/unreachable server never blocks the first render.
     """
-    llm_status = llm.check_connection()
-    if llm_status["status"] != "connected":
-        logger.warning("LLM connection issue: %s", llm_status["message"])
-    model_status = llm.check_model_availability()
-    if model_status["status"] != "available":
-        logger.warning("Model availability issue: %s", model_status["message"])
-    _warm_up_vector_store(vector_retriever)
+    try:
+        llm_status = runtime.llm.check_connection()
+        if llm_status["status"] != "connected":
+            logger.warning("LLM connection issue: %s", llm_status["message"])
+        model_status = runtime.llm.check_model_availability()
+        if model_status["status"] != "available":
+            logger.warning("Model availability issue: %s", model_status["message"])
+        runtime.health = {"model": model_status, "checked_at": time.time()}
+    except Exception as e:  # noqa: BLE001
+        # Deliberately not `return`-ing here: the LLM check and the vector-store
+        # warm-up are independent, so a failure in one must not skip the other.
+        logger.warning("Health checks failed: %s", e)
+    try:
+        _warm_up_vector_store(runtime.vector_retriever)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Vector store warm-up failed: %s", e)
 
 
 MAX_CONVERSATION_HISTORY = 10
@@ -172,8 +222,12 @@ class AppRuntime:
 
     def __init__(self, config: Config) -> None:
         self.config = config
+        self.health: dict[str, Any] = {}
         self.qdrant_store = QdrantStore(
-            host=config.qdrant_host, port=config.qdrant_port, collection_name=config.collection_name
+            host=config.qdrant_host,
+            port=config.qdrant_port,
+            collection_name=config.collection_name,
+            embedding_model=config.embedding_model,
         )
         if not self.qdrant_store.collection_exists():
             logger.warning(
@@ -181,26 +235,19 @@ class AppRuntime:
                 config.collection_name,
             )
 
-        self.vector_retriever = VectorRetriever(self.qdrant_store)
+        self.vector_retriever = VectorRetriever(self.qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
         self.bm25_retriever = _load_or_create_bm25_retriever()
-        self.hybrid_retriever = HybridRetriever(
-            vector_retriever=self.vector_retriever,
-            bm25_retriever=self.bm25_retriever,
-            vector_weight=0.7,
-            bm25_weight=0.3,
-            min_score_threshold=0.1,
-        )
 
-        self.llm = OllamaClient(
+        self.llm = create_llm_client(
             model_name=config.llm_model_name,
-            base_url=config.ollama_base_url,
             temperature=0.0,
             top_p=0.9,
             top_k=40,
             max_tokens=1024,
             timeout=120,
+            num_ctx=config.ollama_num_ctx,
         )
-        threading.Thread(target=_run_health_checks, args=(self.llm, self.vector_retriever), daemon=True).start()
+        threading.Thread(target=_run_health_checks, args=(self,), daemon=True).start()
 
         self.folder_picker = FolderPicker()
         self.ingestion = IngestionManager(on_success=self._on_ingest_success)
@@ -215,14 +262,15 @@ class AppRuntime:
         without needing a new retriever, LLM client, or Qdrant connection.
         """
         return RAGChain(
-            retriever=self.hybrid_retriever,
+            retriever=self.bm25_retriever,
             llm=self.llm,
             use_conversation_memory=True,
             max_conversation_history=MAX_CONVERSATION_HISTORY,
+            prompt_budget_chars=self.llm.prompt_budget_chars,
         )
 
     def swap_bm25(self, index: BM25Retriever) -> None:
-        """Atomically replace the hybrid retriever's BM25 component.
+        """Atomically replace the runtime's BM25 retriever.
 
         Called after a successful ingest instead of clearing
         ``st.cache_resource`` and rebuilding everything: the embedding
@@ -231,7 +279,6 @@ class AppRuntime:
         share this runtime.
         """
         self.bm25_retriever = index
-        self.hybrid_retriever.bm25_retriever = index
 
     def _on_ingest_success(self, _job: IngestJob) -> None:
         get_repo_list.clear()  # type: ignore[attr-defined]

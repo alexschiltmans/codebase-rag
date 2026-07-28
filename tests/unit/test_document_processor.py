@@ -1,11 +1,14 @@
 """Unit tests for data_ingestion/document_processor.py."""
 
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from langchain_core.documents import Document
 
 from codebase_rag.data_ingestion.document_processor import DocumentProcessor
+from codebase_rag.data_ingestion.pipeline import IngestCancelled
 
 
 class TestDocumentProcessor:
@@ -48,3 +51,48 @@ class TestDocumentProcessor:
 
         assert documents == []
         mock_chunker.process_file.assert_not_called()
+
+    def test_process_reports_monotonic_progress(self) -> None:
+        mock_git_loader = MagicMock()
+        mock_git_loader.get_file_paths.return_value = [Path("a.py"), Path("b.py"), Path("c.py")]
+        mock_chunker = MagicMock()
+        mock_chunker.process_file.return_value = [Document(page_content="x", metadata={})]
+
+        processor = DocumentProcessor(git_loader=mock_git_loader, document_chunker=mock_chunker)
+        calls: list[tuple[str, int, int]] = []
+        processor.process(progress_callback=lambda phase, current, total: calls.append((phase, current, total)))
+
+        assert calls == [("processing", 1, 3), ("processing", 2, 3), ("processing", 3, 3)]
+
+    def test_process_raises_ingest_cancelled_when_event_set(self) -> None:
+        mock_git_loader = MagicMock()
+        mock_git_loader.get_file_paths.return_value = [Path("a.py"), Path("b.py")]
+        mock_chunker = MagicMock()
+        mock_chunker.process_file.return_value = [Document(page_content="x", metadata={})]
+
+        processor = DocumentProcessor(git_loader=mock_git_loader, document_chunker=mock_chunker)
+        cancel_event = threading.Event()
+        cancel_event.set()
+
+        with pytest.raises(IngestCancelled):
+            processor.process(cancel_event=cancel_event)
+
+        mock_chunker.process_file.assert_not_called()
+
+    def test_process_stops_at_next_boundary_once_cancelled_mid_loop(self) -> None:
+        mock_git_loader = MagicMock()
+        mock_git_loader.get_file_paths.return_value = [Path("a.py"), Path("b.py"), Path("c.py")]
+        mock_chunker = MagicMock()
+        mock_chunker.process_file.return_value = [Document(page_content="x", metadata={})]
+
+        processor = DocumentProcessor(git_loader=mock_git_loader, document_chunker=mock_chunker)
+        cancel_event = threading.Event()
+
+        def _maybe_cancel(phase: str, current: int, total: int) -> None:
+            if current == 1:
+                cancel_event.set()
+
+        with pytest.raises(IngestCancelled):
+            processor.process(progress_callback=_maybe_cancel, cancel_event=cancel_event)
+
+        assert mock_chunker.process_file.call_count == 1

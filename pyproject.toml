@@ -11,9 +11,10 @@ authors = [
 dependencies = [
     "langchain>=0.3.0",
     "langchain-core>=0.3.0",
+    "langchain-openai>=0.3.34,<1",
     "langchain-ollama>=0.3.0",
     "langchain-text-splitters>=0.3.0",
-    "streamlit>=1.28.0,<2",
+    "streamlit>=1.48.0,<2",
     "qdrant-client>=1.7.0,<2",
     "gitpython>=3.1.40,<4",
     "sentence-transformers>=2.2.2",
@@ -25,6 +26,9 @@ dependencies = [
     "fastapi>=0.115.0,<1",
     "uvicorn>=0.30.0,<1",
 ]
+
+[project.scripts]
+codebase-rag = "codebase_rag.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -67,6 +71,7 @@ line-ending = "auto"
     "S108",   # /tmp paths in mock configs are not a security risk
     "S301",   # pickle in test fixtures is safe
     "S311",   # pseudo-random is fine for test data generation
+    "S603",   # subprocess calls are safe in tests
     "PT017",  # @patch params misidentified as fixtures
     "PT019",  # @patch params misidentified as fixtures
     "FBT003", # boolean positional in patch.object calls
@@ -74,6 +79,12 @@ line-ending = "auto"
 "evals/**" = [
     "T201",   # print is expected in CLI evaluation scripts
     "ANN",    # type annotations not required
+]
+"scripts/check_tracked_imports.py" = [
+    "T201",   # print is expected in a make-verify diagnostic script
+]
+"src/codebase_rag/cli.py" = [
+    "T201",   # print is expected in CLI scripts
 ]
 "src/codebase_rag/api/routers/**" = [
     "B008",   # FastAPI's Depends() idiom requires calling it in argument defaults
@@ -98,3 +109,9 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+markers = [
+    "integration: needs live Qdrant (make services-start)",
+    "e2e: end-to-end flow, needs live services",
+    "performance: timing and scaling checks, runs offline",
+    "evaluation: retrieval/response quality checks, runs offline",
+]

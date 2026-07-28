@@ -5,6 +5,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.app.runtime import IngestionManager
+from codebase_rag.data_ingestion.pipeline import IngestCancelled
 
 
 def _blocking_pipeline_cls(release: threading.Event, calls: list[str]) -> MagicMock:
@@ -96,3 +97,85 @@ class TestAutoManualSeparation:
             assert job is not None
             assert job.kind == "manual"
             release.set()
+
+
+class TestCancel:
+    def _cancel_aware_pipeline_cls(self) -> MagicMock:
+        """A fake IngestPipeline whose .run() raises IngestCancelled once the
+        cancel_event passed to its constructor is set, mimicking the real
+        pipeline's cooperative-cancellation boundary check."""
+
+        def _init(self: MagicMock, **kwargs: object) -> None:
+            self._cancel_event = kwargs.get("cancel_event")
+
+        def _run(self: MagicMock) -> None:
+            event = self._cancel_event
+            assert isinstance(event, threading.Event)
+            event.wait(timeout=5)
+            raise IngestCancelled("cancelled")
+
+        pipeline_cls = MagicMock(side_effect=lambda **kwargs: _FakePipeline(kwargs))
+
+        class _FakePipeline:
+            def __init__(self, kwargs: dict) -> None:
+                _init(self, **kwargs)
+
+            def run(self) -> None:
+                _run(self)
+
+        return pipeline_cls
+
+    def test_cancel_before_finish_marks_job_cancelled(self) -> None:
+        pipeline_cls = self._cancel_aware_pipeline_cls()
+        manager = IngestionManager()
+        with patch("codebase_rag.data_ingestion.pipeline.IngestPipeline", pipeline_cls):
+            manager.start("repo-a", kind="manual")
+            job = manager.current_job()
+            assert job is not None
+
+            manager.cancel()
+
+            for _ in range(50):
+                if manager.last_completed() is not None:
+                    break
+                time.sleep(0.05)
+
+        job = manager.last_completed()
+        assert job is not None
+        assert job.state == "cancelled"
+        assert manager.current_job() is None
+
+    def test_cancel_with_no_running_job_is_a_no_op(self) -> None:
+        manager = IngestionManager()
+        manager.cancel()  # must not raise
+        assert manager.current_job() is None
+
+    def test_acknowledge_after_cancel_clears_last_completed(self) -> None:
+        pipeline_cls = self._cancel_aware_pipeline_cls()
+        manager = IngestionManager()
+        with patch("codebase_rag.data_ingestion.pipeline.IngestPipeline", pipeline_cls):
+            manager.start("repo-a", kind="manual")
+            manager.cancel()
+            for _ in range(50):
+                if manager.last_completed() is not None:
+                    break
+                time.sleep(0.05)
+
+        manager.acknowledge()
+        assert manager.last_completed() is None
+
+    def test_cancelled_auto_job_reports_auto_cancelled_not_auto_error(self) -> None:
+        pipeline_cls = self._cancel_aware_pipeline_cls()
+        manager = IngestionManager()
+        with patch("codebase_rag.data_ingestion.pipeline.IngestPipeline", pipeline_cls):
+            manager.start("default-repo", kind="auto")
+            manager.cancel()
+            for _ in range(50):
+                if manager.last_completed() is not None:
+                    break
+                time.sleep(0.05)
+
+        assert manager.auto_job_cancelled() is True
+        assert manager.auto_job_error() is None
+        manager.acknowledge()
+        assert manager.auto_job_cancelled() is True

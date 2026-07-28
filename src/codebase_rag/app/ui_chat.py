@@ -32,6 +32,8 @@ def display_sources(sources: list[dict[str, str]]) -> None:
 def _format_message(message: dict[str, Any]) -> None:
     with st.chat_message(message.get("role", "")):
         st.markdown(message.get("content", ""))
+        if message.get("question_truncated"):
+            st.warning("Your question was shortened to fit the model's context window.")
         sources = message.get("sources", [])
         if sources:
             with st.expander("Sources"):
@@ -43,12 +45,19 @@ def display_chat_history(state: SessionState) -> None:
         _format_message(message)
 
 
-def append_message(state: SessionState, role: str, content: str, sources: list[dict[str, str]] | None = None) -> None:
+def append_message(
+    state: SessionState,
+    role: str,
+    content: str,
+    sources: list[dict[str, str]] | None = None,
+    *,
+    question_truncated: bool = False,
+) -> None:
     """Append a message to the current chat and persist it to storage."""
     if not content or not content.strip():
         content = "I apologize, but I wasn't able to generate a response. Please try rephrasing your question."
 
-    state.append_message(role, content, sources)
+    state.append_message(role, content, sources, question_truncated=question_truncated)
 
     chat_id = state.current_chat_id
     if chat_id is None:
@@ -95,8 +104,10 @@ def process_pending_query(runtime: AppRuntime, state: SessionState) -> None:
             answer = st.write_stream(rag_chain.stream(query))
         if not isinstance(answer, str):
             answer = "".join(str(part) for part in answer)
-        sources = (rag_chain.last_result or {}).get("sources", [])
-        append_message(state, "assistant", answer, sources)
+        last_result = rag_chain.last_result or {}
+        sources = last_result.get("sources", [])
+        truncated_chars = last_result.get("metrics", {}).get("question_truncated_chars", 0)
+        append_message(state, "assistant", answer, sources, question_truncated=bool(truncated_chars))
         state.query_succeeded()
     except Exception as e:  # noqa: BLE001 - state-machine boundary, see docstring
         logger.error("Error generating response: %s", e)

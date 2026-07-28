@@ -12,11 +12,11 @@ from pathlib import Path
 from codebase_rag.api.ingest_manager import ApiIngestionManager
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
-from codebase_rag.llm.ollama_client import OllamaClient
+from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
-from codebase_rag.retrieval.vector_search import VectorRetriever
+from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
 from codebase_rag.services.token_estimator import get_tokenizer
 
 
@@ -29,23 +29,22 @@ class ApiState:
             port=self.config.qdrant_port,
             collection_name=self.config.collection_name,
         )
-        self.vector_retriever = VectorRetriever(self.qdrant_store)
+        self.vector_retriever = VectorRetriever(self.qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
         self.bm25_retriever = self._load_bm25_retriever()
         self.hybrid_retriever = HybridRetriever(
             vector_retriever=self.vector_retriever,
             bm25_retriever=self.bm25_retriever,
             vector_weight=0.7,
             bm25_weight=0.3,
-            min_score_threshold=0.1,
         )
-        self.llm = OllamaClient(
+        self.llm = create_llm_client(
             model_name=self.config.llm_model_name,
-            base_url=self.config.ollama_base_url,
             temperature=0.0,
             top_p=0.9,
             top_k=40,
             max_tokens=1024,
             timeout=120,
+            num_ctx=self.config.ollama_num_ctx,
         )
         self.tokenizer = get_tokenizer(self.qdrant_store.embedding_manager)
         self.cache_dir = Path("data/cache")
