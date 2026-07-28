@@ -72,11 +72,11 @@ python scripts/ingest.py --repo https://github.com/owner/repo1 --repo https://gi
 # All repositories from REPO_URLS config
 python scripts/ingest.py --all-repos
 
-# Force re-index (ignores content hashes)
+# Force re-index (drops the existing collection before ingesting)
 python scripts/ingest.py --repo https://github.com/owner/repo --force
 ```
 
-Ingestion is idempotent by default: unchanged chunks are skipped, modified chunks are updated, and no duplicates are created.
+Ingestion is idempotent but not incremental: deterministic chunk IDs mean re-running an ingest never creates duplicates, and stale chunks are removed via delete-by-repo. By default the CLI caches processed chunks per repo HEAD SHA, so re-ingesting an unchanged repo skips re-processing (pass `--no-cache` to force it); either way, every run re-embeds all chunks, since embeddings are never cached.
 
 ## Example Queries
 
