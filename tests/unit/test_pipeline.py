@@ -5,6 +5,7 @@ import logging
 import pickle
 import sys
 import tempfile
+import threading
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -13,6 +14,7 @@ import pytest
 from langchain_core.documents import Document
 
 from codebase_rag.data_ingestion.pipeline import (
+    IngestCancelled,
     IngestPipeline,
     _teardown_logging,
     count_ingestible_files,
@@ -342,6 +344,112 @@ class TestIngestPipeline:
         mock_store.delete_by_repo.assert_called_once_with("my-repo")
         mock_store.add_documents.assert_called()
         assert pipeline.stats["chunks_indexed"] == 2
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_reports_monotonic_progress(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        calls: list[tuple[str, int, int]] = []
+        pipeline = IngestPipeline(progress_callback=lambda phase, current, total: calls.append((phase, current, total)))
+
+        docs = [
+            Document(page_content=f"content{i}", metadata={"source": f"{i}.py", "repo": "my-repo"}) for i in range(250)
+        ]
+
+        pipeline.index_documents(docs)
+
+        assert calls == [("indexing", 1, 3), ("indexing", 2, 3), ("indexing", 3, 3)]
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_raises_ingest_cancelled_when_event_set(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        cancel_event = threading.Event()
+        cancel_event.set()
+        pipeline = IngestPipeline(cancel_event=cancel_event)
+        docs = [Document(page_content="content", metadata={"source": "a.py", "repo": "my-repo"})]
+
+        with pytest.raises(IngestCancelled):
+            pipeline.index_documents(docs)
+
+        pipeline.vector_store.add_documents.assert_not_called()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_cancelled_before_delete_leaves_existing_chunks_untouched(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        """A cancel that lands right as indexing starts must not run
+        delete_by_repo — otherwise a re-ingest's existing chunks are wiped
+        with nothing indexed to replace them."""
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        cancel_event = threading.Event()
+        cancel_event.set()
+        pipeline = IngestPipeline(cancel_event=cancel_event)
+        docs = [Document(page_content="content", metadata={"source": "a.py", "repo": "my-repo"})]
+
+        with pytest.raises(IngestCancelled):
+            pipeline.index_documents(docs)
+
+        pipeline.vector_store.delete_by_repo.assert_not_called()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_index_documents_stops_at_next_batch_boundary_once_cancelled(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        cancel_event = threading.Event()
+
+        def _maybe_cancel(phase: str, current: int, total: int) -> None:
+            if current == 1:
+                cancel_event.set()
+
+        pipeline = IngestPipeline(progress_callback=_maybe_cancel, cancel_event=cancel_event)
+        docs = [
+            Document(page_content=f"content{i}", metadata={"source": f"{i}.py", "repo": "my-repo"}) for i in range(250)
+        ]
+
+        with pytest.raises(IngestCancelled):
+            pipeline.index_documents(docs)
+
+        assert pipeline.vector_store.add_documents.call_count == 1
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")

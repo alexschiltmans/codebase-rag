@@ -11,7 +11,9 @@ import json
 import logging
 import pickle
 import sys
+import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from codebase_rag.config import Config
@@ -216,6 +218,10 @@ def display_progress(current: int, total: int, prefix: str = "", length: int = 5
         sys.stdout.write("\n")
 
 
+class IngestCancelled(Exception):  # noqa: N818 - name fixed by the ingestion-progress spec
+    """Raised when a pipeline run is stopped via a cancel event."""
+
+
 class IngestPipeline:
     """Pipeline for ingesting documents from one or more repositories into the vector database.
 
@@ -233,6 +239,8 @@ class IngestPipeline:
         debug: bool = False,
         repo_url: str | None = None,
         repo_urls: list[str] | None = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> None:
         """Initialize the ingestion pipeline.
 
@@ -247,6 +255,11 @@ class IngestPipeline:
             debug: Whether to enable debug mode.
             repo_url: Single GitHub repository URL to ingest.
             repo_urls: List of GitHub repository URLs to ingest.
+            progress_callback: Optional hook called as ``(phase, current, total)``
+                from the file-processing loop and the indexing batch loop. Unused
+                by the CLI; the UI wires it to per-job progress state.
+            cancel_event: Optional event checked at the same two points; raises
+                ``IngestCancelled`` when set. Unused by the CLI.
         """
         log_level = "DEBUG" if debug else "INFO"
         self.logger, self.log_file_path = setup_logging(log_level)
@@ -259,6 +272,8 @@ class IngestPipeline:
             self.included_files = included_files or ["README.md", "pyproject.toml"]
             self.drop_existing = drop_existing
             self.use_cache = use_cache
+            self.progress_callback = progress_callback
+            self.cancel_event = cancel_event
 
             self._repo_urls: list[str] = []
             if repo_urls:
@@ -359,6 +374,8 @@ class IngestPipeline:
         documents = document_processor.process(
             included_dirs=included_dirs,
             included_files=self.included_files,
+            progress_callback=self.progress_callback,
+            cancel_event=self.cancel_event,
         )
         processing_time = time.time() - start_time
         self.logger.info(
@@ -449,6 +466,12 @@ class IngestPipeline:
         """
         self.logger.info("Indexing documents in Qdrant...")
 
+        # Checked here, not just in the batch loop below: without this, a cancel that lands
+        # between the end of processing and the start of indexing would still let delete_by_repo
+        # run, wiping a repo's existing chunks with nothing indexed to replace them.
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise IngestCancelled("Ingestion cancelled before indexing")
+
         # Remove ALL existing chunks for repos being re-ingested so that
         # deleted or shrunk files don't leave orphaned points.
         repos = {doc.metadata.get("repo") for doc in documents if doc.metadata.get("repo")}
@@ -463,10 +486,15 @@ class IngestPipeline:
         total_batches = (len(documents) + batch_size - 1) // batch_size
 
         for i in range(0, len(documents), batch_size):
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                raise IngestCancelled("Ingestion cancelled during indexing")
+
             batch = documents[i : i + batch_size]
             batch_num = i // batch_size + 1
 
             display_progress(batch_num, total_batches, "Indexing: ")
+            if self.progress_callback is not None:
+                self.progress_callback("indexing", batch_num, total_batches)
 
             self.vector_store.add_documents(batch)
 

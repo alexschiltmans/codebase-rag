@@ -78,6 +78,11 @@ def _display_auto_ingest_gate(runtime: AppRuntime) -> bool:
     """
     job = runtime.ingestion.current_job()
     if job is None or job.kind != "auto":
+        if runtime.ingestion.auto_job_cancelled():
+            st.info(
+                "Default repository ingestion was cancelled.\n\nYou can add a repository manually using the sidebar."
+            )
+            return False
         error = runtime.ingestion.auto_job_error()
         if error:
             st.warning(
