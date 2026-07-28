@@ -13,6 +13,7 @@ from codebase_rag.app.ui_sidebar import (
     _display_repo_list,
     _folder_dialog_wait_fragment,
     _get_chat_title,
+    _ingestion_progress_fragment,
     _ordered_chats,
     _preview_local_folder,
     display_sidebar,
@@ -301,6 +302,73 @@ class TestDisplayIngestionOutcome:
 
         assert "ingestion_error_banner" not in mock_st.session_state
         mock_st.rerun.assert_called_once()
+
+
+class TestIngestionProgressFragment:
+    """Exercises the fragment directly (via ``__wrapped__``), same pattern as
+    ``TestFolderDialogWaitFragment``."""
+
+    @patch("codebase_rag.app.ui_sidebar._display_add_repository")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_list")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_renders_proportional_bar_with_phase_and_counts(
+        self, mock_st: MagicMock, mock_repo_list: MagicMock, mock_add_repo: MagicMock
+    ) -> None:
+        mock_status = MagicMock()
+        mock_status.__enter__ = MagicMock(return_value=mock_status)
+        mock_status.__exit__ = MagicMock(return_value=False)
+        mock_st.status.return_value = mock_status
+        mock_st.button.return_value = False
+
+        runtime = MagicMock()
+        job = MagicMock(source="owner/repo", started_at=0, phase="indexing", progress_current=3, progress_total=10)
+        runtime.ingestion.current_job.return_value = job
+
+        _ingestion_progress_fragment.__wrapped__(runtime)
+
+        mock_st.progress.assert_called_once_with(0.3)
+        mock_st.caption.assert_called_once_with("indexing - 3/10")
+
+    @patch("codebase_rag.app.ui_sidebar._display_add_repository")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_list")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_guards_zero_total_by_skipping_the_bar(
+        self, mock_st: MagicMock, mock_repo_list: MagicMock, mock_add_repo: MagicMock
+    ) -> None:
+        mock_status = MagicMock()
+        mock_status.__enter__ = MagicMock(return_value=mock_status)
+        mock_status.__exit__ = MagicMock(return_value=False)
+        mock_st.status.return_value = mock_status
+        mock_st.button.return_value = False
+
+        runtime = MagicMock()
+        job = MagicMock(source="owner/repo", started_at=0, phase="", progress_current=0, progress_total=0)
+        runtime.ingestion.current_job.return_value = job
+
+        _ingestion_progress_fragment.__wrapped__(runtime)
+
+        mock_st.progress.assert_not_called()
+        mock_st.caption.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_add_repository")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_list")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_cancel_button_calls_manager_cancel(
+        self, mock_st: MagicMock, mock_repo_list: MagicMock, mock_add_repo: MagicMock
+    ) -> None:
+        mock_status = MagicMock()
+        mock_status.__enter__ = MagicMock(return_value=mock_status)
+        mock_status.__exit__ = MagicMock(return_value=False)
+        mock_st.status.return_value = mock_status
+        mock_st.button.return_value = True
+
+        runtime = MagicMock()
+        job = MagicMock(source="owner/repo", started_at=0, phase="processing", progress_current=1, progress_total=2)
+        runtime.ingestion.current_job.return_value = job
+
+        _ingestion_progress_fragment.__wrapped__(runtime)
+
+        runtime.ingestion.cancel.assert_called_once()
 
 
 class TestNewChatButton:

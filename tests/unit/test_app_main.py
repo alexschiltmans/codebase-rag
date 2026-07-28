@@ -17,6 +17,7 @@ class TestDisplayAutoIngestGate:
     def test_no_job_no_error_does_not_gate(self, mock_st: MagicMock) -> None:
         runtime = MagicMock()
         runtime.ingestion.current_job.return_value = None
+        runtime.ingestion.auto_job_cancelled.return_value = False
         runtime.ingestion.auto_job_error.return_value = None
 
         assert _display_auto_ingest_gate(runtime) is False
@@ -39,6 +40,7 @@ class TestDisplayAutoIngestGate:
         runtime = MagicMock()
         job = MagicMock(kind="manual", source="https://github.com/owner/other-repo")
         runtime.ingestion.current_job.return_value = job
+        runtime.ingestion.auto_job_cancelled.return_value = False
         runtime.ingestion.auto_job_error.return_value = None
 
         assert _display_auto_ingest_gate(runtime) is False
@@ -48,11 +50,27 @@ class TestDisplayAutoIngestGate:
     def test_failed_auto_job_shows_warning_not_default_repo_wording_for_manual(self, mock_st: MagicMock) -> None:
         runtime = MagicMock()
         runtime.ingestion.current_job.return_value = None
+        runtime.ingestion.auto_job_cancelled.return_value = False
         runtime.ingestion.auto_job_error.return_value = "connection refused"
 
         assert _display_auto_ingest_gate(runtime) is False
         mock_st.warning.assert_called_once()
         assert "connection refused" in mock_st.warning.call_args[0][0]
+
+    @patch("codebase_rag.app.main.st")
+    def test_cancelled_auto_job_ungates_without_error_tone(self, mock_st: MagicMock) -> None:
+        """A cancelled auto job must ungate the chat like a failed one, but
+        without borrowing the "failed" wording or warning tone (design.md:
+        cancelled is distinct from failure, no error tone)."""
+        runtime = MagicMock()
+        runtime.ingestion.current_job.return_value = None
+        runtime.ingestion.auto_job_cancelled.return_value = True
+        runtime.ingestion.auto_job_error.return_value = None
+
+        assert _display_auto_ingest_gate(runtime) is False
+        mock_st.info.assert_called_once()
+        assert "cancelled" in mock_st.info.call_args[0][0]
+        mock_st.warning.assert_not_called()
 
 
 class TestRestoreSavedChats:

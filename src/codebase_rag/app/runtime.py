@@ -29,7 +29,7 @@ from codebase_rag.services.folder_picker import FolderPicker
 logger = logging.getLogger(__name__)
 
 IngestKind = Literal["auto", "manual"]
-IngestState = Literal["running", "succeeded", "failed"]
+IngestState = Literal["running", "succeeded", "failed", "cancelled"]
 
 
 @dataclass
@@ -41,6 +41,9 @@ class IngestJob:
     finished_at: float | None = None
     error: str | None = None
     acknowledged: bool = False
+    phase: str = ""
+    progress_current: int = 0
+    progress_total: int = 0
 
 
 class IngestionManager:
@@ -56,22 +59,44 @@ class IngestionManager:
     def __init__(self, on_success: Callable[[IngestJob], None] | None = None) -> None:
         self._lock = threading.Lock()
         self._job: IngestJob | None = None
+        self._cancel_event: threading.Event | None = None
         self._on_success = on_success
 
     def start(self, source: str, kind: IngestKind) -> bool:
         """Claim the single ingestion slot, or refuse if one is running."""
+        from codebase_rag.data_ingestion.pipeline import IngestCancelled
+
         with self._lock:
             if self._job is not None and self._job.state == "running":
                 return False
             job = IngestJob(kind=kind, source=source)
             self._job = job
+            cancel_event = threading.Event()
+            self._cancel_event = cancel_event
+
+        def _progress_callback(phase: str, current: int, total: int) -> None:
+            with self._lock:
+                job.phase = phase
+                job.progress_current = current
+                job.progress_total = total
 
         def _run() -> None:
             from codebase_rag.data_ingestion.pipeline import IngestPipeline
 
             try:
-                pipeline = IngestPipeline(repo_urls=[source], use_cache=False)
+                pipeline = IngestPipeline(
+                    repo_urls=[source],
+                    use_cache=False,
+                    progress_callback=_progress_callback,
+                    cancel_event=cancel_event,
+                )
                 pipeline.run()
+            except IngestCancelled:
+                logger.info("Ingestion cancelled for %s", source)
+                with self._lock:
+                    job.state = "cancelled"
+                    job.finished_at = time.time()
+                return
             except Exception as exc:  # noqa: BLE001 - surfaced via IngestJob.error, not swallowed
                 logger.error("Ingestion error for %s: %s", source, exc)
                 with self._lock:
@@ -92,6 +117,12 @@ class IngestionManager:
 
         threading.Thread(target=_run, daemon=True).start()
         return True
+
+    def cancel(self) -> None:
+        """Signal the running job's cancel event, if any."""
+        with self._lock:
+            if self._cancel_event is not None and self._job is not None and self._job.state == "running":
+                self._cancel_event.set()
 
     def current_job(self) -> IngestJob | None:
         """Return the running job, if any."""
@@ -123,6 +154,17 @@ class IngestionManager:
             if self._job is not None and self._job.kind == "auto" and self._job.state == "failed":
                 return self._job.error
             return None
+
+    def auto_job_cancelled(self) -> bool:
+        """Whether the most recent auto job ended cancelled, kept visible
+        past acknowledgement for the same reason as ``auto_job_error``.
+
+        Kept separate from ``auto_job_error`` (rather than folding a synthetic
+        message into it) so the ungating gate can word a cancellation without
+        borrowing "failed" phrasing.
+        """
+        with self._lock:
+            return self._job is not None and self._job.kind == "auto" and self._job.state == "cancelled"
 
 
 def _load_or_create_bm25_retriever() -> BM25Retriever:

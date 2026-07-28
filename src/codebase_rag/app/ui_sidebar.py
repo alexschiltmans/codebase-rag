@@ -130,8 +130,13 @@ def _ingestion_progress_fragment(runtime: AppRuntime) -> None:
 
     with st.status(f"Ingesting {job.source}…", expanded=True) as status:
         elapsed = int(time.time() - job.started_at)
+        if job.progress_total > 0:
+            st.progress(min(job.progress_current / job.progress_total, 1.0))
+            st.caption(f"{job.phase} - {job.progress_current}/{job.progress_total}")
         st.write(f"⏳ {elapsed}s elapsed")
         status.update(label=f"Ingesting {job.source}… ({elapsed}s)")
+        if st.button("Cancel", key="btn_cancel_ingestion"):
+            runtime.ingestion.cancel()
 
     _display_repo_list(runtime)
     _display_add_repository(runtime, ingestion_running=True)
@@ -146,6 +151,9 @@ def _display_ingestion_outcome(runtime: AppRuntime) -> None:
         if job.state == "succeeded":
             st.toast(f"✅ Ingested **{job.source}** successfully!")
             runtime.ingestion.acknowledge()
+        elif job.state == "cancelled":
+            st.session_state["ingestion_cancelled_banner"] = {"source": job.source}
+            runtime.ingestion.acknowledge()
         else:
             st.session_state["ingestion_error_banner"] = {"source": job.source, "error": job.error}
             runtime.ingestion.acknowledge()
@@ -156,6 +164,15 @@ def _display_ingestion_outcome(runtime: AppRuntime) -> None:
             f"Ingestion of **{banner['source']}** failed: {banner['error']}",
             "ingestion_error_banner",
             "btn_dismiss_ingestion_error",
+        )
+
+    cancelled_banner = st.session_state.get("ingestion_cancelled_banner")
+    if cancelled_banner:
+        _display_dismissible_info(
+            f"Ingestion of **{cancelled_banner['source']}** was cancelled - the repo is partially ingested. "
+            "Re-run ingest to complete it, or remove the repo.",
+            "ingestion_cancelled_banner",
+            "btn_dismiss_ingestion_cancelled",
         )
 
 
@@ -201,6 +218,13 @@ def _confirm_delete_repo_dialog(runtime: AppRuntime, repo_name: str) -> None:
 
 def _display_dismissible_error(message: str, session_key: str, dismiss_key: str) -> None:
     st.error(message)
+    if st.button("Dismiss", key=dismiss_key):
+        st.session_state.pop(session_key, None)
+        st.rerun()
+
+
+def _display_dismissible_info(message: str, session_key: str, dismiss_key: str) -> None:
+    st.info(message)
     if st.button("Dismiss", key=dismiss_key):
         st.session_state.pop(session_key, None)
         st.rerun()

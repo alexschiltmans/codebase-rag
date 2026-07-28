@@ -346,6 +346,59 @@ def test_clearing_typed_path_removes_preview(mocked_rag_chain: MagicMock, tmp_pa
 
 
 @pytest.mark.e2e
+def test_cancel_button_signals_the_running_job(mocked_rag_chain: MagicMock) -> None:
+    """Clicking Cancel while an ingest runs must call IngestionManager.cancel()."""
+    from codebase_rag.app.runtime import IngestJob
+
+    running_job = IngestJob(kind="manual", source="https://github.com/owner/repo")
+
+    at = AppTest.from_file(APP_PATH)
+    with (
+        patch("codebase_rag.app.runtime.IngestionManager.current_job", return_value=running_job),
+        patch("codebase_rag.app.runtime.IngestionManager.cancel") as mock_cancel,
+    ):
+        at.run()
+        cancel_buttons = [b for b in at.sidebar.button if b.key == "btn_cancel_ingestion"]
+        assert cancel_buttons
+        cancel_buttons[0].click().run()
+
+    assert not at.exception
+    mock_cancel.assert_called_once()
+
+
+@pytest.mark.e2e
+def test_cancelled_ingest_shows_info_banner_and_ungates_chat(mocked_rag_chain: MagicMock) -> None:
+    """A cancelled job must end with a dismissible info banner (not an
+    error) and leave the chat surface ungated."""
+    from codebase_rag.app.runtime import IngestJob
+
+    cancelled_job = IngestJob(kind="manual", source="https://github.com/owner/repo", state="cancelled")
+
+    at = AppTest.from_file(APP_PATH)
+    with (
+        patch("codebase_rag.app.runtime.IngestionManager.current_job", return_value=None),
+        patch("codebase_rag.app.runtime.IngestionManager.last_completed", return_value=cancelled_job),
+    ):
+        at.run()
+
+    assert not at.exception
+    assert len(at.chat_input) == 1
+    assert not at.chat_input[0].disabled
+
+    infos = " ".join(i.value for i in at.sidebar.info)
+    assert "cancelled" in infos
+    assert "partially ingested" in infos
+
+    dismiss_buttons = [b for b in at.sidebar.button if b.key == "btn_dismiss_ingestion_cancelled"]
+    assert dismiss_buttons
+    with patch("codebase_rag.app.runtime.IngestionManager.last_completed", return_value=None):
+        dismiss_buttons[0].click().run()
+
+    assert not at.exception
+    assert not [i for i in at.sidebar.info if "cancelled" in i.value]
+
+
+@pytest.mark.e2e
 def test_preview_count_updates_after_adding_a_file(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
     """Regression test for the stale preview cache: adding a file to an
     already-selected folder must be reflected on the next rerun."""
