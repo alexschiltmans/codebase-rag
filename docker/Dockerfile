@@ -27,6 +27,9 @@ RUN chmod +x /entrypoint.sh
 # Ensure Python can find the codebase_rag package
 ENV PYTHONPATH=/app/src
 
+# Cache Hugging Face models on the persistent volume
+ENV HF_HOME=/app/cache
+
 # Create data directories
 RUN mkdir -p data/repos data/cache cache logs
 

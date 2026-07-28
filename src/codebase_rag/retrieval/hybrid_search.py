@@ -22,9 +22,10 @@ units.
 """
 
 import logging
-from typing import Any
 
 from langchain_core.documents import Document
+
+from .retriever_protocol import RetrieverProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +35,10 @@ class HybridRetriever:
 
     def __init__(
         self,
-        vector_retriever: Any,
-        bm25_retriever: Any = None,
+        vector_retriever: RetrieverProtocol,
+        bm25_retriever: RetrieverProtocol | None = None,
         vector_weight: float = 0.7,
         bm25_weight: float = 0.3,
-        min_score_threshold: float = 0.1,
         top_k: int = 5,
         rrf_k: int = 60,
     ) -> None:
@@ -49,7 +49,6 @@ class HybridRetriever:
             bm25_retriever: The BM25 retriever. If None, only vector search is used.
             vector_weight: Weight for the vector ranker's contribution (default: 0.7).
             bm25_weight: Weight for the BM25 ranker's contribution (default: 0.3).
-            min_score_threshold: Minimum normalized score for results to be returned (default: 0.1).
             top_k: Default number of results to return (default: 5).
             rrf_k: Reciprocal Rank Fusion constant (default: 60, the standard value used
                 by Elasticsearch and the original RRF paper — it dampens the influence of
@@ -59,7 +58,6 @@ class HybridRetriever:
         self.bm25_retriever = bm25_retriever
         self.vector_weight = vector_weight
         self.bm25_weight = bm25_weight
-        self.min_score_threshold = min_score_threshold
         self.top_k = top_k
         self.rrf_k = rrf_k
 
@@ -69,7 +67,14 @@ class HybridRetriever:
         Each ranker's result list is combined by rank rather than by raw score, so the
         two lists never need to be on comparable scales (avoids weak keyword matches
         getting an inflated score purely from per-query max-normalization). Fused scores
-        are then rescaled to [0, 1] so `min_score_threshold` stays meaningful.
+        are rescaled to [0, 1] against the rankers that actually returned results
+        (so a document topping every contributing ranker scores 1.0) and returned
+        for display, but are not used to filter results here: after RRF a document
+        ranked #1 by even one ranker always scores well above zero, so a fixed
+        cutoff on the fused score can't distinguish relevant from irrelevant —
+        relevance filtering happens upstream, on the vector retriever's raw cosine
+        score (see `VectorRetriever.search`). Returns an empty list when both
+        component retrievers return nothing.
 
         Args:
             query: The search query.
@@ -84,7 +89,7 @@ class HybridRetriever:
         vector_results = self.vector_retriever.search(query, k=k_value * 2)
 
         # Get BM25 search results (if BM25 retriever is available)
-        bm25_results = self.bm25_retriever.search(query, k=k_value * 2) if self.bm25_retriever else []
+        bm25_results = self.bm25_retriever.search(query, k=k_value * 2) if self.bm25_retriever is not None else []
 
         if not vector_results and not bm25_results:
             logger.warning("No results from either vector or BM25 search")
@@ -105,55 +110,21 @@ class HybridRetriever:
             entry = doc_to_score.setdefault(doc_id(doc), {"doc": doc, "rrf_score": 0.0})
             entry["rrf_score"] += self.bm25_weight / (self.rrf_k + rank)
 
-        # Rescale so a document ranked #1 by every available ranker scores 1.0.
-        max_possible_score = self.vector_weight / (self.rrf_k + 1)
-        if self.bm25_retriever:
+        # Rescale so a document ranked #1 by every ranker that actually
+        # contributed scores 1.0. This keys off the results, not off which
+        # retriever objects exist: a configured-but-empty BM25 index (what
+        # the app holds before its first ingest) contributes nothing, and
+        # counting its weight here would cap every score at vector_weight.
+        max_possible_score = 0.0
+        if vector_results:
+            max_possible_score += self.vector_weight / (self.rrf_k + 1)
+        if bm25_results:
             max_possible_score += self.bm25_weight / (self.rrf_k + 1)
 
-        results = []
-        for entry in doc_to_score.values():
-            normalized_score = entry["rrf_score"] / max_possible_score if max_possible_score > 0 else 0.0
-            if normalized_score >= self.min_score_threshold:
-                results.append((entry["doc"], normalized_score))
+        results = [
+            (entry["doc"], entry["rrf_score"] / max_possible_score if max_possible_score > 0 else 0.0)
+            for entry in doc_to_score.values()
+        ]
 
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:k_value]
-
-    def get_relevant_documents(self, query: str) -> list[Document]:
-        """Retrieve relevant documents using hybrid search.
-
-        Implements the standard LangChain retriever interface.
-
-        Args:
-            query: The search query.
-
-        Returns:
-            List of relevant documents.
-        """
-        results = self.search(query)
-        return [doc for doc, _ in results]
-
-    def aget_relevant_documents(self, query: str) -> list[Document]:
-        """Retrieve relevant documents using hybrid search (sync fallback).
-
-        Args:
-            query: The search query.
-
-        Returns:
-            List of relevant documents.
-        """
-        return self.get_relevant_documents(query)
-
-    def retrieve(self, query: str, **kwargs: Any) -> list[Document]:
-        """Retrieve documents using hybrid search.
-
-        Args:
-            query: The search query.
-            **kwargs: Additional parameters (top_k supported).
-
-        Returns:
-            List of retrieved documents.
-        """
-        k = kwargs.get("top_k", self.top_k)
-        results = self.search(query, k=k)
-        return [doc for doc, _ in results]

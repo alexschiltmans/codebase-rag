@@ -202,3 +202,11 @@ models/
 *.bak
 *.backup
 *~
+
+# OpenSpec workflow artifacts and installed skills/commands
+openspec/
+.claude/skills/openspec-*/
+.claude/commands/opsx/
+.copilot/
+.claude/agents/advisor.md
+CLAUDE.md

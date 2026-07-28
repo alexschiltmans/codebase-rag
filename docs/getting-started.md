@@ -12,7 +12,7 @@ make services-start
 
 `make services-start` starts all Docker services and pulls the configured LLM model into Ollama automatically. Open http://localhost:8501 once the app container is healthy.
 
-> **Manual alternative:** `docker compose -f docker/compose-dev.yml up -d` starts the containers but does not pull the model, so you'll need to run `ollama pull sam860/LFM2:350m` separately.
+> **Manual alternative:** `docker compose -f docker/compose-dev.yml --env-file .env up -d` starts the containers but does not pull the model, so you'll need to run `ollama pull sam860/LFM2:350m` separately. `--env-file .env` matters here because, unlike `make services-start`, this command doesn't source `.env` into the shell first: without it, compose looks for `.env` next to the compose file (`docker/.env`, which doesn't exist) instead of the repo root, and every configured variable falls back to its default.
 
 **Useful services:**
 
@@ -50,7 +50,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 uv venv --python 3.12 && uv sync --extra dev
-docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.12.6
+docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.17.0
 ollama pull sam860/LFM2:350m
 python scripts/ingest.py --repo https://github.com/<owner>/<repo>
 streamlit run src/codebase_rag/app/main.py
@@ -72,11 +72,11 @@ python scripts/ingest.py --repo https://github.com/owner/repo1 --repo https://gi
 # All repositories from REPO_URLS config
 python scripts/ingest.py --all-repos
 
-# Force re-index (ignores content hashes)
+# Force re-index (drops the existing collection before ingesting)
 python scripts/ingest.py --repo https://github.com/owner/repo --force
 ```
 
-Ingestion is idempotent by default: unchanged chunks are skipped, modified chunks are updated, and no duplicates are created.
+Ingestion is idempotent but not incremental: deterministic chunk IDs mean re-running an ingest never creates duplicates, and stale chunks are removed via delete-by-repo. By default the CLI caches processed chunks per repo HEAD SHA, so re-ingesting an unchanged repo skips re-processing (pass `--no-cache` to force it); either way, every run re-embeds all chunks, since embeddings are never cached.
 
 ## Example Queries
 

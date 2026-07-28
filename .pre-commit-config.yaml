@@ -32,3 +32,17 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: []
+
+  # Runs on push only: the commit-stage hooks above are per-file and fast,
+  # while this is the whole offline gate (unit + performance + evaluation
+  # tiers, plus OpenSpec validation). Catches what unit-only checks miss.
+  # Integration and e2e need live services and stay out of the hook.
+  - repo: local
+    hooks:
+      - id: verify
+        name: make verify (offline test tiers + OpenSpec validation)
+        entry: make verify
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true

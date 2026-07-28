@@ -26,10 +26,13 @@ def _build_runtime(config: MagicMock, *, existing_repos: list[str] | None = None
     mock_llm = MagicMock()
     mock_llm.check_connection.return_value = {"status": "connected"}
     mock_llm.check_model_availability.return_value = {"status": "available"}
+    mock_llm.num_ctx = 8192
+    mock_llm.max_tokens = 1024
+    mock_llm.prompt_budget_chars = (8192 - 1024 - 256) * 4
 
     with (
         patch("codebase_rag.app.runtime.QdrantStore", return_value=mock_qdrant),
-        patch("codebase_rag.app.runtime.OllamaClient", return_value=mock_llm),
+        patch("codebase_rag.app.runtime.create_llm_client", return_value=mock_llm),
         patch("codebase_rag.app.runtime._load_or_create_bm25_retriever", return_value=MagicMock()),
         patch("codebase_rag.app.runtime.IngestionManager.start") as mock_start,
     ):
@@ -42,7 +45,7 @@ class TestAppRuntimeConstruction:
         runtime, _ = _build_runtime(_config())
         assert runtime.qdrant_store is not None
         assert runtime.vector_retriever is not None
-        assert runtime.hybrid_retriever is not None
+        assert runtime.bm25_retriever is not None
         assert runtime.llm is not None
         assert runtime.folder_picker is not None
         assert runtime.ingestion is not None
@@ -65,14 +68,13 @@ class TestAppRuntimeConstruction:
 
 
 class TestSwapBm25:
-    def test_updates_both_bm25_and_hybrid_retriever(self) -> None:
+    def test_updates_bm25_retriever(self) -> None:
         runtime, _ = _build_runtime(_config())
         new_index = MagicMock()
 
         runtime.swap_bm25(new_index)
 
         assert runtime.bm25_retriever is new_index
-        assert runtime.hybrid_retriever.bm25_retriever is new_index
 
 
 class TestDeleteRepo:
@@ -98,8 +100,61 @@ class TestNewRagChain:
         with patch("codebase_rag.app.runtime.RAGChain") as mock_rag_chain_cls:
             runtime.new_rag_chain()
             mock_rag_chain_cls.assert_called_once_with(
-                retriever=runtime.hybrid_retriever,
+                retriever=runtime.bm25_retriever,
                 llm=runtime.llm,
                 use_conversation_memory=True,
                 max_conversation_history=10,
+                prompt_budget_chars=(8192 - 1024 - 256) * 4,
             )
+
+
+class TestHealthChecks:
+    def test_run_health_checks_populates_runtime_health(self) -> None:
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        _run_health_checks(runtime)
+
+        assert "model" in runtime.health
+        assert "checked_at" in runtime.health
+        assert runtime.health["model"]["status"] == "available"
+
+    def test_run_health_checks_stores_model_status_on_not_found(self) -> None:
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        runtime.llm.check_model_availability.return_value = {
+            "status": "not_found",
+            "message": "Model not found",
+            "suggested_action": "Run 'ollama pull model'",
+        }
+
+        _run_health_checks(runtime)
+
+        assert runtime.health["model"]["status"] == "not_found"
+        assert runtime.health["model"]["suggested_action"] == "Run 'ollama pull model'"
+        assert "checked_at" in runtime.health
+
+    def test_run_health_checks_handles_warm_up_exceptions(self) -> None:
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        with patch("codebase_rag.app.runtime._warm_up_vector_store", side_effect=RuntimeError("Warm-up failed")):
+            _run_health_checks(runtime)
+
+        assert "model" in runtime.health
+        assert runtime.health["model"]["status"] == "available"
+
+    def test_run_health_checks_still_warms_up_after_llm_check_failure(self) -> None:
+        """The LLM check and the vector-store warm-up are independent; one failing must not
+        skip the other, which an early `return` in the first try/except used to do.
+        """
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        runtime.llm.check_connection.side_effect = RuntimeError("LLM unreachable")
+
+        with patch("codebase_rag.app.runtime._warm_up_vector_store") as mock_warm_up:
+            _run_health_checks(runtime)
+
+        mock_warm_up.assert_called_once_with(runtime.vector_retriever)

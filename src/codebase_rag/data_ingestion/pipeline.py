@@ -12,7 +12,9 @@ import json
 import logging
 import pickle
 import sys
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -83,15 +85,30 @@ def count_ingestible_files(local_path: Path) -> tuple[list[str], int]:
     return included_dirs, len(file_paths)
 
 
-def setup_logging(log_level: str = "INFO") -> logging.Logger:
+_INGEST_HANDLER_NAMES = ("codebase_rag.ingest_file", "codebase_rag.ingest_console")
+
+# The level the shared "codebase_rag" logger had before the most recent
+# setup_logging() call, restored by _teardown_logging() when the run ends.
+# A module global rather than a return value because the logger is a
+# process-wide singleton and IngestPipeline.run() is the only place that
+# needs to read it back, well after setup_logging() has returned.
+_prior_level: int | None = None
+
+
+def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> tuple[logging.Logger, Path]:
     """Set up logging configuration.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        add_console: Whether to add a console handler. If None (default), adds one only
+            if the root logger has no handlers (fresh CLI process). Set explicitly
+            in tests to control console output.
 
     Returns:
-        logging.Logger: Configured logger.
+        Tuple of configured logger and log file path.
     """
+    global _prior_level
+
     numeric_level = getattr(logging, log_level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError(f"Invalid log level: {log_level}")
@@ -99,18 +116,64 @@ def setup_logging(log_level: str = "INFO") -> logging.Logger:
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
 
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    log_file = logs_dir / f"ingest-{timestamp}.log"
+    now = time.time()
+    timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now))
+    microseconds = int((now % 1) * 1_000_000)
+    log_file = logs_dir / f"ingest-{timestamp}-{microseconds:06d}.log"
 
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-    )
+    suffix = 0
+    while log_file.exists() and suffix < 1000:
+        suffix += 1
+        log_file = logs_dir / f"ingest-{timestamp}-{microseconds:06d}-{suffix}.log"
 
-    logger = logging.getLogger("codebase_rag.ingest")
+    logger = logging.getLogger("codebase_rag")
+
+    for handler in logger.handlers[:]:
+        if handler.name in _INGEST_HANDLER_NAMES:
+            handler.close()
+            logger.removeHandler(handler)
+
+    if _prior_level is None:
+        _prior_level = logger.level
+    logger.setLevel(numeric_level)
+
+    format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter(format_string))
+    file_handler.name = "codebase_rag.ingest_file"
+    logger.addHandler(file_handler)
+
+    if add_console is None:
+        add_console = not logging.getLogger().hasHandlers()
+
+    if add_console:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter(format_string))
+        stream_handler.name = "codebase_rag.ingest_console"
+        logger.addHandler(stream_handler)
+
     logger.info(f"Logging initialized at level {log_level}, writing to {log_file}")
-    return logger
+    return logger, log_file
+
+
+def _teardown_logging(logger: logging.Logger) -> None:
+    """Detach this run's ingest handlers and restore the logger's prior level.
+
+    Called when a pipeline run finishes, success or failure. Without this,
+    the file handler (and the level it forced) stay attached to the shared
+    "codebase_rag" logger until the *next* setup_logging() call, so every
+    other package logger's records in between land in this run's file and
+    its file descriptor is held open indefinitely.
+    """
+    global _prior_level
+
+    for handler in logger.handlers[:]:
+        if handler.name in _INGEST_HANDLER_NAMES:
+            handler.close()
+            logger.removeHandler(handler)
+
+    logger.setLevel(_prior_level if _prior_level is not None else logging.NOTSET)
+    _prior_level = None
 
 
 def save_documents_cache(documents: list, cache_path: Path) -> None:
@@ -169,6 +232,10 @@ class IncrementalIngestResult:
     head_sha: str | None
 
 
+class IngestCancelled(Exception):  # noqa: N818 - name fixed by the ingestion-progress spec
+    """Raised when a pipeline run is stopped via a cancel event."""
+
+
 class IngestPipeline:
     """Pipeline for ingesting documents from one or more repositories into the vector database.
 
@@ -186,6 +253,8 @@ class IngestPipeline:
         debug: bool = False,
         repo_url: str | None = None,
         repo_urls: list[str] | None = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> None:
         """Initialize the ingestion pipeline.
 
@@ -200,39 +269,52 @@ class IngestPipeline:
             debug: Whether to enable debug mode.
             repo_url: Single GitHub repository URL to ingest.
             repo_urls: List of GitHub repository URLs to ingest.
+            progress_callback: Optional hook called as ``(phase, current, total)``
+                from the file-processing loop and the indexing batch loop. Unused
+                by the CLI; the UI wires it to per-job progress state.
+            cancel_event: Optional event checked at the same two points; raises
+                ``IngestCancelled`` when set. Unused by the CLI.
         """
         log_level = "DEBUG" if debug else "INFO"
-        self.logger = setup_logging(log_level)
+        self.logger, self.log_file_path = setup_logging(log_level)
 
-        self.config = Config.get_instance()
-        self._explicit_included_dirs = included_dirs
-        self.included_dirs = included_dirs or ["docs", "src", "tests"]
-        self.included_files = included_files or ["README.md", "pyproject.toml"]
-        self.drop_existing = drop_existing
-        self.use_cache = use_cache
+        # A failure below (bad LLM_PROVIDER, unreachable Qdrant) would otherwise never reach run()'s finally.
+        try:
+            self.config = Config.get_instance()
+            self._explicit_included_dirs = included_dirs
+            self.included_dirs = included_dirs or ["docs", "src", "tests"]
+            self.included_files = included_files or ["README.md", "pyproject.toml"]
+            self.drop_existing = drop_existing
+            self.use_cache = use_cache
+            self.progress_callback = progress_callback
+            self.cancel_event = cancel_event
 
-        self._repo_urls: list[str] = []
-        if repo_urls:
-            self._repo_urls = list(repo_urls)
-        elif repo_url:
-            self._repo_urls = [repo_url]
+            self._repo_urls: list[str] = []
+            if repo_urls:
+                self._repo_urls = list(repo_urls)
+            elif repo_url:
+                self._repo_urls = [repo_url]
 
-        self.cache_dir = Path("data/cache")
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+            self.cache_dir = Path("data/cache")
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.vector_store = QdrantStore(
-            host=self.config.qdrant_host,
-            port=self.config.qdrant_port,
-            collection_name=self.config.collection_name,
-            recreate_collection=drop_existing,
-        )
+            self.vector_store = QdrantStore(
+                host=self.config.qdrant_host,
+                port=self.config.qdrant_port,
+                collection_name=self.config.collection_name,
+                embedding_model=self.config.embedding_model,
+                recreate_collection=drop_existing,
+            )
 
-        self.stats: dict[str, int | float] = {
-            "processed_files": 0,
-            "chunks_created": 0,
-            "chunks_indexed": 0,
-            "elapsed_time": 0.0,
-        }
+            self.stats: dict[str, int | float] = {
+                "processed_files": 0,
+                "chunks_created": 0,
+                "chunks_indexed": 0,
+                "elapsed_time": 0.0,
+            }
+        except Exception:
+            _teardown_logging(self.logger)
+            raise
 
         # HEAD SHA per repo processed this run, recorded so run() can persist
         # freshness metadata for GET /repos after indexing succeeds.
@@ -311,6 +393,8 @@ class IngestPipeline:
         documents = document_processor.process(
             included_dirs=included_dirs,
             included_files=self.included_files,
+            progress_callback=self.progress_callback,
+            cancel_event=self.cancel_event,
         )
         processing_time = time.time() - start_time
         self.logger.info(
@@ -487,6 +571,12 @@ class IngestPipeline:
         """
         self.logger.info("Indexing documents in Qdrant...")
 
+        # Checked here, not just in the batch loop below: without this, a cancel that lands
+        # between the end of processing and the start of indexing would still let delete_by_repo
+        # run, wiping a repo's existing chunks with nothing indexed to replace them.
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise IngestCancelled("Ingestion cancelled before indexing")
+
         # Remove ALL existing chunks for repos being re-ingested so that
         # deleted or shrunk files don't leave orphaned points.
         repos = {doc.metadata.get("repo") for doc in documents if doc.metadata.get("repo")}
@@ -501,10 +591,15 @@ class IngestPipeline:
         total_batches = (len(documents) + batch_size - 1) // batch_size
 
         for i in range(0, len(documents), batch_size):
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                raise IngestCancelled("Ingestion cancelled during indexing")
+
             batch = documents[i : i + batch_size]
             batch_num = i // batch_size + 1
 
             display_progress(batch_num, total_batches, "Indexing: ")
+            if self.progress_callback is not None:
+                self.progress_callback("indexing", batch_num, total_batches)
 
             self.vector_store.add_documents(batch)
 
@@ -609,3 +704,5 @@ class IngestPipeline:
         except Exception as e:
             self.logger.error(f"Error in ingestion pipeline: {e}", exc_info=True)
             raise
+        finally:
+            _teardown_logging(self.logger)

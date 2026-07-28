@@ -128,5 +128,117 @@
     "category": "factual_lookup",
     "expected_failure": true,
     "failure_reason": "The RAG system may confuse the power-grid-model pyproject.toml with the codebase-rag pyproject.toml"
+  },
+  {
+    "question": "How does power-grid-model decide whether it has enough sensor data to determine the grid's state statistically?",
+    "expected_answer": "The system checks observability: for n nodes there are 2*n-1 unknowns (voltage magnitude and angle per node, minus one reference angle), and the number of independent measurements must be at least that many. Measurement count sums voltage sensors, power/current sensors on appliances and branches, with each counted per the documented weighting. Meeting the count is only a necessary condition; measurements must also be topologically independent, and at least one voltage measurement is required.",
+    "keywords": ["observability", "measurements", "voltage sensor", "unknowns", "topologically independent"],
+    "sources": ["calculations.md"],
+    "difficulty": "hard",
+    "category": "conceptual"
+  },
+  {
+    "question": "What happens to a transformer's tap position when the controlled voltage drifts outside its target band during automatic regulation?",
+    "expected_answer": "If the controlled voltage falls below the lower band edge, the tap position is incremented by one step (or per the chosen strategy); if it rises above the upper edge, the tap position is decremented. If the updated tap position would exceed tap_min or tap_max it is clamped to that bound, and another power flow is run with the new tap positions. If the maximum number of tap-changing iterations is reached, the calculation stops and raises an error.",
+    "keywords": ["tap position", "voltage band", "clamped", "power flow", "iterations"],
+    "sources": ["tap-changing-algorithms.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "Why does power-grid-model skip automatic checks on the physical realism of input data by default?",
+    "expected_answer": "Checking hard physical bounds is offloaded to a separate data validator tool because those checks can be prohibitively expensive to run at scale in production. The library instead assumes input data validity and recommends running the validator specifically for debugging rather than in production paths where performance matters.",
+    "keywords": ["data validator", "performance", "physical bounds", "debugging"],
+    "sources": ["performance-guide.md", "data-validator.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "What information does an object carry when input data fails validation, and how can a caller inspect it?",
+    "expected_answer": "A ValidationError object carries which component(s), which field(s), and which object id(s) are involved, and can be converted to a compact human-readable message with str(error). component, field, and ids are accessible as member variables for more specific inspection.",
+    "keywords": ["ValidationError", "component", "field", "ids", "str"],
+    "sources": ["data-validator.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "How can an ideal transformer be represented in power-grid-model even though there is no dedicated ideal-transformer component?",
+    "expected_answer": "An ideal transformer can be modeled as a link placed between two different voltage levels, since PGM explicitly allows that; no additional electrical parameters are needed. The regular transformer component cannot be used for this because it always models finite impedance, which conflicts with an ideal transformer's properties.",
+    "keywords": ["ideal transformer", "link", "voltage levels", "impedance"],
+    "sources": ["non-pgm-components.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "How would you model a grounding or earthing transformer using power-grid-model's existing components?",
+    "expected_answer": "A grounding transformer can be modeled as a shunt with only zero-sequence parameters set (derived from its resistance and reactance) and its positive-sequence parameters set to zero.",
+    "keywords": ["grounding transformer", "shunt", "zero-sequence", "positive-sequence"],
+    "sources": ["non-pgm-components.md"],
+    "difficulty": "hard",
+    "category": "conceptual"
+  },
+  {
+    "question": "What voltage scaling adjustment does power-grid-model apply during a short circuit calculation, and why?",
+    "expected_answer": "A voltage scaling factor c is applied to the voltage source per IEC 60909, to account for different operational conditions. Its value depends on the nominal voltage of the source's connected node and whether minimum or maximum short circuit current is being calculated, per a lookup table distinguishing nodes at or below 1kV from those above.",
+    "keywords": ["voltage scaling factor", "IEC 60909", "c_max", "c_min", "nominal voltage"],
+    "sources": ["sc-algorithms.md"],
+    "difficulty": "hard",
+    "category": "conceptual"
+  },
+  {
+    "question": "What assumptions about loads and generation does power-grid-model make when computing a short circuit current?",
+    "expected_answer": "The pre-fault state of the grid with respect to loads and generation is ignored (though shunt admittances are still included); the pre-fault voltage is instead derived from grid parameters and topology excluding loads and generation, and the calculation is treated as time-independent.",
+    "keywords": ["short circuit", "pre-fault", "loads", "generation", "time-independent"],
+    "sources": ["sc-algorithms.md"],
+    "difficulty": "hard",
+    "category": "conceptual"
+  },
+  {
+    "question": "Which bus is treated as the reference point with known voltage and angle in a power flow calculation, and what PGM component represents it?",
+    "expected_answer": "The slack bus, the reference bus with known voltage and angle, is represented in power-grid-model by the source component.",
+    "keywords": ["slack bus", "reference bus", "source", "known voltage"],
+    "sources": ["pf-algorithms.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "What extra requirement applies to asymmetric power flow calculations that doesn't apply to symmetric ones?",
+    "expected_answer": "Asymmetric power flow calculations require the network to have a reference to ground; without it, floating-grid handling is needed for the calculation to have a valid solution.",
+    "keywords": ["asymmetric", "reference to ground", "floating grid"],
+    "sources": ["pf-algorithms.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "How can memory usage be reduced when constructing input or update data for a use case that only touches a few optional attributes?",
+    "expected_answer": "Switching from row-based to columnar data format reduces memory footprint, since row-based construction (e.g. via initialize_array) allocates all attributes for a component even when many optional ones go unused, whereas columnar format only needs the attributes actually used, at the cost of a possible slight computational overhead.",
+    "keywords": ["columnar", "row-based", "memory", "optional attributes"],
+    "sources": ["performance-guide.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "What two ways can component data be laid out in memory, and how do they differ?",
+    "expected_answer": "Row-based (row-major) buffers store all attributes of a given component contiguously before moving to the next component. Columnar (column-major) buffers instead group data across components by attribute type.",
+    "keywords": ["row-based", "columnar", "buffer", "memory layout"],
+    "sources": ["dataset-terminology.md"],
+    "difficulty": "easy",
+    "category": "conceptual"
+  },
+  {
+    "question": "How does power-grid-model represent batch data where different scenarios update different numbers of components?",
+    "expected_answer": "It uses a sparse buffer representation: data for all scenarios is stored as a single flattened 1D buffer, and scenario boundaries are tracked separately using an index pointer (indptr) that segments the flattened buffer into per-scenario ranges.",
+    "keywords": ["sparse", "flattened buffer", "indptr", "scenario boundaries"],
+    "sources": ["dataset-terminology.md"],
+    "difficulty": "medium",
+    "category": "conceptual"
+  },
+  {
+    "question": "Why might running the full Cartesian product of two batch datasets not require allocating memory for every combined scenario?",
+    "expected_answer": "When two batch datasets are passed together as update_data, power-grid-model treats them as a Cartesian product internally and handles the scenario combinations without needing to allocate memory for the full N1*N2*... set of combined scenarios.",
+    "keywords": ["Cartesian product", "batch datasets", "update_data", "memory allocation"],
+    "sources": ["performance-guide.md"],
+    "difficulty": "hard",
+    "category": "conceptual"
   }
 ]
