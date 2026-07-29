@@ -840,3 +840,51 @@ class TestIngestPipeline:
         assert result[0].metadata.get("repo") == "myrepo"
         # DocumentProcessor should NOT have been called — cache was fresh
         mock_doc_proc_cls.assert_not_called()
+
+    @patch("codebase_rag.data_ingestion.pipeline.DocumentProcessor")
+    @patch("codebase_rag.data_ingestion.pipeline.GitLoader")
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_process_single_repo_rejects_cache_from_an_older_commit(
+        self,
+        mock_config_cls: MagicMock,
+        mock_logging: MagicMock,
+        mock_qdrant_cls: MagicMock,
+        mock_git_loader_cls: MagicMock,
+        mock_doc_proc_cls: MagicMock,
+    ) -> None:
+        """A second full `run()` after further upstream commits must not treat
+        an existing pickle as fresh just because it exists on disk: the
+        recorded HEAD SHA has to match too, or a stale document cache would
+        be re-indexed as if it were current."""
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        # HEAD has advanced past the commit the cache was built from.
+        mock_git_loader = MagicMock()
+        mock_git_loader.repo.head.commit.hexsha = "def456"
+        mock_git_loader_cls.return_value = mock_git_loader
+        mock_doc_proc_cls.return_value.process.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipeline = IngestPipeline(repo_url="https://github.com/test/myrepo")
+            pipeline.cache_dir = Path(tmpdir)
+
+            cache_path = Path(tmpdir) / "processed_documents_myrepo.pkl"
+            with open(cache_path, "wb") as f:
+                pickle.dump([Document(page_content="stale", metadata={"source": "a.py"})], f)
+
+            freshness_path = Path(tmpdir) / "myrepo_freshness.json"
+            with open(freshness_path, "w") as f:
+                json.dump({"last_ingest_time": 0, "head_sha": "abc123"}, f)
+
+            pipeline._process_single_repo("https://github.com/test/myrepo")
+
+        # The stale cache didn't match HEAD, so the pipeline had to reprocess.
+        mock_doc_proc_cls.return_value.process.assert_called_once()

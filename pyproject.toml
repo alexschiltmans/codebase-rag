@@ -23,6 +23,8 @@ dependencies = [
     "requests>=2.28.0",
     "langfuse>=2.0.0,<3",
     "ragas>=0.4.3,<1",
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.0,<1",
 ]
 
 [project.scripts]
@@ -83,6 +85,9 @@ line-ending = "auto"
 ]
 "src/codebase_rag/cli.py" = [
     "T201",   # print is expected in CLI scripts
+]
+"src/codebase_rag/api/routers/**" = [
+    "B008",   # FastAPI's Depends() idiom requires calling it in argument defaults
 ]
 
 [tool.mypy]

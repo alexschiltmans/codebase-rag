@@ -56,6 +56,9 @@ class Config:
     # Chat storage settings (SQLite)
     chat_storage_path: Path = Path("./data/chat_history.db")
 
+    # Retriever settings
+    retriever: str = "bm25"
+
     # LLM settings
     provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
@@ -70,6 +73,10 @@ class Config:
 
     # Application settings
     log_level: str = "INFO"
+
+    # HTTP API settings
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
 
     # Langfuse tracing settings
     langfuse_enabled: bool = False
@@ -94,6 +101,10 @@ class Config:
             if provider not in ("ollama", "openai-compat"):
                 raise ValueError(f"LLM_PROVIDER must be 'ollama' or 'openai-compat', got '{provider}'")
 
+            retriever = _env("RETRIEVER", cls.retriever)
+            if retriever not in ("bm25", "hybrid"):
+                raise ValueError(f"RETRIEVER must be 'bm25' or 'hybrid', got '{retriever}'")
+
             llm_base_url = _env("LLM_BASE_URL", cls.llm_base_url)
             if provider == "openai-compat" and not llm_base_url:
                 # Otherwise this passes here and dies inside OpenAICompatClient.__init__ instead,
@@ -108,6 +119,7 @@ class Config:
                 qdrant_port=_env_int("QDRANT_PORT", cls.qdrant_port),
                 collection_name=_env("COLLECTION_NAME", cls.collection_name),
                 chat_storage_path=Path(_env("CHAT_STORAGE_PATH", str(cls.chat_storage_path))),
+                retriever=retriever,
                 provider=provider,
                 ollama_base_url=_env("OLLAMA_BASE_URL", cls.ollama_base_url),
                 llm_base_url=llm_base_url,
@@ -117,6 +129,8 @@ class Config:
                 ollama_num_ctx=_env_int("OLLAMA_NUM_CTX", cls.ollama_num_ctx),
                 default_repo_url=_env("DEFAULT_REPO_URL", cls.default_repo_url),
                 log_level=_env("LOG_LEVEL", cls.log_level),
+                api_host=_env("API_HOST", cls.api_host),
+                api_port=_env_int("API_PORT", cls.api_port),
                 langfuse_enabled=_env("LANGFUSE_ENABLED", "false").lower() == "true",
                 langfuse_public_key=_env("LANGFUSE_PUBLIC_KEY", cls.langfuse_public_key),
                 langfuse_secret_key=_env("LANGFUSE_SECRET_KEY", cls.langfuse_secret_key),

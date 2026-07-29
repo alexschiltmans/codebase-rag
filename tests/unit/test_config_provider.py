@@ -103,3 +103,32 @@ class TestProviderValidation:
         with patch.dict(os.environ, {"LLM_API_KEY": "test-key-123"}):
             config = Config.get_instance()
             assert config.llm_api_key == "test-key-123"
+
+
+class TestRetrieverValidation:
+    """Test cases for RETRIEVER configuration validation."""
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_default_retriever_is_bm25(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        env_copy = dict(os.environ)
+        env_copy.pop("RETRIEVER", None)
+        with patch.dict(os.environ, env_copy, clear=True):
+            config = Config.get_instance()
+            assert config.retriever == "bm25"
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_valid_hybrid_retriever(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        with patch.dict(os.environ, {"RETRIEVER": "hybrid"}):
+            config = Config.get_instance()
+            assert config.retriever == "hybrid"
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_invalid_retriever_raises_error(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        with (
+            patch.dict(os.environ, {"RETRIEVER": "reranked"}),
+            pytest.raises(ValueError, match="RETRIEVER must be 'bm25' or 'hybrid'"),
+        ):
+            Config.get_instance()
