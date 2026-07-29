@@ -328,10 +328,6 @@ class IngestPipeline:
         """Return the document cache path for a specific repo."""
         return self.cache_dir / f"processed_documents_{repo_name}.pkl"
 
-    def _cache_meta_path_for_repo(self, repo_name: str) -> Path:
-        """Return the cache metadata path for a specific repo."""
-        return self.cache_dir / f"{repo_name}_cache_meta.json"
-
     def _get_head_sha(self, git_loader: GitLoader) -> str | None:
         """Return the HEAD commit SHA from a GitLoader's repo, or None."""
         if git_loader.repo is None:
@@ -342,25 +338,23 @@ class IngestPipeline:
             return None
 
     def _is_cache_fresh(self, repo_name: str, head_sha: str | None) -> bool:
-        """Check whether the document cache matches the current HEAD SHA."""
+        """Check whether the document cache matches the current HEAD SHA.
+
+        Reads `{repo}_freshness.json`: `run()` writes both the pickle and
+        freshness together, and `process_repo_incremental` deletes the pickle
+        whenever it re-embeds or deletes anything, so the two always describe
+        the same *content*. They can describe different commits: a no-op
+        incremental ingest at a newer HEAD advances freshness without touching
+        the pickle, which is safe precisely because nothing changed. Without
+        this check, a second full `run()` after further upstream commits would
+        treat a stale pickle as fresh and silently re-index old content.
+        """
         if head_sha is None:
             return False
-        meta_path = self._cache_meta_path_for_repo(repo_name)
-        if not meta_path.exists():
+        if not self._cache_path_for_repo(repo_name).exists():
             return False
-        try:
-            with open(meta_path) as f:
-                meta = json.load(f)
-            return bool(meta.get("commit_sha") == head_sha)
-        except (json.JSONDecodeError, OSError):
-            return False
-
-    def _save_cache_meta(self, repo_name: str, head_sha: str) -> None:
-        """Persist cache metadata for a repo."""
-        meta_path = self._cache_meta_path_for_repo(repo_name)
-        meta_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(meta_path, "w") as f:
-            json.dump({"commit_sha": head_sha, "timestamp": time.time()}, f, indent=2)
+        _, cached_sha = repo_service.read_freshness(self.cache_dir, repo_name)
+        return cached_sha == head_sha
 
     def _process_single_repo(self, repo_url: str) -> list:
         """Process documents from a single repository.
@@ -411,8 +405,6 @@ class IngestPipeline:
 
         if self.use_cache:
             save_documents_cache(documents, cache_path)
-            if head_sha:
-                self._save_cache_meta(repo_name, head_sha)
 
         return documents
 
@@ -513,6 +505,11 @@ class IngestPipeline:
         manifest = {path: current_hashes[path] for path in current_hashes}
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, indent=2))
+
+        if changed_paths or deleted_sources:
+            # A later run() must not load a document-cache pickle built from an
+            # older commit than the one this incremental ingest just wrote.
+            self._cache_path_for_repo(repo_name).unlink(missing_ok=True)
 
         repo_service.save_freshness(self.cache_dir, repo_name, head_sha)
 

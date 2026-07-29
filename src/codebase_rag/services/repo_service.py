@@ -14,9 +14,12 @@ class RepoInfo:
     head_sha: str | None
 
 
-def _read_freshness(cache_dir: Path, repo_name: str) -> tuple[float | None, str | None]:
+def read_freshness(cache_dir: Path, repo_name: str) -> tuple[float | None, str | None]:
     """Read freshness metadata for a repo, preferring the incremental-ingest
     freshness file and falling back to the older full-cache metadata file.
+
+    Also used by `IngestPipeline._is_cache_fresh` to validate the document
+    cache against the repo's last recorded HEAD SHA.
     """
     freshness_path = cache_dir / f"{repo_name}_freshness.json"
     if freshness_path.exists():
@@ -41,7 +44,7 @@ def list_repos(qdrant_store: Any, cache_dir: Path) -> list[RepoInfo]:
     """List every ingested repository with freshness metadata."""
     infos = []
     for name in qdrant_store.list_repos():
-        last_ingest_time, head_sha = _read_freshness(cache_dir, name)
+        last_ingest_time, head_sha = read_freshness(cache_dir, name)
         infos.append(RepoInfo(name=name, last_ingest_time=last_ingest_time, head_sha=head_sha))
     return infos
 

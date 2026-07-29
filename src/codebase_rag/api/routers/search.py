@@ -13,7 +13,7 @@ router = APIRouter()
 @router.post("/search", response_model=None)
 def search_endpoint(request: SearchRequest, state: ApiState = Depends(get_state)) -> SearchResponse | PlainTextResponse:
     results = search(
-        state.hybrid_retriever,
+        state.retriever,
         query=request.query,
         k=request.k,
         repo=request.repo,
