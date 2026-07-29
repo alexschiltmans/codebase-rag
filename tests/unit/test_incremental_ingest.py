@@ -128,6 +128,55 @@ class TestProcessRepoIncremental:
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
     @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_touching_a_file_invalidates_the_full_run_document_cache(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """A full `run()` document-cache pickle must not survive an incremental
+        ingest that changed the repo, or a later `run()` would load a cache
+        built from an older commit."""
+        (tmp_path / "src").mkdir()
+        a_path = tmp_path / "src" / "a.py"
+        a_path.write_text("print('a')")
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            pipeline = _make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+            pipeline._explicit_included_dirs = ["src"]
+
+            repo_name = pipeline._resolve_repo_source(str(tmp_path))[0]
+            cache_path = pipeline._cache_path_for_repo(repo_name)
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_bytes(b"stale pickle")
+
+            pipeline.process_repo_incremental(str(tmp_path))
+
+            assert not cache_path.exists()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_unchanged_reingest_leaves_document_cache_in_place(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("print('a')")
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            pipeline = _make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+            pipeline._explicit_included_dirs = ["src"]
+            pipeline.process_repo_incremental(str(tmp_path))
+
+            repo_name = pipeline._resolve_repo_source(str(tmp_path))[0]
+            cache_path = pipeline._cache_path_for_repo(repo_name)
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_bytes(b"still valid pickle")
+
+            pipeline.process_repo_incremental(str(tmp_path))
+
+            assert cache_path.exists()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
     def test_saves_freshness_metadata(
         self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
     ) -> None:

@@ -1,4 +1,4 @@
-"""Token-budgeted search over the hybrid retriever.
+"""Token-budgeted search over the configured retriever.
 
 Shared by the HTTP API, and (per the design) the future MCP server and CLI,
 so budgeting/dedupe behavior only needs to be correct in one place.
@@ -57,7 +57,7 @@ def _dedupe(results: list[tuple[Document, float]]) -> list[tuple[Document, float
 
 
 def search(
-    hybrid_retriever: Any,
+    retriever: Any,
     query: str,
     k: int | None = None,
     repo: str | None = None,
@@ -67,7 +67,7 @@ def search(
     """Search, dedupe overlapping chunks, and stop once the token budget is spent.
 
     Args:
-        hybrid_retriever: A `HybridRetriever`-like object exposing `.search(query, k)`.
+        retriever: Any `RetrieverProtocol` implementation, exposing `.search(query, k)`.
         query: The search query.
         k: Number of candidates to fetch before dedupe/budgeting (fetches extra
             when a repo filter is set, since filtering happens after ranking).
@@ -77,7 +77,7 @@ def search(
         tokenizer: Optional tokenizer passed through to the token estimator.
     """
     fetch_k = (k or 10) * (4 if repo else 1)
-    raw_results = hybrid_retriever.search(query, k=fetch_k)
+    raw_results = retriever.search(query, k=fetch_k)
 
     if repo:
         raw_results = [(doc, score) for doc, score in raw_results if doc.metadata.get("repo") == repo]

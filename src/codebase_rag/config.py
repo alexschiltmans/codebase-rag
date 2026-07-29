@@ -56,6 +56,9 @@ class Config:
     # Chat storage settings (SQLite)
     chat_storage_path: Path = Path("./data/chat_history.db")
 
+    # Retriever settings
+    retriever: str = "bm25"
+
     # LLM settings
     provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
@@ -98,6 +101,10 @@ class Config:
             if provider not in ("ollama", "openai-compat"):
                 raise ValueError(f"LLM_PROVIDER must be 'ollama' or 'openai-compat', got '{provider}'")
 
+            retriever = _env("RETRIEVER", cls.retriever)
+            if retriever not in ("bm25", "hybrid"):
+                raise ValueError(f"RETRIEVER must be 'bm25' or 'hybrid', got '{retriever}'")
+
             llm_base_url = _env("LLM_BASE_URL", cls.llm_base_url)
             if provider == "openai-compat" and not llm_base_url:
                 # Otherwise this passes here and dies inside OpenAICompatClient.__init__ instead,
@@ -112,6 +119,7 @@ class Config:
                 qdrant_port=_env_int("QDRANT_PORT", cls.qdrant_port),
                 collection_name=_env("COLLECTION_NAME", cls.collection_name),
                 chat_storage_path=Path(_env("CHAT_STORAGE_PATH", str(cls.chat_storage_path))),
+                retriever=retriever,
                 provider=provider,
                 ollama_base_url=_env("OLLAMA_BASE_URL", cls.ollama_base_url),
                 llm_base_url=llm_base_url,

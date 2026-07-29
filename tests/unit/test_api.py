@@ -19,7 +19,7 @@ from codebase_rag.api.routers import answer, ingest, repos, search
 
 class FakeApiState:
     def __init__(self, tmp_path: Path) -> None:
-        self.hybrid_retriever = MagicMock()
+        self.retriever = MagicMock()
         self.tokenizer = None
         self.qdrant_store = MagicMock()
         self.qdrant_store.list_repos.return_value = []
@@ -56,7 +56,7 @@ def _doc(source: str, start: int, end: int, content: str) -> Document:
 
 class TestSearchEndpoint:
     def test_json_format(self, client: TestClient, state: FakeApiState) -> None:
-        state.hybrid_retriever.search.return_value = [(_doc("a.py", 1, 5, "hello world"), 0.9)]
+        state.retriever.search.return_value = [(_doc("a.py", 1, 5, "hello world"), 0.9)]
 
         response = client.post("/search", json={"query": "hello"})
 
@@ -66,7 +66,7 @@ class TestSearchEndpoint:
         assert body["results"][0]["start_line"] == 1
 
     def test_compact_format_returns_plain_text(self, client: TestClient, state: FakeApiState) -> None:
-        state.hybrid_retriever.search.return_value = [(_doc("a.py", 1, 5, "hello world"), 0.9)]
+        state.retriever.search.return_value = [(_doc("a.py", 1, 5, "hello world"), 0.9)]
 
         response = client.post("/search", json={"query": "hello", "format": "compact"})
 
@@ -75,7 +75,7 @@ class TestSearchEndpoint:
         assert "{" not in response.text
 
     def test_empty_results(self, client: TestClient, state: FakeApiState) -> None:
-        state.hybrid_retriever.search.return_value = []
+        state.retriever.search.return_value = []
 
         response = client.post("/search", json={"query": "nothing"})
 
