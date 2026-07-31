@@ -16,7 +16,7 @@ from codebase_rag.config import Config
 
 
 @pytest.fixture(autouse=True)
-def _reset_config() -> None:
+def _reset_config() -> Iterator[None]:
     Config._instance = None
     yield
     Config._instance = None

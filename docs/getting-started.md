@@ -100,6 +100,12 @@ python scripts/ingest.py --repo https://github.com/owner/repo --force
 
 Ingestion is idempotent but not incremental: deterministic chunk IDs mean re-running an ingest never creates duplicates, and stale chunks are removed via delete-by-repo. By default the CLI caches processed chunks per repo HEAD SHA, so re-ingesting an unchanged repo skips re-processing (pass `--no-cache` to force it); either way, every run re-embeds all chunks, since embeddings are never cached.
 
+## Developer commands
+
+`make check` (lint, format, types, unit tests) and `make verify` (`make check` plus the performance/evaluation tiers and OpenSpec validation) are the gates described in `CLAUDE.md`; both run fully offline.
+
+`make audit` audits the locked dependency set against published vulnerability advisories via `pip-audit` and exits nonzero when it finds one. It is not part of `make check`, `make verify`, or the pre-commit hooks: those gates must stay runnable offline and must not fail because of an advisory published upstream with no local code change. Run `make audit` deliberately, when you want to know what's outstanding in the dependency set.
+
 ## Example Queries
 
 After ingesting a repository:

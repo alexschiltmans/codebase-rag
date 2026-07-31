@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.data_ingestion.pipeline import IngestPipeline
@@ -44,7 +45,7 @@ class TestProcessRepoIncremental:
             assert result.files_changed == 2
             assert result.files_deleted == 0
             assert result.chunks_indexed == 2
-            pipeline.vector_store.add_documents.assert_called_once()
+            cast(MagicMock, pipeline.vector_store).add_documents.assert_called_once()
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
@@ -62,7 +63,7 @@ class TestProcessRepoIncremental:
             pipeline = _make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
             pipeline._explicit_included_dirs = ["src"]
             pipeline.process_repo_incremental(str(tmp_path))
-            pipeline.vector_store.reset_mock()
+            cast(MagicMock, pipeline.vector_store).reset_mock()
 
             a_path.write_text("print('a changed')")
             result = pipeline.process_repo_incremental(str(tmp_path))
@@ -71,10 +72,11 @@ class TestProcessRepoIncremental:
             assert result.files_unchanged == 1
             assert result.files_deleted == 0
 
-            deleted_sources = [call.args[0] for call in pipeline.vector_store.delete_by_source.call_args_list]
+            delete_calls = cast(MagicMock, pipeline.vector_store).delete_by_source.call_args_list
+            deleted_sources = [call.args[0] for call in delete_calls]
             assert deleted_sources == [str(a_path)]
 
-            added_docs = pipeline.vector_store.add_documents.call_args[0][0]
+            added_docs = cast(MagicMock, pipeline.vector_store).add_documents.call_args[0][0]
             assert all(doc.metadata["source"] == str(a_path) for doc in added_docs)
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
@@ -90,15 +92,15 @@ class TestProcessRepoIncremental:
             pipeline = _make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
             pipeline._explicit_included_dirs = ["src"]
             pipeline.process_repo_incremental(str(tmp_path))
-            pipeline.vector_store.reset_mock()
+            cast(MagicMock, pipeline.vector_store).reset_mock()
 
             result = pipeline.process_repo_incremental(str(tmp_path))
 
             assert result.files_changed == 0
             assert result.files_unchanged == 1
             assert result.chunks_indexed == 0
-            pipeline.vector_store.add_documents.assert_not_called()
-            pipeline.vector_store.delete_by_source.assert_not_called()
+            cast(MagicMock, pipeline.vector_store).add_documents.assert_not_called()
+            cast(MagicMock, pipeline.vector_store).delete_by_source.assert_not_called()
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
@@ -116,13 +118,14 @@ class TestProcessRepoIncremental:
             pipeline = _make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
             pipeline._explicit_included_dirs = ["src"]
             pipeline.process_repo_incremental(str(tmp_path))
-            pipeline.vector_store.reset_mock()
+            cast(MagicMock, pipeline.vector_store).reset_mock()
 
             b_path.unlink()
             result = pipeline.process_repo_incremental(str(tmp_path))
 
             assert result.files_deleted == 1
-            deleted_sources = [call.args[0] for call in pipeline.vector_store.delete_by_source.call_args_list]
+            delete_calls = cast(MagicMock, pipeline.vector_store).delete_by_source.call_args_list
+            deleted_sources = [call.args[0] for call in delete_calls]
             assert str(b_path) in deleted_sources
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")

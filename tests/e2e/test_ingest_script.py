@@ -5,8 +5,9 @@ import os
 import shutil
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import git
 import pytest
@@ -19,7 +20,7 @@ from scripts.ingest import main
 
 
 @pytest.fixture
-def temp_data_dir():
+def temp_data_dir() -> Iterator[Path]:
     """Create a temporary directory for test data."""
     temp_dir = tempfile.mkdtemp()
     old_cwd = os.getcwd()
@@ -44,11 +45,11 @@ def temp_data_dir():
 @patch("codebase_rag.database.qdrant_store.QdrantStore.delete_by_repo")
 @patch("codebase_rag.retrieval.hybrid_search.HybridRetriever.search")
 def test_ingest_pipeline(
-    mock_hybrid_search,
-    mock_delete_by_repo,
-    mock_add_documents,
-    mock_clone_from,
-    temp_data_dir,
+    mock_hybrid_search: MagicMock,
+    mock_delete_by_repo: MagicMock,
+    mock_add_documents: MagicMock,
+    mock_clone_from: MagicMock,
+    temp_data_dir: Path,
 ) -> None:
     """Test the complete IngestPipeline runs its real process/index/bm25 steps."""
     repo_url = "https://github.com/test/test-repo"
@@ -92,7 +93,7 @@ def test_ingest_pipeline(
 @pytest.mark.e2e
 @patch("argparse.ArgumentParser.parse_args")
 @patch("scripts.ingest.IngestPipeline")
-def test_main_script(mock_pipeline_class, mock_parse_args, temp_data_dir) -> None:  # noqa: ARG001
+def test_main_script(mock_pipeline_class: MagicMock, mock_parse_args: MagicMock, temp_data_dir: Path) -> None:  # noqa: ARG001
     """Test the main function of the ingest script."""
     args = mock_parse_args.return_value
     args.dirs = ["docs"]

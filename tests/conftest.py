@@ -1,6 +1,7 @@
 """Shared test fixtures and configuration."""
 
 import logging
+from collections.abc import Iterator
 
 import pytest
 
@@ -8,7 +9,7 @@ from codebase_rag.config import Config
 
 
 @pytest.fixture(autouse=True)
-def reset_config_singleton() -> None:
+def reset_config_singleton() -> Iterator[None]:
     """Reset Config singleton before and after each test."""
     Config._instance = None
     yield
@@ -16,7 +17,7 @@ def reset_config_singleton() -> None:
 
 
 @pytest.fixture(autouse=True)
-def restore_root_logger_state():
+def restore_root_logger_state() -> Iterator[None]:
     """Snapshot and restore root logger state around each test.
 
     Prevents tests from mutating logging config for subsequent tests.
@@ -38,7 +39,7 @@ def restore_root_logger_state():
 
 
 @pytest.fixture(autouse=True)
-def restore_codebase_rag_logger_state():
+def restore_codebase_rag_logger_state() -> Iterator[None]:
     """Snapshot and restore the "codebase_rag" logger's handlers, level, and pipeline's
     module-global `_prior_level` around each test.
 

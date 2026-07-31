@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-TEST_QUESTIONS = [
+TEST_QUESTIONS: list[dict[str, Any]] = [
     {
         "question": "What are the main features of the codebase?",
         "keywords": ["features", "main", "capabilities"],
@@ -65,7 +65,8 @@ def get_test_dataset() -> list[dict[str, Any]]:
     if dataset_path.exists():
         try:
             with open(dataset_path) as f:
-                return json.load(f)
+                loaded: list[dict[str, Any]] = json.load(f)
+                return loaded
         except json.JSONDecodeError:
             # Fall through to return default dataset
             pass

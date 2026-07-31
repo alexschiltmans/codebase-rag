@@ -1,14 +1,24 @@
-"""Evaluation of LLM response quality."""
+"""End-to-end check that the RAG chain answers questions over a real index.
 
-import json
+Needs a live LLM backend and an ingested BM25 cache, so it sits in the e2e tier
+rather than the offline evaluation tier.
+
+This asserts that the chain works, not how good its answers are. Answer quality
+is measured by `evals/run_eval.py` against a curated test set, which is the only
+place the numbers mean anything.
+"""
+
 import re
 from pathlib import Path
 
 import pytest
 
+from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
+from codebase_rag.retrieval.bm25_search import BM25Retriever
+from tests.evaluation.test_dataset import get_test_dataset
 
-from .test_dataset import get_test_dataset
+QUESTION_COUNT = 5
 
 
 def evaluate_response(response: str, expected_keywords: list[str], question: str) -> dict:
@@ -60,52 +70,32 @@ def evaluate_response(response: str, expected_keywords: list[str], question: str
     }
 
 
-@pytest.mark.evaluation
-def test_rag_response_quality() -> None:
-    """Evaluate RAG chain response quality on the test dataset."""
+@pytest.mark.e2e
+def test_rag_response_answers_over_real_index() -> None:
+    """Every question routed through the chain comes back answered and sourced."""
     bm25_path = Path("./data/cache/bm25_retriever.json")
     if not bm25_path.exists():
         pytest.skip(f"BM25 retriever file {bm25_path} not found")
 
     try:
-        # This will connect to actual services - be careful in CI environments
-        rag_chain = RAGChain()
+        retriever = BM25Retriever.load_json(bm25_path)
+        llm = create_llm_client()
+        rag_chain = RAGChain(retriever=retriever, llm=llm)
     except Exception as e:
         pytest.skip(f"Failed to initialize RAG chain: {e}")
 
-    test_questions = get_test_dataset()
+    questions = get_test_dataset()[:QUESTION_COUNT]
+    assert questions, "Test dataset is empty"
 
-    evaluation_results = []
-
-    for question_data in test_questions[:5]:  # Test first 5 questions
+    for question_data in questions:
         question = question_data["question"]
-        expected_keywords = question_data["keywords"]
+        response_data = rag_chain.run(question)
 
-        try:
-            response_data = rag_chain.run(question)
-            response = response_data["answer"]
-            sources = response_data["sources"]
+        answer = response_data["answer"]
+        assert answer.strip(), f"Empty answer for {question!r}"
+        assert response_data["sources"], f"No sources returned for {question!r}"
 
-            eval_metrics = evaluate_response(response, expected_keywords, question)
-
-            result = {
-                "question": question,
-                "response": response,
-                "sources": sources,
-                "metrics": eval_metrics,
-                "expected_keywords": expected_keywords,
-            }
-            evaluation_results.append(result)
-
-            assert eval_metrics["has_citations"], "Response should include citations"
-            assert eval_metrics["on_topic"], "Response should be on-topic"
-            assert eval_metrics["keyword_coverage"] >= 0.3, "Keyword coverage is too low"
-
-        except Exception:  # noqa: S110
-            pass  # Individual question failures should not block other evaluations
-
-    results_dir = Path("evaluation_results")
-    results_dir.mkdir(exist_ok=True)
-
-    with open(results_dir / "response_quality.json", "w") as f:
-        json.dump(evaluation_results, f, indent=2)
+        # Keyword coverage is deliberately not asserted: the shared dataset ships placeholder keywords,
+        # so it would score zero regardless of how the chain performs.
+        metrics = evaluate_response(answer, question_data["keywords"], question)
+        assert metrics["on_topic"], f"Answer is off-topic for {question!r} (overlap {metrics['keyword_overlap']:.2f})"

@@ -9,6 +9,7 @@ function call test.
 """
 
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,7 +23,7 @@ APP_PATH = str(Path(__file__).parent.parent.parent / "src" / "codebase_rag" / "a
 
 
 @pytest.fixture
-def mocked_rag_chain():
+def mocked_rag_chain() -> Iterator[MagicMock]:
     """Patch Qdrant, Ollama, and the RAG chain so `main.py` runs offline.
 
     `get_runtime` is cached with `st.cache_resource`, and `get_repo_list`

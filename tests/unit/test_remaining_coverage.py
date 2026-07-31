@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import git
@@ -21,7 +22,7 @@ from codebase_rag.retrieval.vector_search import VectorRetriever
 class TestRAGChainConversationMemory:
     """Tests for RAGChain conversation memory features."""
 
-    def _make_chain(self, **kwargs) -> RAGChain:
+    def _make_chain(self, **kwargs: Any) -> RAGChain:
         retriever = MagicMock()
         llm = MagicMock()
         return RAGChain(retriever=retriever, llm=llm, **kwargs)
@@ -159,7 +160,7 @@ class TestRAGChainConversationMemory:
         )
         assert docs_dropped > 0
         assert used_docs == docs[: len(docs) - docs_dropped]
-        assert len(prompt) <= chain.prompt_budget_chars
+        assert len(prompt) <= cast(int, chain.prompt_budget_chars)
         assert question_truncated == 0
         assert "question" in prompt
 
@@ -174,7 +175,7 @@ class TestRAGChainConversationMemory:
         assert docs_dropped == 1
         assert used_docs == []
         assert history_dropped > 0
-        assert len(prompt) <= chain.prompt_budget_chars
+        assert len(prompt) <= cast(int, chain.prompt_budget_chars)
 
     def test_build_within_budget_drops_oldest_history_with_uneven_lengths(self) -> None:
         """Regression test: uneven message lengths used to make the drop loop report a fit while still over budget."""
@@ -182,7 +183,7 @@ class TestRAGChainConversationMemory:
         chain.add_user_message("old")
         chain.add_assistant_message("new assistant " + "n" * 500)
         prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget("q", [])
-        assert len(prompt) <= chain.prompt_budget_chars
+        assert len(prompt) <= cast(int, chain.prompt_budget_chars)
         assert history_dropped > 0
 
     def test_build_within_budget_keeps_newest_history_drops_oldest(self) -> None:
@@ -193,7 +194,7 @@ class TestRAGChainConversationMemory:
         chain.add_user_message("newest question")
         chain.add_assistant_message("newest answer")
         prompt, used_docs, docs_dropped, history_dropped, question_truncated = chain._build_within_budget("q", [])
-        assert len(prompt) <= chain.prompt_budget_chars
+        assert len(prompt) <= cast(int, chain.prompt_budget_chars)
         assert 0 < history_dropped < 4
         assert "oldest question" not in prompt
         assert "newest question" in prompt
@@ -215,7 +216,7 @@ class TestRAGChainConversationMemory:
         assert "[truncated]" in prompt
         assert used_docs == []
         assert query not in prompt
-        assert len(prompt) <= chain.prompt_budget_chars
+        assert len(prompt) <= cast(int, chain.prompt_budget_chars)
 
     def test_build_within_budget_truncation_skipped_when_it_would_grow_the_prompt(
         self, caplog: pytest.LogCaptureFixture
@@ -229,7 +230,7 @@ class TestRAGChainConversationMemory:
         assert question_truncated == 0
         assert "hi" in prompt
         assert "[truncated]" not in prompt
-        assert len(prompt) > chain.prompt_budget_chars
+        assert len(prompt) > cast(int, chain.prompt_budget_chars)
         assert any("still exceeds budget" in r.message for r in caplog.records)
 
     def test_build_within_budget_stops_dropping_docs_that_would_grow_the_prompt(self) -> None:
@@ -241,7 +242,7 @@ class TestRAGChainConversationMemory:
         )
         assert docs_dropped == 0
         assert used_docs == [doc]
-        assert len(prompt) <= chain.prompt_budget_chars
+        assert len(prompt) <= cast(int, chain.prompt_budget_chars)
 
     def test_build_within_budget_excludes_current_query_from_history(self) -> None:
         chain = self._make_chain(use_conversation_memory=True, prompt_budget_chars=100_000)
@@ -254,28 +255,30 @@ class TestRAGChainConversationMemory:
         """Retrieval goes through the protocol's `search(query, k)` exactly
         once — no attribute probing, no fallback call path."""
         chain = self._make_chain()
-        chain.retriever.search.return_value = [(Document(page_content="doc", metadata={}), 0.9)]
+        cast(MagicMock, chain.retriever.search).return_value = [(Document(page_content="doc", metadata={}), 0.9)]
 
         result = chain._retrieve_documents("query", 5)
 
         assert len(result) == 1
-        chain.retriever.search.assert_called_once_with("query", 5)
+        cast(MagicMock, chain.retriever.search).assert_called_once_with("query", 5)
 
     def test_retriever_type_error_propagates(self) -> None:
         """Regression test for SE-1: a TypeError raised *inside* a retriever
         must reach the caller instead of being swallowed by argument-dispatch
         logic and silently retried without top_k."""
         chain = self._make_chain()
-        chain.retriever.search.side_effect = TypeError("bug inside the retriever")
+        cast(MagicMock, chain.retriever.search).side_effect = TypeError("bug inside the retriever")
 
         with pytest.raises(TypeError, match="bug inside the retriever"):
             chain.run("test query")
 
-        chain.retriever.search.assert_called_once()
+        cast(MagicMock, chain.retriever.search).assert_called_once()
 
     def test_run_with_generation_error(self) -> None:
         chain = self._make_chain()
-        chain.retriever.search.return_value = [(Document(page_content="doc", metadata={"source": "a.py"}), 0.9)]
+        cast(MagicMock, chain.retriever.search).return_value = [
+            (Document(page_content="doc", metadata={"source": "a.py"}), 0.9)
+        ]
         chain.llm.invoke.side_effect = RuntimeError("LLM error")
 
         with pytest.raises(RuntimeError, match="LLM error"):
@@ -295,7 +298,7 @@ class TestRAGChainConversationMemory:
         retriever returns no documents, must reach the refusal answer and
         cite no sources — not a hallucinated answer from stale context."""
         chain = self._make_chain()
-        chain.retriever.search.return_value = []
+        cast(MagicMock, chain.retriever.search).return_value = []
 
         result = chain.run("what's a good lasagna recipe?")
 

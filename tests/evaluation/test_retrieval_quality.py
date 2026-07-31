@@ -19,7 +19,8 @@ def load_retriever(pickle_path: str) -> HybridRetriever:
         HybridRetriever: The loaded retriever.
     """
     with open(pickle_path, "rb") as f:
-        return pickle.load(f)
+        retriever: HybridRetriever = pickle.load(f)
+        return retriever
 
 
 def calculate_keyword_recall(keywords: list[str], content: str) -> float:
@@ -69,14 +70,14 @@ def calculate_source_precision(expected_sources: list[str], actual_sources: list
         "./data/cache/hybrid_retriever.pkl",
     ],
 )
-def test_retrieval_quality(retriever_path) -> None:
+def test_retrieval_quality(retriever_path: str) -> None:
     """Evaluate retrieval quality on the test dataset."""
-    retriever_path = Path(retriever_path)
-    if not retriever_path.exists():
-        pytest.skip(f"Retriever file {retriever_path} not found")
+    resolved_path = Path(retriever_path)
+    if not resolved_path.exists():
+        pytest.skip(f"Retriever file {resolved_path} not found")
 
     try:
-        retriever = load_retriever(retriever_path)
+        retriever = load_retriever(str(resolved_path))
     except Exception as e:
         pytest.fail(f"Failed to load retriever: {e}")
 

@@ -1,5 +1,6 @@
 """Unit tests for AppRuntime construction and lifecycle, with all backends mocked."""
 
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.app.runtime import AppRuntime, get_repo_list
@@ -18,7 +19,7 @@ def _config(**overrides: object) -> MagicMock:
     return config
 
 
-def _build_runtime(config: MagicMock, *, existing_repos: list[str] | None = None) -> AppRuntime:
+def _build_runtime(config: MagicMock, *, existing_repos: list[str] | None = None) -> tuple[AppRuntime, MagicMock]:
     mock_qdrant = MagicMock()
     mock_qdrant.collection_exists.return_value = existing_repos is not None
     mock_qdrant.list_repos.return_value = existing_repos or []
@@ -37,7 +38,7 @@ def _build_runtime(config: MagicMock, *, existing_repos: list[str] | None = None
         patch("codebase_rag.app.runtime.IngestionManager.start") as mock_start,
     ):
         runtime = AppRuntime(config)
-    return runtime, mock_start  # type: ignore[return-value]
+    return runtime, mock_start
 
 
 class TestAppRuntimeConstruction:
@@ -80,7 +81,7 @@ class TestSwapBm25:
 class TestDeleteRepo:
     def test_deletes_from_qdrant_and_rebuilds_bm25(self) -> None:
         runtime, _ = _build_runtime(_config())
-        runtime.qdrant_store.delete_by_repo = MagicMock(return_value=5)
+        cast(Any, runtime.qdrant_store).delete_by_repo = MagicMock(return_value=5)
         get_repo_list.clear()
 
         with (
@@ -123,7 +124,7 @@ class TestHealthChecks:
         from codebase_rag.app.runtime import _run_health_checks
 
         runtime, _ = _build_runtime(_config())
-        runtime.llm.check_model_availability.return_value = {
+        cast(MagicMock, runtime.llm.check_model_availability).return_value = {
             "status": "not_found",
             "message": "Model not found",
             "suggested_action": "Run 'ollama pull model'",
@@ -152,7 +153,7 @@ class TestHealthChecks:
         from codebase_rag.app.runtime import _run_health_checks
 
         runtime, _ = _build_runtime(_config())
-        runtime.llm.check_connection.side_effect = RuntimeError("LLM unreachable")
+        cast(MagicMock, runtime.llm.check_connection).side_effect = RuntimeError("LLM unreachable")
 
         with patch("codebase_rag.app.runtime._warm_up_vector_store") as mock_warm_up:
             _run_health_checks(runtime)

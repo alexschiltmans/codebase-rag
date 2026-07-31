@@ -66,14 +66,15 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
 from langfuse import Langfuse
 from ragas import evaluate
-from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+from ragas.dataset_schema import EvaluationDataset, MultiTurnSample, SingleTurnSample
 from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.evaluation import EvaluationResult
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics._answer_relevance import AnswerRelevancy
 from ragas.metrics._context_recall import ContextRecall
@@ -276,10 +277,11 @@ def resolve_skip_metrics() -> set[str]:
     return skipped
 
 
-def load_testset() -> list[dict]:
+def load_testset() -> list[dict[Any, Any]]:
     """Load the evaluation test set."""
     with open(TESTSET_PATH) as f:
-        return json.load(f)
+        testset: list[dict[Any, Any]] = json.load(f)
+        return testset
 
 
 def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
@@ -572,7 +574,7 @@ def run_ragas_evaluation(
         model=judge_model_name,
         base_url=config.ollama_base_url,
         temperature=0.0,
-        timeout=judge_timeout_s,
+        client_kwargs={"timeout": judge_timeout_s},
         reasoning=False,
         num_ctx=JUDGE_NUM_CTX,
         num_predict=JUDGE_NUM_PREDICT,
@@ -594,7 +596,7 @@ def run_ragas_evaluation(
         return {"scores": {}, "coverage": {}, "requested_metrics": requested_metrics}
 
     # Build evaluation dataset from results
-    samples = []
+    samples: list[SingleTurnSample | MultiTurnSample] = []
     for r in results:
         if r.get("error"):
             continue
@@ -625,8 +627,8 @@ def run_ragas_evaluation(
             show_progress=True,
             run_config=run_config,
         )
-        # Extract scores and per-metric judge-job coverage from the pandas DataFrame
-        df = eval_result.to_pandas()
+        # `return_executor` was not passed, so this is always an EvaluationResult.
+        df = cast(EvaluationResult, eval_result).to_pandas()
         scores, coverage = compute_ragas_scores_and_coverage(df)
         logger.info("ragas scores: %s", scores)
         logger.info("ragas coverage: %s", coverage)

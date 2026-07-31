@@ -2,6 +2,7 @@
 
 import shutil
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,7 +18,7 @@ from codebase_rag.retrieval.vector_search import VectorRetriever
 
 
 @pytest.fixture
-def test_documents():
+def test_documents() -> list[Document]:
     """Create test documents for retrieval."""
     return [
         Document(
@@ -44,7 +45,7 @@ def test_documents():
 
 
 @pytest.fixture
-def temp_cache_dir():
+def temp_cache_dir() -> Iterator[Path]:
     """Create a temporary directory for cache files."""
     temp_dir = tempfile.mkdtemp()
     yield Path(temp_dir)
@@ -52,7 +53,7 @@ def temp_cache_dir():
 
 
 @pytest.mark.integration
-def test_bm25_retrieval(test_documents, temp_cache_dir) -> None:
+def test_bm25_retrieval(test_documents: list[Document], temp_cache_dir: Path) -> None:
     """Test BM25 retrieval with actual documents."""
     retriever = BM25Retriever(test_documents)
 
@@ -74,7 +75,7 @@ def test_bm25_retrieval(test_documents, temp_cache_dir) -> None:
 
 @pytest.mark.integration
 @patch.object(QdrantStore, "similarity_search_with_score")
-def test_hybrid_retrieval(mock_similarity_search, test_documents) -> None:
+def test_hybrid_retrieval(mock_similarity_search: MagicMock, test_documents: list[Document]) -> None:
     """Test hybrid retrieval with BM25 and mocked vector search."""
     # Set up mock for vector search to return 3 results
     mock_similarity_search.return_value = [
@@ -109,7 +110,7 @@ def test_hybrid_retrieval(mock_similarity_search, test_documents) -> None:
 
 @pytest.mark.integration
 @patch.object(OllamaClient, "invoke")
-def test_rag_chain_integration(mock_llm_invoke, test_documents) -> None:
+def test_rag_chain_integration(mock_llm_invoke: MagicMock, test_documents: list[Document]) -> None:
     """Test the integration of retrieval and LLM in the RAG chain."""
     mock_llm_invoke.return_value = (
         "To install the package, you can use pip as shown in the documentation:\n"

@@ -6,6 +6,8 @@ These tests require running Qdrant (localhost:6333) and optionally Ollama.
 import os
 import shutil
 import tempfile
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 import requests
@@ -20,7 +22,7 @@ from codebase_rag.retrieval.vector_search import VectorRetriever
 
 
 @pytest.fixture
-def qdrant_store():
+def qdrant_store() -> Iterator[QdrantStore]:
     """Create a QdrantStore with a temporary test collection."""
 
     store = QdrantStore(
@@ -35,7 +37,7 @@ def qdrant_store():
 
 
 @pytest.fixture
-def sqlite_db_path():
+def sqlite_db_path() -> Iterator[str]:
     """Create a temporary SQLite database path and clean up after."""
     tmp_dir = tempfile.mkdtemp()
     db_path = os.path.join(tmp_dir, "test_chat.db")
@@ -81,7 +83,7 @@ class TestQdrantStore:
 @pytest.mark.e2e
 class TestSqliteChatStorage:
     def test_save_and_retrieve(self, sqlite_db_path: str) -> None:
-        storage = SqliteChatStorage(db_path=sqlite_db_path)
+        storage = SqliteChatStorage(db_path=Path(sqlite_db_path))
         messages = [
             {"role": "user", "content": "Hello!"},
             {"role": "assistant", "content": "Hi there!"},
@@ -93,7 +95,7 @@ class TestSqliteChatStorage:
         assert len(retrieved) == 2
 
     def test_list_and_delete(self, sqlite_db_path: str) -> None:
-        storage = SqliteChatStorage(db_path=sqlite_db_path)
+        storage = SqliteChatStorage(db_path=Path(sqlite_db_path))
         storage.save_chat("test-chat-1", [{"role": "user", "content": "Hello!"}])
 
         assert len(storage.list_chats()) == 1
@@ -106,7 +108,7 @@ class TestSqliteChatStorage:
 class TestChatHistoryManager:
     def test_round_trip(self, sqlite_db_path: str) -> None:
         manager = ChatHistoryManager()
-        manager.storage = SqliteChatStorage(db_path=sqlite_db_path)
+        manager.storage = SqliteChatStorage(db_path=Path(sqlite_db_path))
 
         messages = [
             {"role": "user", "content": "How does Qdrant work?"},

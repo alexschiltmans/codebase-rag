@@ -1,5 +1,6 @@
 """Unit tests for app/ui_sidebar.py, with Streamlit mocked out."""
 
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.app.state import SessionState
@@ -245,7 +246,7 @@ class TestFolderDialogWaitFragment:
         runtime.folder_picker.is_open.return_value = True
         runtime.folder_picker.poll.return_value = MagicMock(path="/picked/dir", error=None)
 
-        _folder_dialog_wait_fragment.__wrapped__(runtime)
+        cast(Any, _folder_dialog_wait_fragment).__wrapped__(runtime)
 
         assert mock_st.session_state["typed_folder_path"] == "/picked/dir"
         mock_st.rerun.assert_called_once_with(scope="app")
@@ -258,7 +259,7 @@ class TestFolderDialogWaitFragment:
         runtime.folder_picker.is_open.return_value = True
         runtime.folder_picker.poll.return_value = None
 
-        _folder_dialog_wait_fragment.__wrapped__(runtime)
+        cast(Any, _folder_dialog_wait_fragment).__wrapped__(runtime)
 
         mock_st.caption.assert_called_once()
         mock_st.rerun.assert_not_called()
@@ -324,7 +325,7 @@ class TestIngestionProgressFragment:
         job = MagicMock(source="owner/repo", started_at=0, phase="indexing", progress_current=3, progress_total=10)
         runtime.ingestion.current_job.return_value = job
 
-        _ingestion_progress_fragment.__wrapped__(runtime)
+        cast(Any, _ingestion_progress_fragment).__wrapped__(runtime)
 
         mock_st.progress.assert_called_once_with(0.3)
         mock_st.caption.assert_called_once_with("indexing - 3/10")
@@ -345,7 +346,7 @@ class TestIngestionProgressFragment:
         job = MagicMock(source="owner/repo", started_at=0, phase="", progress_current=0, progress_total=0)
         runtime.ingestion.current_job.return_value = job
 
-        _ingestion_progress_fragment.__wrapped__(runtime)
+        cast(Any, _ingestion_progress_fragment).__wrapped__(runtime)
 
         mock_st.progress.assert_not_called()
         mock_st.caption.assert_not_called()
@@ -366,7 +367,7 @@ class TestIngestionProgressFragment:
         job = MagicMock(source="owner/repo", started_at=0, phase="processing", progress_current=1, progress_total=2)
         runtime.ingestion.current_job.return_value = job
 
-        _ingestion_progress_fragment.__wrapped__(runtime)
+        cast(Any, _ingestion_progress_fragment).__wrapped__(runtime)
 
         runtime.ingestion.cancel.assert_called_once()
 

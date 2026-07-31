@@ -193,10 +193,21 @@ format-check: venv ## Check formatting without rewriting files (matches CI)
 
 .PHONY: typecheck
 typecheck: venv ## Run mypy
-	$(PYTHON) -m mypy src/
+	$(PYTHON) -m mypy src/ tests/ evals/ scripts/
 
 .PHONY: check
 check: lint format-check typecheck test-unit ## Fast gate: lint, format, types, unit tests
+
+# Run deliberately, not part of the gate: it queries an advisory database and can't run offline.
+# `-r` + `--disable-pip` avoids pip-audit building its own resolver venv, whose `ensurepip` aborts
+# with SIGABRT under uv-managed interpreters; `--no-emit-project` and `--require-hashes` keep the
+# unhashed `-e .` entry out of the export so every dependency in it carries a hash.
+.PHONY: audit
+audit: venv ## Audit the locked dependency set for known vulnerabilities
+	@tmpfile=$$(mktemp) && \
+	trap 'rm -f "$$tmpfile"' EXIT && \
+	uv export --format requirements-txt --all-extras --no-emit-project -o "$$tmpfile" && \
+	$(VENV)/bin/pip-audit -r "$$tmpfile" --disable-pip --require-hashes
 
 # The gate to run before review, commit, and push. Covers every tier that
 # works without live services, so it is safe to run anywhere and in a hook.

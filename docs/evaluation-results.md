@@ -25,15 +25,17 @@ The "large model" column is a past run with `qwen3-coder:30b`, kept here as a hi
 
 The app's default retriever is BM25-only (see "Default retriever decision" below). To measure the alternatives, the eval runs the full test set through vector-only, BM25-only, and hybrid (RRF) retrieval. The test set is now 30 questions: the original 16 (10 exact-term lookups of function/class/enum names plus 6 multi-file/how-it-works reasoning questions) and 14 conceptual/paraphrased questions added to stop the comparison being biased toward BM25's home turf. Full results: [evals/ablation.md](../evals/ablation.md), [evals/results_vector.md](../evals/results_vector.md), [evals/results_bm25.md](../evals/results_bm25.md), [evals/results_hybrid.md](../evals/results_hybrid.md).
 
-Figures below are from the 2026-07-28 re-run (`evals/ablation.md`), which supersedes the 2026-07-21 baseline.
+Figures below are from the 2026-07-31 re-run (`evals/ablation.md`), which supersedes the 2026-07-28 run and the 2026-07-21 baseline.
 
 | Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Avg Latency |
 |-----------|----------|-----|----------------|------------------|-------------|
-| Vector-only | 0.6207 | 0.5287 | 0.4432 | 0.2800 | 10.5s |
-| BM25-only | 0.6552 | 0.4362 | 0.4802 | 0.2333 | 6.4s |
-| Hybrid | 0.5862 | 0.5029 | 0.4468 | 0.2600 | 6.0s |
+| Vector-only | 0.6207 | 0.5287 | 0.4543 | 0.2800 | 1.0s |
+| BM25-only | 0.6552 | 0.4362 | 0.5217 | 0.2333 | 0.9s |
+| Hybrid | 0.5862 | 0.5029 | 0.4413 | 0.2600 | 0.9s |
 
 Hit Rate and Source Precision reproduced the 2026-07-21 baseline to four decimals on all three arms. MRR did not: it moved on all three (BM25 0.4534 to 0.4362, hybrid 0.5115 to 0.5029, vector 0.5270 to 0.5287). Since Hit Rate and Source Precision are set-based and MRR is rank-based, the retrieved sets were identical and their ordering was not. Neither metric involves a judge, so this is not judge variance. The cause has not been established; tie-break ordering changing when the corpus was rebuilt is the obvious candidate, but it is untested. Latencies are not comparable to the baseline's either: the 2026-07-21 run was served by a native Metal Ollama, this one was not.
+
+The 2026-07-31 re-run reproduced 2026-07-28 exactly on retrieval: Hit Rate, MRR and Source Precision match to four decimals on all three arms, and the per-question retrieved sets are identical across all 90 question/arm pairs. Only Keyword Recall moved (vector 0.4432 to 0.4543, BM25 0.4802 to 0.5217, hybrid 0.4468 to 0.4413), which is generation-side sampling variance, since it scores the answer text rather than the retrieval. Latency is again not comparable: this run was served by a native Metal Ollama on an otherwise idle machine, which is where the drop from roughly 6-10s to roughly 1s comes from, not from any change to retrieval or generation. The category breakdown below is derived from the same retrieval results and is unchanged.
 
 Read this table by Hit Rate and MRR, same as before: both score retrieval directly against each question's expected source files, with no LLM in the loop. Hit Rate is what actually reaches the LLM's context at `top_k=5` (every retrieved document is passed in, not just the top one), so it is the metric that should drive the default-retriever decision; MRR matters more for a caller that only uses the top result.
 
@@ -65,7 +67,9 @@ This replaces the "provisional, pending a broader test set" caveat that used to 
 
 The table below is from the 2026-07-21 run, judged by a fixed `qwen3.5:9b` (reasoning disabled) rather than the self-judging 350M default, so its scores are more trustworthy than earlier self-judged numbers — but read them with their coverage, which the harness now records and gates on, refusing to publish a metric that completed on fewer than 90% of questions.
 
-The 2026-07-28 re-run that produced the retrieval numbers above did **not** set `--judge-model`, so it was self-judged by the 350M model. Its RAGAS scores in `evals/results_*.json` (Answer Relevancy around 0.09, Faithfulness 0.90 to 0.98) are therefore not comparable to this table and are not published here; the gap between them measures the judge, not the answers. Re-run with `RAGAS_JUDGE_MODEL=qwen3.5:9b` to refresh these figures.
+The 2026-07-28 and 2026-07-31 re-runs that produced the retrieval numbers above did **not** set `--judge-model`, so both were self-judged by the 350M model. Their RAGAS scores in `evals/results_*.json` (Answer Relevancy around 0.09 to 0.17, Faithfulness 0.90 to 0.98) are therefore not comparable to this table and are not published here; the gap between them measures the judge, not the answers. Re-run with `RAGAS_JUDGE_MODEL=qwen3.5:9b` to refresh these figures.
+
+Judge coverage did improve between those two runs, from 264 of 270 metric/question calls completing to 269 of 270. The judge client's `timeout` had been passed as a kwarg `ChatOllama` silently discards, so no configured timeout ever reached the HTTP client; moving it to `client_kwargs` fixed that. Four of the nine metric/arm cells that had been short of full coverage now complete on all 30 questions. This is a coverage change, not a quality change, and it does not affect the qwen3.5:9b table above, which was measured before either run.
 
 | Retriever | Faithfulness | Answer Relevancy | Context Recall |
 |-----------|--------------|------------------|----------------|

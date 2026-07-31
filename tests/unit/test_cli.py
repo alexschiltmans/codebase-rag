@@ -540,7 +540,7 @@ class TestCLIIntegration:
 class TestLoadBm25RetrieverCwdIndependence:
     """The BM25 index lives under the project's own data/cache, not wherever the CLI runs."""
 
-    def test_finds_index_regardless_of_cwd(self, tmp_path: Path, monkeypatch) -> None:
+    def test_finds_index_regardless_of_cwd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         data_dir = tmp_path / "data_dir"
         cache_dir = data_dir / "data" / "cache"
         cache_dir.mkdir(parents=True)

@@ -26,13 +26,13 @@ jobs:
         run: uv sync --no-config --extra dev
 
       - name: Lint (ruff)
-        run: uv run ruff check src/ tests/ scripts/
+        run: uv run ruff check src/ tests/ scripts/ evals/
 
       - name: Format check (ruff)
-        run: uv run ruff format --check src/ tests/ scripts/
+        run: uv run ruff format --check src/ tests/ scripts/ evals/
 
       - name: Type check (mypy)
-        run: uv run mypy src/
+        run: uv run mypy src/ tests/ evals/ scripts/
 
       - name: Unit tests
         run: uv run pytest tests/unit/ --cov=src/codebase_rag --cov-report=term --cov-report=xml:coverage.xml

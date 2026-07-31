@@ -91,6 +91,7 @@ class TestChatLifecycle:
         state = _new_state()
         state.append_message("user", "hello")
         first_chat_id = state.current_chat_id
+        assert first_chat_id is not None
         state.start_new_chat()
         state.switch_chat(first_chat_id)
         assert state.current_chat_id == first_chat_id
@@ -109,6 +110,7 @@ class TestChatLifecycle:
         state = _new_state()
         state.append_message("user", "hello")
         first_chat_id = state.current_chat_id
+        assert first_chat_id is not None
         state.start_new_chat()
         state.submit_query("q")
         state.query_failed("boom")

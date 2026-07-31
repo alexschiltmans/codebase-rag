@@ -2,6 +2,7 @@
 
 import shutil
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +15,7 @@ from codebase_rag.database.qdrant_store import QdrantStore
 
 
 @pytest.fixture
-def temp_repo_dir():
+def temp_repo_dir() -> Iterator[Path]:
     """Create a temporary directory for test repository."""
     temp_dir = tempfile.mkdtemp()
     yield Path(temp_dir)
@@ -22,7 +23,7 @@ def temp_repo_dir():
 
 
 @pytest.fixture
-def sample_repo(temp_repo_dir):
+def sample_repo(temp_repo_dir: Path) -> Path:
     """Create a sample repository structure for testing."""
     docs_dir = temp_repo_dir / "docs"
     src_dir = temp_repo_dir / "src" / "mypackage"
@@ -99,7 +100,7 @@ def test_load_network():
 
 
 @pytest.mark.integration
-def test_git_loader_get_file_paths(sample_repo) -> None:
+def test_git_loader_get_file_paths(sample_repo: Path) -> None:
     """Test GitLoader file path retrieval."""
     loader = GitLoader(local_path=sample_repo)
 
@@ -123,7 +124,7 @@ def test_git_loader_get_file_paths(sample_repo) -> None:
 
 
 @pytest.mark.integration
-def test_document_processor_end_to_end(sample_repo) -> None:
+def test_document_processor_end_to_end(sample_repo: Path) -> None:
     """Test DocumentProcessor end-to-end processing."""
     git_loader = GitLoader(local_path=sample_repo)
     processor = DocumentProcessor(git_loader=git_loader)
@@ -147,7 +148,7 @@ def test_document_processor_end_to_end(sample_repo) -> None:
 
 @pytest.mark.integration
 @patch("codebase_rag.database.qdrant_store.QdrantClient")
-def test_qdrant_store_add_documents(mock_qdrant_client, sample_repo) -> None:
+def test_qdrant_store_add_documents(mock_qdrant_client: MagicMock, sample_repo: Path) -> None:
     """Test QdrantStore document addition."""
     mock_client_instance = MagicMock()
     mock_qdrant_client.return_value = mock_client_instance

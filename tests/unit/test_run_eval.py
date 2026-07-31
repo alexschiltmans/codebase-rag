@@ -7,6 +7,7 @@ namespace package), matching the pattern in `tests/e2e/test_ingest_script.py`.
 
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 import pytest
@@ -35,25 +36,25 @@ from evals.run_eval import (
 class TestComputeRagasScoresAndCoverage:
     """5.1: coverage accounting against a synthetic DataFrame with a known NaN pattern."""
 
-    def test_clean_metric_reports_full_coverage(self):
+    def test_clean_metric_reports_full_coverage(self) -> None:
         df = pd.DataFrame({"faithfulness": [1.0, 0.5, 0.75]})
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert scores["faithfulness"] == pytest.approx(0.75)
         assert coverage["faithfulness"] == {"attempted": 3, "completed": 3, "failed": 0}
 
-    def test_partially_failed_metric_publishes_with_nonzero_failed(self):
+    def test_partially_failed_metric_publishes_with_nonzero_failed(self) -> None:
         df = pd.DataFrame({"context_recall": [1.0, float("nan"), 0.5, float("nan")]})
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert scores["context_recall"] == pytest.approx(0.75)
         assert coverage["context_recall"] == {"attempted": 4, "completed": 2, "failed": 2}
 
-    def test_all_nan_metric_publishes_none(self):
+    def test_all_nan_metric_publishes_none(self) -> None:
         df = pd.DataFrame({"answer_relevancy": [float("nan"), float("nan")]})
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert scores["answer_relevancy"] is None
         assert coverage["answer_relevancy"] == {"attempted": 2, "completed": 0, "failed": 2}
 
-    def test_non_metric_columns_are_excluded(self):
+    def test_non_metric_columns_are_excluded(self) -> None:
         df = pd.DataFrame(
             {
                 "user_input": ["q1", "q2"],
@@ -71,22 +72,22 @@ class TestComputeRagasScoresAndCoverage:
 class TestComputeRetrievalHitAndReciprocalRank:
     """1.3: hit rate / MRR math against hand-built expected/actual source lists."""
 
-    def test_match_at_rank_two_scores_half_mrr(self):
+    def test_match_at_rank_two_scores_half_mrr(self) -> None:
         hit, rr = compute_retrieval_hit_and_reciprocal_rank(["enum.py"], ["data-model.md", "enum.py", "node.hpp"])
         assert hit == 1
         assert rr == pytest.approx(0.5)
 
-    def test_match_at_rank_one_scores_full_mrr(self):
+    def test_match_at_rank_one_scores_full_mrr(self) -> None:
         hit, rr = compute_retrieval_hit_and_reciprocal_rank(["enum.py"], ["enum.py", "node.hpp"])
         assert hit == 1
         assert rr == pytest.approx(1.0)
 
-    def test_no_match_scores_zero(self):
+    def test_no_match_scores_zero(self) -> None:
         hit, rr = compute_retrieval_hit_and_reciprocal_rank(["enum.py"], ["data-model.md", "node.hpp"])
         assert hit == 0
         assert rr == 0.0
 
-    def test_match_is_case_insensitive_substring(self):
+    def test_match_is_case_insensitive_substring(self) -> None:
         hit, rr = compute_retrieval_hit_and_reciprocal_rank(["Enum.py"], ["src/ENUM.PY"])
         assert hit == 1
         assert rr == pytest.approx(1.0)
@@ -95,7 +96,13 @@ class TestComputeRetrievalHitAndReciprocalRank:
 class TestComputeCustomMetricsRetrieval:
     """1.3: avg_hit_rate/avg_mrr aggregation, including exclusion rules."""
 
-    def _result(self, sources_expected=None, sources_actual=None, expected_failure=False, error=None):
+    def _result(
+        self,
+        sources_expected: list[str] | None = None,
+        sources_actual: list[str] | None = None,
+        expected_failure: bool = False,
+        error: str | None = None,
+    ) -> dict[str, Any]:
         return {
             "question": "q",
             "answer": "a",
@@ -107,19 +114,19 @@ class TestComputeCustomMetricsRetrieval:
             "error": error,
         }
 
-    def test_rank_two_match_averages_to_half_mrr(self):
+    def test_rank_two_match_averages_to_half_mrr(self) -> None:
         results = [self._result(["enum.py"], ["data-model.md", "enum.py"])]
         metrics = compute_custom_metrics(results)
         assert metrics["avg_hit_rate"] == pytest.approx(1.0)
         assert metrics["avg_mrr"] == pytest.approx(0.5)
 
-    def test_no_match_averages_to_zero(self):
+    def test_no_match_averages_to_zero(self) -> None:
         results = [self._result(["enum.py"], ["node.hpp"])]
         metrics = compute_custom_metrics(results)
         assert metrics["avg_hit_rate"] == pytest.approx(0.0)
         assert metrics["avg_mrr"] == pytest.approx(0.0)
 
-    def test_empty_sources_expected_is_excluded_from_average(self):
+    def test_empty_sources_expected_is_excluded_from_average(self) -> None:
         results = [
             self._result([], ["node.hpp"]),
             self._result(["enum.py"], ["enum.py"]),
@@ -129,7 +136,7 @@ class TestComputeCustomMetricsRetrieval:
         assert metrics["avg_hit_rate"] == pytest.approx(1.0)
         assert metrics["avg_mrr"] == pytest.approx(1.0)
 
-    def test_expected_failure_question_is_excluded_from_average(self):
+    def test_expected_failure_question_is_excluded_from_average(self) -> None:
         results = [
             self._result(["enum.py"], ["node.hpp"], expected_failure=True),
             self._result(["enum.py"], ["enum.py"]),
@@ -138,7 +145,7 @@ class TestComputeCustomMetricsRetrieval:
         assert metrics["avg_hit_rate"] == pytest.approx(1.0)
         assert metrics["avg_mrr"] == pytest.approx(1.0)
 
-    def test_errored_result_is_excluded_from_average(self):
+    def test_errored_result_is_excluded_from_average(self) -> None:
         results = [
             self._result(["enum.py"], [], error="boom"),
             self._result(["enum.py"], ["enum.py"]),
@@ -147,7 +154,7 @@ class TestComputeCustomMetricsRetrieval:
         assert metrics["avg_hit_rate"] == pytest.approx(1.0)
         assert metrics["avg_mrr"] == pytest.approx(1.0)
 
-    def test_no_eligible_questions_defaults_to_zero(self):
+    def test_no_eligible_questions_defaults_to_zero(self) -> None:
         results = [self._result([], [])]
         metrics = compute_custom_metrics(results)
         assert metrics["avg_hit_rate"] == 0
@@ -155,28 +162,28 @@ class TestComputeCustomMetricsRetrieval:
 
 
 class TestCheckCoverageGate:
-    def test_coverage_below_threshold_fails(self):
+    def test_coverage_below_threshold_fails(self) -> None:
         coverage = {"faithfulness": {"attempted": 16, "completed": 6, "failed": 10}}
         assert check_coverage_gate(coverage, min_coverage=0.9) == "faithfulness"
 
-    def test_coverage_at_threshold_passes(self):
+    def test_coverage_at_threshold_passes(self) -> None:
         coverage = {"faithfulness": {"attempted": 10, "completed": 9, "failed": 1}}
         assert check_coverage_gate(coverage, min_coverage=0.9) is None
 
-    def test_skipped_metric_absent_from_coverage_cannot_fail_gate(self):
+    def test_skipped_metric_absent_from_coverage_cannot_fail_gate(self) -> None:
         # A skipped metric never enters `ragas_coverage` in the first place —
         # simulate that by simply not including it here.
         coverage = {"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}}
         assert check_coverage_gate(coverage, min_coverage=0.9) is None
 
-    def test_first_failing_metric_is_reported(self):
+    def test_first_failing_metric_is_reported(self) -> None:
         coverage = {
             "faithfulness": {"attempted": 10, "completed": 10, "failed": 0},
             "answer_relevancy": {"attempted": 10, "completed": 0, "failed": 10},
         }
         assert check_coverage_gate(coverage, min_coverage=0.9) == "answer_relevancy"
 
-    def test_missing_requested_metric_is_reported_deterministically(self):
+    def test_missing_requested_metric_is_reported_deterministically(self) -> None:
         # 9.2: several requested metrics all missing (wholesale failure) — the
         # reported name must be stable, not whichever the set happens to yield.
         requested = {"faithfulness", "answer_relevancy", "context_recall"}
@@ -187,18 +194,20 @@ class TestCheckCoverageGate:
             {}, min_coverage=0.9, requested_metrics={"context_recall", "faithfulness", "answer_relevancy"}
         )
 
-    def test_requested_metric_missing_from_coverage_fails_gate(self):
+    def test_requested_metric_missing_from_coverage_fails_gate(self) -> None:
         # Wholesale judge-phase failure: nothing was measured at all, but
         # something was requested — an empty `coverage` must not read as "pass".
         assert check_coverage_gate({}, min_coverage=0.9, requested_metrics={"faithfulness"}) == "faithfulness"
 
-    def test_empty_coverage_with_no_requested_metrics_passes(self):
+    def test_empty_coverage_with_no_requested_metrics_passes(self) -> None:
         # Nothing was requested (e.g. all metrics explicitly skipped) — an
         # empty `coverage` here really does mean "nothing to check".
         assert check_coverage_gate({}, min_coverage=0.9, requested_metrics=set()) is None
 
 
-def _publish_args(ragas_coverage, ragas_scores, requested_metrics=None):
+def _publish_args(
+    ragas_coverage: dict[str, Any], ragas_scores: dict[str, Any], requested_metrics: set[str] | None = None
+) -> dict[str, Any]:
     return {
         "results": [{"question": "q", "answer": "a", "error": None}],
         "custom_metrics": {
@@ -221,7 +230,7 @@ def _publish_args(ragas_coverage, ragas_scores, requested_metrics=None):
 class TestPublishRetrieverResults:
     """5.2: gate below threshold writes nothing and exits non-zero; at threshold, writes and exits zero."""
 
-    def test_below_threshold_exits_nonzero_and_writes_nothing(self, tmp_path):
+    def test_below_threshold_exits_nonzero_and_writes_nothing(self, tmp_path: Path) -> None:
         results_path = tmp_path / "results_vector.json"
         md_path = tmp_path / "results_vector.md"
         results_path.write_text("preexisting json")
@@ -241,7 +250,7 @@ class TestPublishRetrieverResults:
         assert results_path.stat().st_mtime_ns == json_mtime
         assert md_path.stat().st_mtime_ns == md_mtime
 
-    def test_at_threshold_writes_and_returns(self, tmp_path):
+    def test_at_threshold_writes_and_returns(self, tmp_path: Path) -> None:
         ragas_coverage = {"faithfulness": {"attempted": 10, "completed": 9, "failed": 1}}
         ragas_scores = {"faithfulness": 0.95}
 
@@ -257,7 +266,7 @@ class TestPublishRetrieverResults:
 class TestWholesaleJudgeFailureGate:
     """8.2: the ragas_error/empty-coverage shape (judge phase failed wholesale) exits non-zero and writes nothing."""
 
-    def test_wholesale_failure_exits_nonzero_and_writes_nothing(self, tmp_path):
+    def test_wholesale_failure_exits_nonzero_and_writes_nothing(self, tmp_path: Path) -> None:
         results_path = tmp_path / "results_vector.json"
         md_path = tmp_path / "results_vector.md"
         results_path.write_text("preexisting json")
@@ -282,7 +291,7 @@ class TestWholesaleJudgeFailureGate:
         assert results_path.stat().st_mtime_ns == json_mtime
         assert md_path.stat().st_mtime_ns == md_mtime
 
-    def test_no_metrics_requested_is_not_a_wholesale_failure(self, tmp_path):
+    def test_no_metrics_requested_is_not_a_wholesale_failure(self, tmp_path: Path) -> None:
         # All metrics explicitly skipped: empty coverage here is legitimate
         # ("nothing asked for"), not a failure to measure — should publish.
         args = _publish_args(ragas_coverage={}, ragas_scores={}, requested_metrics=set())
@@ -296,15 +305,15 @@ class TestWholesaleJudgeFailureGate:
 class TestResolveSkipMetrics:
     """5.3: --skip-metric removes a metric from the output and from the gate."""
 
-    def test_no_flag_returns_empty_set(self, monkeypatch):
+    def test_no_flag_returns_empty_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py"])
         assert resolve_skip_metrics() == set()
 
-    def test_single_flag(self, monkeypatch):
+    def test_single_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py", "--skip-metric", "context_recall"])
         assert resolve_skip_metrics() == {"context_recall"}
 
-    def test_repeatable_flag(self, monkeypatch):
+    def test_repeatable_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             sys,
             "argv",
@@ -312,7 +321,7 @@ class TestResolveSkipMetrics:
         )
         assert resolve_skip_metrics() == {"context_recall", "answer_relevancy"}
 
-    def test_skipped_metric_would_be_excluded_from_scores_and_coverage(self):
+    def test_skipped_metric_would_be_excluded_from_scores_and_coverage(self) -> None:
         # A skipped metric is filtered out of `metrics` before `evaluate()` runs
         # (see `run_ragas_evaluation`), so it never appears as a DataFrame column
         # in the first place — simulate that resulting frame directly.
@@ -322,7 +331,7 @@ class TestResolveSkipMetrics:
         assert "context_recall" not in coverage
         assert check_coverage_gate(coverage, min_coverage=0.9) is None
 
-    def test_enabled_but_empty_metric_still_fails_gate(self):
+    def test_enabled_but_empty_metric_still_fails_gate(self) -> None:
         df = pd.DataFrame({"faithfulness": [1.0, 1.0], "context_recall": [float("nan"), float("nan")]})
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert scores["context_recall"] is None
@@ -332,13 +341,13 @@ class TestResolveSkipMetrics:
 class TestRagasMetricNames:
     """9.1: the all-skip guard's name set is derived from the metric list, so it can't drift."""
 
-    def test_names_match_built_metrics(self):
+    def test_names_match_built_metrics(self) -> None:
         assert {m.name for m in build_ragas_metrics(None, None)} == RAGAS_METRIC_NAMES
 
-    def test_names_are_nonempty(self):
+    def test_names_are_nonempty(self) -> None:
         assert RAGAS_METRIC_NAMES
 
-    def test_default_set_is_the_full_producible_set(self):
+    def test_default_set_is_the_full_producible_set(self) -> None:
         # All three are producible because the judge decodes under a schema
         # constraint (see TestSchemaConstrainedJudging), so none is trimmed.
         assert {m.name for m in build_ragas_metrics(None, None)} == {
@@ -351,10 +360,10 @@ class TestRagasMetricNames:
 class TestSchemaConstrainedJudging:
     """The judge constrains decoding to the active RAGAS prompt's JSON schema."""
 
-    def _client(self):
+    def _client(self) -> _SchemaConstrainedChatOllama:
         return _SchemaConstrainedChatOllama(model="qwen3.5:9b", base_url="http://127.0.0.1:11434")
 
-    def test_active_schema_is_injected_as_format(self):
+    def test_active_schema_is_injected_as_format(self) -> None:
         from langchain_core.messages import HumanMessage
 
         schema = {"type": "object", "properties": {"verdict": {"type": "integer"}}}
@@ -365,14 +374,14 @@ class TestSchemaConstrainedJudging:
             _JUDGE_RESPONSE_SCHEMA.reset(token)
         assert params["format"] == schema
 
-    def test_no_active_schema_leaves_format_unconstrained(self):
+    def test_no_active_schema_leaves_format_unconstrained(self) -> None:
         from langchain_core.messages import HumanMessage
 
         # Default context var is None, so nothing is forced onto `format`.
         params = self._client()._chat_params([HumanMessage(content="hi")])
         assert params["format"] is None
 
-    def test_install_wrapper_sets_active_schema_during_the_call(self):
+    def test_install_wrapper_sets_active_schema_during_the_call(self) -> None:
         import asyncio
 
         from ragas.prompt.pydantic_prompt import PydanticPrompt
@@ -382,27 +391,27 @@ class TestSchemaConstrainedJudging:
 
         # Record what the context var holds when the wrapped inner method runs,
         # standing in for the LLM call that reads it via _chat_params.
-        seen = {}
+        seen: dict[str, Any] = {}
         original = PydanticPrompt.generate_multiple
 
-        async def recorder(self, *args, **kwargs):
+        async def recorder(self: Any, *args: Any, **kwargs: Any) -> None:
             seen["schema"] = _JUDGE_RESPONSE_SCHEMA.get()
 
-        PydanticPrompt.generate_multiple = recorder
-        PydanticPrompt._schema_constrained = False
+        cast(Any, PydanticPrompt).generate_multiple = recorder
+        cast(Any, PydanticPrompt)._schema_constrained = False
         try:
             _install_schema_constrained_judging()
             prompt = PydanticPrompt.__new__(PydanticPrompt)
             prompt.output_model = _Model
-            asyncio.run(prompt.generate_multiple(llm=None, data=None))
+            asyncio.run(cast(Any, prompt).generate_multiple(llm=None, data=None))
         finally:
-            PydanticPrompt.generate_multiple = original
-            PydanticPrompt._schema_constrained = False
+            cast(Any, PydanticPrompt).generate_multiple = original
+            cast(Any, PydanticPrompt)._schema_constrained = False
 
         assert seen["schema"] == _Model.model_json_schema()
         assert _JUDGE_RESPONSE_SCHEMA.get() is None  # reset after the call
 
-    def test_install_is_idempotent(self):
+    def test_install_is_idempotent(self) -> None:
         from ragas.prompt.pydantic_prompt import PydanticPrompt
 
         original = PydanticPrompt.generate_multiple
@@ -413,46 +422,46 @@ class TestSchemaConstrainedJudging:
             _install_schema_constrained_judging()
             assert PydanticPrompt.generate_multiple is wrapped_once
         finally:
-            PydanticPrompt.generate_multiple = original
-            PydanticPrompt._schema_constrained = was_installed
+            cast(Any, PydanticPrompt).generate_multiple = original
+            cast(Any, PydanticPrompt)._schema_constrained = was_installed
 
 
 class TestResolveConfigValueFlagForms:
     """9.4: `--flag=value` is honored, not silently ignored in favor of the default."""
 
-    def test_equals_form_is_parsed(self, monkeypatch):
+    def test_equals_form_is_parsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py", "--max-workers=4"])
         assert resolve_max_workers() == 4
 
-    def test_space_form_still_works(self, monkeypatch):
+    def test_space_form_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py", "--max-workers", "3"])
         assert resolve_max_workers() == 3
 
-    def test_equals_form_for_float(self, monkeypatch):
+    def test_equals_form_for_float(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py", "--min-coverage=0.5"])
         assert resolve_min_coverage() == pytest.approx(0.5)
 
-    def test_default_when_absent(self, monkeypatch):
+    def test_default_when_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py"])
         monkeypatch.delenv("RAGAS_MAX_WORKERS", raising=False)
         assert resolve_max_workers() == 1
 
 
 class TestResolveJudgeTimeout:
-    def test_default_is_1200(self, monkeypatch):
+    def test_default_is_1200(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py"])
         monkeypatch.delenv("RAGAS_JUDGE_TIMEOUT", raising=False)
         assert resolve_judge_timeout_s() == 1200
 
-    def test_flag_overrides_default(self, monkeypatch):
+    def test_flag_overrides_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py", "--judge-timeout", "1800"])
         assert resolve_judge_timeout_s() == 1800
 
-    def test_equals_form(self, monkeypatch):
+    def test_equals_form(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py", "--judge-timeout=900"])
         assert resolve_judge_timeout_s() == 900
 
-    def test_env_var_overrides_default(self, monkeypatch):
+    def test_env_var_overrides_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["run_eval.py"])
         monkeypatch.setenv("RAGAS_JUDGE_TIMEOUT", "600")
         assert resolve_judge_timeout_s() == 600

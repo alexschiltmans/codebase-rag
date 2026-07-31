@@ -8,6 +8,7 @@ import tempfile
 import threading
 from io import StringIO
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -77,7 +78,7 @@ class TestCountIngestibleFiles:
 class TestSetupLogging:
     """Tests for setup_logging."""
 
-    def test_valid_log_level(self, tmp_path: Path, monkeypatch) -> None:
+    def test_valid_log_level(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         logger, log_file = setup_logging("DEBUG")
         assert logger.name == "codebase_rag"
@@ -88,7 +89,7 @@ class TestSetupLogging:
         with pytest.raises(ValueError, match="Invalid log level"):
             setup_logging("BANANA")
 
-    def test_file_created_with_root_handlers(self, tmp_path: Path, monkeypatch) -> None:
+    def test_file_created_with_root_handlers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         root_logger = logging.getLogger()
         root_logger.addHandler(logging.StreamHandler())
@@ -98,7 +99,7 @@ class TestSetupLogging:
         assert log_file.exists()
         assert (tmp_path / "logs").exists()
 
-    def test_calling_twice_leaves_one_handler(self, tmp_path: Path, monkeypatch) -> None:
+    def test_calling_twice_leaves_one_handler(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import logging as log_module
         import time as time_module
 
@@ -123,7 +124,7 @@ class TestSetupLogging:
         assert "Second run message" in content2
         assert "First run message" not in content2
 
-    def test_console_handler_explicit_true(self, tmp_path: Path, monkeypatch) -> None:
+    def test_console_handler_explicit_true(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         logger = logging.getLogger("codebase_rag")
         logger.handlers.clear()
@@ -138,7 +139,7 @@ class TestSetupLogging:
         assert len(console_handlers) == 1
         assert console_handlers[0].name == "codebase_rag.ingest_console"
 
-    def test_no_console_handler_explicit_false(self, tmp_path: Path, monkeypatch) -> None:
+    def test_no_console_handler_explicit_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         logger = logging.getLogger("codebase_rag")
         logger.handlers.clear()
@@ -152,7 +153,7 @@ class TestSetupLogging:
         ]
         assert len(console_handlers) == 0
 
-    def test_default_no_console_when_root_has_handlers(self, tmp_path: Path, monkeypatch) -> None:
+    def test_default_no_console_when_root_has_handlers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """The `add_console=None` default probes the root logger: app case (handlers present)."""
         monkeypatch.chdir(tmp_path)
         logger = logging.getLogger("codebase_rag")
@@ -169,7 +170,9 @@ class TestSetupLogging:
         ]
         assert len(console_handlers) == 0
 
-    def test_default_adds_console_when_root_has_no_handlers(self, tmp_path: Path, monkeypatch) -> None:
+    def test_default_adds_console_when_root_has_no_handlers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """The `add_console=None` default probes the root logger: CLI case (root cleared)."""
         monkeypatch.chdir(tmp_path)
         logger = logging.getLogger("codebase_rag")
@@ -190,7 +193,9 @@ class TestSetupLogging:
         finally:
             root_logger.handlers[:] = saved_handlers
 
-    def test_teardown_detaches_handlers_and_stops_capturing_other_loggers(self, tmp_path: Path, monkeypatch) -> None:
+    def test_teardown_detaches_handlers_and_stops_capturing_other_loggers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """After teardown, records from unrelated package loggers no longer land in the run's file."""
         monkeypatch.chdir(tmp_path)
         codebase_rag_logger = logging.getLogger("codebase_rag")
@@ -208,7 +213,7 @@ class TestSetupLogging:
         assert "unrelated app log after ingest" not in content
         assert not any(h.name in ("codebase_rag.ingest_file", "codebase_rag.ingest_console") for h in logger.handlers)
 
-    def test_teardown_restores_prior_logger_level(self, tmp_path: Path, monkeypatch) -> None:
+    def test_teardown_restores_prior_logger_level(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """setup_logging must not leave its DEBUG level bleeding into all app logging after the run ends."""
         monkeypatch.chdir(tmp_path)
         codebase_rag_logger = logging.getLogger("codebase_rag")
@@ -392,7 +397,7 @@ class TestIngestPipeline:
         with pytest.raises(IngestCancelled):
             pipeline.index_documents(docs)
 
-        pipeline.vector_store.add_documents.assert_not_called()
+        cast(MagicMock, pipeline.vector_store.add_documents).assert_not_called()
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
@@ -419,7 +424,7 @@ class TestIngestPipeline:
         with pytest.raises(IngestCancelled):
             pipeline.index_documents(docs)
 
-        pipeline.vector_store.delete_by_repo.assert_not_called()
+        cast(MagicMock, pipeline.vector_store.delete_by_repo).assert_not_called()
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
@@ -449,7 +454,7 @@ class TestIngestPipeline:
         with pytest.raises(IngestCancelled):
             pipeline.index_documents(docs)
 
-        assert pipeline.vector_store.add_documents.call_count == 1
+        assert cast(MagicMock, pipeline.vector_store.add_documents).call_count == 1
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
@@ -603,7 +608,7 @@ class TestIngestPipeline:
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.Config")
     def test_run_detaches_ingest_handlers_on_success(
-        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """run() must tear down the ingest handlers itself; a real (unmocked) logger proves it."""
         monkeypatch.chdir(tmp_path)
@@ -634,7 +639,7 @@ class TestIngestPipeline:
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.Config")
     def test_run_detaches_ingest_handlers_on_failure(
-        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The teardown must run even when the pipeline raises, not just on the success path."""
         monkeypatch.chdir(tmp_path)
@@ -662,7 +667,7 @@ class TestIngestPipeline:
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.Config")
     def test_init_detaches_ingest_handlers_when_construction_fails(
-        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch
+        self, mock_config_cls: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A constructor failure after setup_logging (e.g. QdrantStore unreachable) must not
         leave the handler attached, since run()'s finally block is never reached in that case.

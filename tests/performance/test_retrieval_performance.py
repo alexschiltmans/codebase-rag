@@ -13,8 +13,8 @@ from codebase_rag.retrieval.hybrid_search import HybridRetriever
 
 def generate_random_text(length: int = 500, rng: random.Random | None = None) -> str:
     """Generate random text of specified length."""
-    rng = rng or random
-    return "".join(rng.choice(string.ascii_letters + " " * 10) for _ in range(length))
+    generator = rng if rng is not None else random.Random(20260720)
+    return "".join(generator.choice(string.ascii_letters + " " * 10) for _ in range(length))
 
 
 def generate_test_documents(
@@ -71,7 +71,7 @@ def generate_test_documents(
 
 @pytest.mark.performance
 @pytest.mark.parametrize("num_docs", [100, 500, 1000])
-def test_bm25_initialization_performance(num_docs) -> None:
+def test_bm25_initialization_performance(num_docs: int) -> None:
     """Test the performance of BM25Retriever initialization with different document counts."""
     documents = generate_test_documents(num_docs)
 
@@ -86,7 +86,7 @@ def test_bm25_initialization_performance(num_docs) -> None:
 
 @pytest.mark.performance
 @pytest.mark.parametrize("num_docs", [100, 500, 1000])
-def test_bm25_search_performance(num_docs) -> None:
+def test_bm25_search_performance(num_docs: int) -> None:
     """Test the performance of BM25 search with different document counts."""
     documents = generate_test_documents(num_docs, codebase_keywords=True)
     retriever = BM25Retriever(documents)
@@ -119,10 +119,10 @@ def test_hybrid_search_scaling() -> None:
 
         # Create a mock vector retriever that returns fixed results
         class MockVectorRetriever:
-            def __init__(self, docs):
+            def __init__(self, docs: list[Document]) -> None:
                 self._docs = docs
 
-            def search(self, query, k):
+            def search(self, query: str, k: int | None = None) -> list[tuple[Document, float]]:
                 return [(random.choice(self._docs), random.uniform(0.7, 0.9)) for _ in range(min(5, len(self._docs)))]
 
         vector_retriever = MockVectorRetriever(documents)

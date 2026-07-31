@@ -2,6 +2,7 @@
 
 import threading
 import time
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.app.runtime import IngestionManager
@@ -105,10 +106,10 @@ class TestCancel:
         cancel_event passed to its constructor is set, mimicking the real
         pipeline's cooperative-cancellation boundary check."""
 
-        def _init(self: MagicMock, **kwargs: object) -> None:
+        def _init(self: Any, **kwargs: object) -> None:
             self._cancel_event = kwargs.get("cancel_event")
 
-        def _run(self: MagicMock) -> None:
+        def _run(self: Any) -> None:
             event = self._cancel_event
             assert isinstance(event, threading.Event)
             event.wait(timeout=5)
