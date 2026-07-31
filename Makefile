@@ -14,7 +14,15 @@ COMPOSE_FILE := docker/compose-dev.yml
 # `docker compose -f $(COMPOSE_FILE)` run by hand outside these targets, and
 # for docs/getting-started.md's manual command.
 ENV_FILE_FLAG := $(if $(wildcard .env),--env-file .env,)
-COMPOSE      := docker compose -f $(COMPOSE_FILE) $(ENV_FILE_FLAG)
+# PROFILE selects which compose profile to bring up (e.g. PROFILE=full for the
+# fully containerized stack, PROFILE=ollama for infrastructure + the LLM
+# container). Empty by default: infrastructure only.
+PROFILE_FLAG := $(if $(PROFILE),--profile $(PROFILE),)
+COMPOSE      := docker compose -f $(COMPOSE_FILE) $(ENV_FILE_FLAG) $(PROFILE_FLAG)
+# Teardown targets must reach profiled containers regardless of which PROFILE (if
+# any) started them, so they name every profile explicitly instead of inheriting
+# PROFILE_FLAG through COMPOSE.
+COMPOSE_ALL_PROFILES := docker compose -f $(COMPOSE_FILE) $(ENV_FILE_FLAG) --profile ollama --profile full
 VENV         := .venv
 PYTHON       := $(VENV)/bin/python
 PYTEST       := $(PYTHON) -m pytest
@@ -54,24 +62,43 @@ venv: $(VENV)/bin/activate ## Create venv and install all deps
 
 # ── Docker services ──────────────────────────────────────────────────────────
 .PHONY: services-start
-services-start: ## Start Docker services (Qdrant, Langfuse, Ollama)
+services-start: ## Start Docker services (Qdrant, Langfuse). PROFILE=ollama adds the LLM container; PROFILE=full adds the app and api containers too.
 	@printf "$(BLUE)Starting services…$(NC)\n"
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 		$(COMPOSE) up -d
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-		if [ "$${LLM_PROVIDER:-ollama}" = "ollama" ]; then \
-			printf "$(BLUE)Pulling LLM model (this may take a while on first run)…$(NC)\n"; \
-			MODEL=$${LLM_MODEL_NAME:-sam860/LFM2:350m}; \
-			printf "$(BLUE)Model: $$MODEL$(NC)\n"; \
-			docker exec codebase-rag-ollama ollama pull "$$MODEL"; \
-		else \
-			printf "$(BLUE)LLM_PROVIDER=$${LLM_PROVIDER}: skipping Ollama model pull.$(NC)\n"; \
+		if [ "$(PROFILE)" = "ollama" ] || [ "$(PROFILE)" = "full" ]; then \
+			if [ "$${LLM_PROVIDER:-ollama}" = "ollama" ]; then \
+				printf "$(BLUE)Waiting for Ollama container to be healthy…$(NC)\n"; \
+				attempt=0; \
+				until [ "$$(docker inspect -f '{{.State.Health.Status}}' codebase-rag-ollama 2>/dev/null)" = "healthy" ]; do \
+					attempt=$$((attempt + 1)); \
+					if [ $$attempt -ge 30 ]; then \
+						printf "$(RED)Timed out waiting for codebase-rag-ollama to become healthy.$(NC)\n"; \
+						exit 1; \
+					fi; \
+					sleep 2; \
+				done; \
+				printf "$(BLUE)Pulling LLM model (this may take a while on first run)…$(NC)\n"; \
+				MODEL=$${LLM_MODEL_NAME:-sam860/LFM2:350m}; \
+				printf "$(BLUE)Model: $$MODEL$(NC)\n"; \
+				docker exec codebase-rag-ollama ollama pull "$$MODEL"; \
+			else \
+				printf "$(BLUE)LLM_PROVIDER=$${LLM_PROVIDER}: skipping Ollama model pull.$(NC)\n"; \
+			fi; \
 		fi
-	@printf "$(GREEN)Services started.$(NC)\n"
+	@if [ "$(PROFILE)" = "full" ]; then \
+		printf "$(GREEN)Services started: Qdrant, Langfuse, Ollama, app, api.$(NC)\n"; \
+	elif [ "$(PROFILE)" = "ollama" ]; then \
+		printf "$(GREEN)Services started: Qdrant, Langfuse, Ollama.$(NC)\n"; \
+	else \
+		printf "$(GREEN)Services started: Qdrant, Langfuse.$(NC)\n"; \
+		printf "$(BLUE)Run 'make app' to start the Streamlit app on the host, or 'make services-start PROFILE=full' for the fully containerized stack.$(NC)\n"; \
+	fi
 
 .PHONY: services-stop
 services-stop: ## Stop Docker services
-	$(COMPOSE) down
+	$(COMPOSE_ALL_PROFILES) down
 
 .PHONY: services-restart
 services-restart: services-stop services-start ## Restart Docker services
@@ -89,7 +116,7 @@ services-clean: ## Remove all containers and volumes (destructive)
 	@printf "$(YELLOW)This will remove all containers and volumes. Data will be lost.$(NC)\n"
 	@read -p "Are you sure? (y/n) " -n 1 -r && echo && \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			$(COMPOSE) down -v; \
+			$(COMPOSE_ALL_PROFILES) down -v; \
 			printf "$(GREEN)Environment cleaned.$(NC)\n"; \
 		fi
 

@@ -6,6 +6,8 @@ This script creates a simple RAG chain and tests its conversation memory capabil
 import logging
 from typing import Any
 
+import pytest
+
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.llm.ollama_client import OllamaClient
@@ -16,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.integration
 def test_conversation_memory() -> None:
     """Test the conversation memory functionality of the RAG chain."""
     try:
@@ -30,6 +33,8 @@ def test_conversation_memory() -> None:
         vector_retriever = VectorRetriever(qdrant_store)
 
         llm = OllamaClient(model_name=config.llm_model_name, base_url=config.ollama_base_url, temperature=0.7)
+        if llm.check_connection().get("status") != "connected":
+            pytest.skip("Ollama not reachable")
 
         rag_chain = RAGChain(
             retriever=vector_retriever, llm=llm, use_conversation_memory=True, max_conversation_history=5

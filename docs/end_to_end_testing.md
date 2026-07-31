@@ -6,7 +6,7 @@ How to set up and run end-to-end tests, covering both automated tests and manual
 
 - Docker and Docker Compose
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
-- Ollama installed and running
+- [Ollama](https://ollama.com) installed natively and running. For a containerized one, `make services-start PROFILE=ollama` also needs `OLLAMA_BASE_URL=http://127.0.0.1:11435` in your `.env`: the container publishes on 11435, and tests pointed at the default 11434 find nothing there and skip.
 - Chrome or Chromium browser (for UI testing)
 
 ## Environment Setup
@@ -99,9 +99,9 @@ If the application can't connect to Qdrant:
 
 If Ollama isn't responding:
 
-1. Verify Ollama is running: `curl http://localhost:11434/api/version`
-2. Check if the model is downloaded: `ollama list`
-3. Pull the model if needed: `ollama pull sam860/LFM2:350m`
+1. Verify Ollama is running: `curl "$OLLAMA_BASE_URL/api/version"`. This is `http://127.0.0.1:11434` for a native install, or `http://127.0.0.1:11435` for the containerized one (`make services-start PROFILE=ollama`/`PROFILE=full`).
+2. Check if the model is downloaded: `ollama list` (containerized: `docker exec codebase-rag-ollama ollama list`)
+3. Pull the model if needed: `ollama pull sam860/LFM2:350m` (containerized: `docker exec codebase-rag-ollama ollama pull sam860/LFM2:350m`)
 
 #### Streamlit App Crashes
 

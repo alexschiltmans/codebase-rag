@@ -12,6 +12,7 @@ import requests
 from langchain_core.documents import Document
 from qdrant_client import QdrantClient
 
+from codebase_rag.config import Config
 from codebase_rag.database.chat_storage import ChatHistoryManager
 from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.database.sqlite_storage import SqliteChatStorage
@@ -163,10 +164,11 @@ class TestVectorRetriever:
 class TestOllamaConnection:
     def test_ollama_reachable(self) -> None:
 
+        base_url = Config.get_instance().ollama_base_url
         try:
-            resp = requests.get("http://localhost:11434/api/tags", timeout=5)
+            resp = requests.get(f"{base_url}/api/tags", timeout=5)
             assert resp.status_code == 200
-        except requests.ConnectionError:
+        except (requests.ConnectionError, requests.Timeout, requests.RequestException):
             pytest.skip("Ollama not reachable")
 
 

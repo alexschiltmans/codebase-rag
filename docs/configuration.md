@@ -24,7 +24,7 @@ All settings are configured via environment variables or a `.env` file in the pr
 
 | Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API URL. The default targets a natively installed Ollama. The containerized Ollama (`make services-start PROFILE=ollama` or `PROFILE=full`) publishes on host port `11435` instead, to avoid shadowing a native install; point this at `http://127.0.0.1:11435` to use it from the host, or use `host.docker.internal` per the note below when connecting from inside another container. |
 
 ## OpenAI-compatible backend
 

@@ -61,7 +61,7 @@ class Config:
 
     # LLM settings
     provider: str = "ollama"
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = "http://127.0.0.1:11434"
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model_name: str = "sam860/LFM2:350m"

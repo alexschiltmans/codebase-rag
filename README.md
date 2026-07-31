@@ -24,7 +24,7 @@
 - **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 30 questions. See [Evaluation Results](docs/evaluation-results.md) for the retriever ablation and the model-size comparison.
 - **Observable.** Optional Langfuse integration traces every retrieval and generation step, so you can debug quality issues instead of guessing.
 - **Documented decisions.** Architecture Decision Records explain *why* each technology was chosen, not just *what* was used. See the [ADR index](docs/adr-index.md).
-- **Batteries included.** `make services-start` gives you the app, vector DB, LLM server, and tracing dashboard. No manual setup.
+- **Batteries included.** `make services-start` gives you the vector DB and tracing dashboard; `make app` starts the Streamlit app on the host. `make services-start PROFILE=full` containerizes everything, including the LLM server, in one command.
 
 ## Features
 
@@ -97,7 +97,7 @@ codebase-rag/
 
 ## Getting Started
 
-Quick start: `make services-start` → open http://localhost:8501.
+Quick start: install [Ollama](https://ollama.com) natively and `ollama pull sam860/LFM2:350m`, run `make services-start` to bring up Qdrant and Langfuse, then `make app` → open http://localhost:8501. For a fully containerized stack (including the LLM server) in one command, use `make services-start PROFILE=full`.
 
 The default model is small enough to run on any machine, and answers accordingly; set `LLM_MODEL_NAME` (env or compose) to a larger Ollama model for better answers. See [Evaluation Results](docs/evaluation-results.md) for the numbers behind that tradeoff.
 
@@ -114,7 +114,7 @@ By default, the app uses Ollama for inference. To use a different backend, set `
 **Ollama** (default)
 ```bash
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://127.0.0.1:11434
 ```
 
 **LM Studio**

@@ -1,37 +1,23 @@
 # Getting Started
 
-## Option A: Docker (recommended)
+## Option A: Local development (recommended)
 
-Qdrant, Ollama, Langfuse, and the Streamlit app all start in one command.
+Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), [Ollama](https://ollama.com) installed natively.
+
+```bash
+# Install Ollama (macOS/Linux) and pull the default model
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull sam860/LFM2:350m
+```
 
 ```bash
 git clone <your-repo-url>
 cd codebase-rag
-make services-start
-```
 
-`make services-start` starts all Docker services and pulls the configured LLM model into Ollama automatically. Open http://localhost:8501 once the app container is healthy.
-
-> **Manual alternative:** `docker compose -f docker/compose-dev.yml --env-file .env up -d` starts the containers but does not pull the model, so you'll need to run `ollama pull sam860/LFM2:350m` separately. `--env-file .env` matters here because, unlike `make services-start`, this command doesn't source `.env` into the shell first: without it, compose looks for `.env` next to the compose file (`docker/.env`, which doesn't exist) instead of the repo root, and every configured variable falls back to its default.
-
-**Useful services:**
-
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Streamlit app | http://localhost:8501 | Chat interface |
-| Qdrant dashboard | http://localhost:6333/dashboard | Vector DB inspection |
-| Langfuse | http://localhost:3000 | LLM tracing (if enabled) |
-| Ollama | http://localhost:11434 | LLM API |
-
-## Option B: Local development
-
-Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), a running Qdrant instance, a running Ollama instance.
-
-```bash
 # Create venv, install all deps, and copy .env.example → .env
 make setup
 
-# Start Qdrant and Ollama via Docker (skip if already running)
+# Start Qdrant and Langfuse via Docker
 make services-start
 
 # Ingest a repository
@@ -41,7 +27,9 @@ make ingest REPO=https://github.com/<owner>/<repo>
 make app
 ```
 
-Or manually:
+Open http://localhost:8501 once the app starts.
+
+Or manually, without the Makefile:
 
 ```bash
 # Install uv if needed
@@ -55,6 +43,40 @@ ollama pull sam860/LFM2:350m
 python scripts/ingest.py --repo https://github.com/<owner>/<repo>
 streamlit run src/codebase_rag/app/main.py
 ```
+
+**Useful services:**
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Streamlit app | http://localhost:8501 | Chat interface |
+| Qdrant dashboard | http://localhost:6333/dashboard | Vector DB inspection |
+| Langfuse | http://localhost:3000 | LLM tracing (if enabled) |
+| Ollama (native) | http://127.0.0.1:11434 | LLM API |
+
+## Option B: Fully containerized
+
+Qdrant, Ollama, Langfuse, and the Streamlit app all start in one command. No native Ollama install needed.
+
+```bash
+git clone <your-repo-url>
+cd codebase-rag
+make services-start PROFILE=full
+```
+
+`make services-start PROFILE=full` starts every Docker service and pulls the configured LLM model into the Ollama container automatically. Open http://localhost:8501 once the app container is healthy.
+
+If you only want the containerized LLM without the app or api containers, use `make services-start PROFILE=ollama`.
+
+> **Manual alternative:** `docker compose -f docker/compose-dev.yml --env-file .env --profile full up -d` starts the containers but does not pull the model, so you'll need to run `docker exec codebase-rag-ollama ollama pull sam860/LFM2:350m` separately. `--env-file .env` matters here because, unlike `make services-start`, this command doesn't source `.env` into the shell first: without it, compose looks for `.env` next to the compose file (`docker/.env`, which doesn't exist) instead of the repo root, and every configured variable falls back to its default.
+
+**Useful services:**
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Streamlit app | http://localhost:8501 | Chat interface |
+| Qdrant dashboard | http://localhost:6333/dashboard | Vector DB inspection |
+| Langfuse | http://localhost:3000 | LLM tracing (if enabled) |
+| Ollama (container) | http://127.0.0.1:11435 | LLM API |
 
 ## Ingesting repositories
 

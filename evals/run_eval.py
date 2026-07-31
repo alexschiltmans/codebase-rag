@@ -24,18 +24,18 @@ Usage:
     uv run python evals/run_eval.py --judge-timeout 1800
 
 Model backend: the judge client is always `_SchemaConstrainedChatOllama` against
-`config.ollama_base_url` (default `http://localhost:11434`) — ragas's schema
+`config.ollama_base_url` (default `http://127.0.0.1:11434`) — ragas's schema
 constraint is Ollama-specific, so the judge needs a running Ollama regardless
 of `LLM_PROVIDER`. The generation client honors `LLM_PROVIDER`: with
 `LLM_PROVIDER=openai-compat`, generation goes through `create_llm_client` to
 the configured OpenAI-compatible server instead of Ollama, so an eval run in
 that mode needs both backends up. The generation client's resolved endpoint is
-logged separately from the judge's (see `build_rag_chain`). On a machine that
-runs both a native (Metal, GPU) Ollama and a Docker (CPU-only) Ollama on port
-11434, a bare `localhost` can resolve to the Docker one and judge on CPU —
-turning one judge job into minutes. Set `OLLAMA_BASE_URL=http://127.0.0.1:11434`
-to force the native Metal endpoint; confirm from the logged base URL that the
-judge used it.
+logged separately from the judge's (see `build_rag_chain`). This project's own
+Ollama container publishes on 11435, so it cannot shadow a native server, but
+any other container binding 11434 can: alongside a native (Metal, GPU) Ollama a
+bare `localhost` resolves to the CPU-only one and judges on CPU, turning one
+judge job into minutes. Keep `OLLAMA_BASE_URL=http://127.0.0.1:11434` for the
+native Metal endpoint; confirm from the logged base URL that the judge used it.
 
 Operational precondition: this harness must not share its Ollama instance with
 the running app or another eval — both compete for the same single-threaded

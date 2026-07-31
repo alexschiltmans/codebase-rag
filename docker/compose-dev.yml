@@ -54,10 +54,11 @@ services:
   ollama:
     container_name: codebase-rag-ollama
     image: ollama/ollama:latest
+    profiles: ["ollama", "full"]
     volumes:
       - codebase_rag_ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "11435:11434"
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -69,6 +70,7 @@ services:
 
   app:
     container_name: codebase-rag-app
+    profiles: ["full"]
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -106,6 +108,7 @@ services:
 
   api:
     container_name: codebase-rag-api
+    profiles: ["full"]
     build:
       context: ..
       dockerfile: docker/Dockerfile
