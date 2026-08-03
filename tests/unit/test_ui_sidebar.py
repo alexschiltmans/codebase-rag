@@ -500,6 +500,122 @@ class TestDisplaySidebar:
     @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
     @patch("codebase_rag.app.ui_sidebar._display_repo_management")
     @patch("codebase_rag.app.ui_sidebar.st")
+    def test_about_omits_endpoint_before_health_reports(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """The first paint happens before the background check lands and must still render."""
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {}
+
+        display_sidebar(runtime, _new_state())
+
+        about_text = mock_st.sidebar.markdown.call_args[0][0]
+        assert "A local LLM via Ollama (**my-model**)" in about_text
+        assert "http://" not in about_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_about_states_endpoint_and_gpu_placement(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """Which of two reachable backends answered is readable off the screen."""
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {
+            "connection": {"status": "connected", "url": "http://127.0.0.1:11434"},
+            "model": {"status": "available"},
+            "placement": {"placement": "gpu"},
+        }
+
+        display_sidebar(runtime, _new_state())
+
+        about_text = mock_st.sidebar.markdown.call_args[0][0]
+        assert "http://127.0.0.1:11434" in about_text
+        assert "on the GPU" in about_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_cpu_placement_is_stated_without_a_warning(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """CPU inference is a legitimate configuration, so it is a fact and not an alert."""
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {
+            "connection": {"status": "connected", "url": "http://127.0.0.1:11435"},
+            "model": {"status": "available"},
+            "placement": {"placement": "cpu"},
+        }
+
+        display_sidebar(runtime, _new_state())
+
+        about_text = mock_st.sidebar.markdown.call_args[0][0]
+        assert "http://127.0.0.1:11435" in about_text
+        assert "on the CPU" in about_text
+        mock_st.sidebar.warning.assert_not_called()
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_unknown_placement_shows_endpoint_alone(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """Nothing loaded yet means no placement claim, not a CPU claim."""
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {
+            "connection": {"status": "connected", "url": "http://127.0.0.1:11434"},
+            "model": {"status": "available"},
+            "placement": {"placement": "unknown"},
+        }
+
+        display_sidebar(runtime, _new_state())
+
+        about_text = mock_st.sidebar.markdown.call_args[0][0]
+        assert "http://127.0.0.1:11434" in about_text
+        assert "on the CPU" not in about_text
+        assert "on the GPU" not in about_text
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
+    def test_endpoint_shown_alongside_the_missing_model_warning(
+        self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
+    ) -> None:
+        """The endpoint is the fact that identifies which backend is missing the model."""
+        runtime = MagicMock()
+        runtime.config.provider = "ollama"
+        runtime.config.llm_model_name = "my-model"
+        runtime.health = {
+            "connection": {"status": "connected", "url": "http://127.0.0.1:11435"},
+            "model": {
+                "status": "not_found",
+                "message": "Model 'my-model' not found",
+                "suggested_action": "Run 'docker exec codebase-rag-ollama ollama pull my-model'",
+            },
+            "placement": {"placement": "unknown"},
+        }
+
+        display_sidebar(runtime, _new_state())
+
+        assert "http://127.0.0.1:11435" in mock_st.sidebar.markdown.call_args[0][0]
+        mock_st.sidebar.warning.assert_called_once()
+
+    @patch("codebase_rag.app.ui_sidebar._display_chat_history_list")
+    @patch("codebase_rag.app.ui_sidebar._display_new_chat_button")
+    @patch("codebase_rag.app.ui_sidebar._display_repo_management")
+    @patch("codebase_rag.app.ui_sidebar.st")
     def test_no_warning_when_model_available(
         self, mock_st: MagicMock, mock_repo_mgmt: MagicMock, mock_new_chat: MagicMock, mock_history: MagicMock
     ) -> None:

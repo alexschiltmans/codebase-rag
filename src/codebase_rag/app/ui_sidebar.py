@@ -17,6 +17,25 @@ logger = logging.getLogger(__name__)
 
 _LOGO_PATH = Path(__file__).parent / "logo.png"
 _INGEST_REFUSED_MESSAGE = "An ingestion is already running, wait for it to finish."
+# Stated as fact, not as a remedy: CPU inference is the only option on plenty of machines.
+_PLACEMENT_TEXT = {"gpu": ", on the GPU", "cpu": ", on the CPU"}
+
+
+def _backend_line(runtime: AppRuntime) -> str:
+    """The About block's backend bullet, naming the endpoint once health has reported.
+
+    Renders without the endpoint before the background check lands, so the first paint is
+    the existing line rather than an error. Placement appears only once it is known, which
+    on a cold start means after the first answer has loaded the model.
+    """
+    backend_label = "Ollama" if runtime.config.provider == "ollama" else "an OpenAI-compatible server"
+    line = f"- A local LLM via {backend_label} (**{runtime.config.llm_model_name}**)"
+
+    endpoint = runtime.health.get("connection", {}).get("url")
+    if not endpoint:
+        return line
+    placement = runtime.health.get("placement", {}).get("placement")
+    return f"{line} at `{endpoint}`{_PLACEMENT_TEXT.get(placement, '')}"
 
 
 def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
@@ -26,7 +45,6 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
     except Exception as e:  # FileNotFoundError, RuntimeError, etc.
         logger.debug("Skipping sidebar logo due to %s", e)
 
-    backend_label = "Ollama" if runtime.config.provider == "ollama" else "an OpenAI-compatible server"
     st.sidebar.title("About")
     st.sidebar.markdown(
         f"""
@@ -35,7 +53,7 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
         It helps users understand code by providing answers based on ingested documentation and source code.
 
         This application uses:
-        - A local LLM via {backend_label} (**{runtime.config.llm_model_name}**)
+        {_backend_line(runtime)}
         - Hybrid search combining vector and BM25
         - Qdrant vector database
         """

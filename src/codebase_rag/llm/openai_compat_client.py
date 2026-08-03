@@ -140,6 +140,16 @@ class OpenAICompatClient:
         except requests.exceptions.RequestException as e:
             return {"status": "error", "message": f"Error checking connection: {e}", "url": self.base_url}
 
+    def check_runtime_placement(self) -> dict[str, Any]:
+        """Report that GPU residency cannot be determined for this backend.
+
+        The chat-completions API has no running-models query and no equivalent of a VRAM
+        figure, so there is nothing to read. The constant is deliberate rather than an
+        unimplemented stub: guessing from the URL would give a confident wrong answer on
+        any host whose container runtime does expose the GPU.
+        """
+        return {"placement": "unknown", "url": self.base_url}
+
     def check_model_availability(self) -> dict[str, Any]:
         """Check if the configured model is available on the server.
 

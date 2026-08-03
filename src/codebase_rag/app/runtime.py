@@ -189,6 +189,21 @@ def _warm_up_vector_store(vector_retriever: VectorRetriever) -> None:
         logger.warning("Vector store warm-up failed: %s", e)
 
 
+def _check_placement(runtime: AppRuntime) -> dict[str, Any]:
+    """Ask the backend where the model is running, degrading to unknown on any failure.
+
+    Swallows everything the client can raise: placement is the least important of the three
+    results, and losing the endpoint and the model status over it would cost more than it
+    is worth.
+    """
+    try:
+        return runtime.llm.check_runtime_placement()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Could not determine runtime placement: %s", e)
+        # Same shape as the clients return, so a caller never has to special-case the failure.
+        return {"placement": "unknown", "url": getattr(runtime.llm, "base_url", None)}
+
+
 def _run_health_checks(runtime: AppRuntime) -> None:
     """Best-effort connectivity checks, logged only. Run off the
     main thread so a slow/unreachable server never blocks the first render.
@@ -200,7 +215,20 @@ def _run_health_checks(runtime: AppRuntime) -> None:
         model_status = runtime.llm.check_model_availability()
         if model_status["status"] != "available":
             logger.warning("Model availability issue: %s", model_status["message"])
-        runtime.health = {"model": model_status, "checked_at": time.time()}
+        placement_status = _check_placement(runtime)
+        # One assignment, because the sidebar treats any truthy health dict as complete.
+        runtime.health = {
+            "connection": llm_status,
+            "model": model_status,
+            "placement": placement_status,
+            "checked_at": time.time(),
+        }
+        logger.info(
+            "Generation backend resolved: %s (model '%s', placement: %s)",
+            llm_status.get("url", "unknown"),
+            runtime.config.llm_model_name,
+            placement_status.get("placement", "unknown"),
+        )
     except Exception as e:  # noqa: BLE001
         # Deliberately not `return`-ing here: the LLM check and the vector-store
         # warm-up are independent, so a failure in one must not skip the other.

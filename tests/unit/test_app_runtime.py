@@ -1,7 +1,10 @@
 """Unit tests for AppRuntime construction and lifecycle, with all backends mocked."""
 
+import logging
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from codebase_rag.app.runtime import AppRuntime, get_repo_list
 
@@ -25,8 +28,9 @@ def _build_runtime(config: MagicMock, *, existing_repos: list[str] | None = None
     mock_qdrant.list_repos.return_value = existing_repos or []
 
     mock_llm = MagicMock()
-    mock_llm.check_connection.return_value = {"status": "connected"}
+    mock_llm.check_connection.return_value = {"status": "connected", "url": "http://localhost:11434"}
     mock_llm.check_model_availability.return_value = {"status": "available"}
+    mock_llm.check_runtime_placement.return_value = {"placement": "gpu", "url": "http://localhost:11434"}
     mock_llm.num_ctx = 8192
     mock_llm.max_tokens = 1024
     mock_llm.prompt_budget_chars = (8192 - 1024 - 256) * 4
@@ -135,6 +139,42 @@ class TestHealthChecks:
         assert runtime.health["model"]["status"] == "not_found"
         assert runtime.health["model"]["suggested_action"] == "Run 'ollama pull model'"
         assert "checked_at" in runtime.health
+
+    def test_run_health_checks_publishes_connection_and_placement(self) -> None:
+        """All three results land together, so a reader never sees a half-filled dict."""
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        _run_health_checks(runtime)
+
+        assert runtime.health["connection"]["url"] == "http://localhost:11434"
+        assert runtime.health["model"]["status"] == "available"
+        assert runtime.health["placement"]["placement"] == "gpu"
+        assert "checked_at" in runtime.health
+
+    def test_run_health_checks_survives_a_raising_placement_check(self) -> None:
+        """Placement is the least important result; losing the endpoint over it costs more."""
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        cast(MagicMock, runtime.llm.check_runtime_placement).side_effect = RuntimeError("ps timed out")
+
+        _run_health_checks(runtime)
+
+        assert runtime.health["connection"]["url"] == "http://localhost:11434"
+        assert runtime.health["model"]["status"] == "available"
+        assert runtime.health["placement"]["placement"] == "unknown"
+
+    def test_run_health_checks_logs_the_resolved_endpoint(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A headless run reports the same fact the sidebar shows."""
+        from codebase_rag.app.runtime import _run_health_checks
+
+        runtime, _ = _build_runtime(_config())
+        with caplog.at_level(logging.INFO, logger="codebase_rag.app.runtime"):
+            _run_health_checks(runtime)
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("http://localhost:11434" in message and "gpu" in message for message in messages)
 
     def test_run_health_checks_handles_warm_up_exceptions(self) -> None:
         from codebase_rag.app.runtime import _run_health_checks

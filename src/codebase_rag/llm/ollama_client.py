@@ -18,6 +18,9 @@ GENERATION_MARGIN_TOKENS = 256
 CHARS_PER_TOKEN = 4
 # Below this, the budget can't hold the template, a question, and one context chunk.
 MIN_PROMPT_BUDGET_CHARS = 2000
+# The compose Ollama publishes here, off 11434, so it can't shadow a native install.
+CONTAINER_OLLAMA_HOST_PORT = 11435
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
 class OllamaClient:
@@ -134,9 +137,7 @@ class OllamaClient:
             if response.status_code == 200:
                 models = response.json().get("models", [])
                 model_names = [m.get("name") for m in models]
-                if self.model_name in model_names or (
-                    ":" not in self.model_name and f"{self.model_name}:latest" in model_names
-                ):
+                if any(self._matches_configured_model(name) for name in model_names):
                     return {"status": "available", "model": self.model_name, "all_models": model_names}
                 docker_cmd = (
                     f"docker exec codebase-rag-ollama ollama pull {self.model_name}"
@@ -153,6 +154,45 @@ class OllamaClient:
         except (requests.exceptions.RequestException, ValueError) as e:
             return {"status": "error", "message": f"Error checking model availability: {e}"}
 
+    def check_runtime_placement(self) -> dict[str, Any]:
+        """Report whether the configured model is currently resident in GPU memory.
+
+        Reads Ollama's running-models list, where `size_vram` counts the bytes the loaded
+        model holds in VRAM. Placement is only knowable while the model is loaded, so a
+        model nothing has touched yet reports `unknown` rather than `cpu`: claiming CPU
+        inference on a cold start would be wrong on every GPU machine, every time.
+
+        Returns a `placement` of `gpu`, `cpu`, or `unknown`, plus the endpoint that was
+        asked, so a caller can report which backend the answer describes.
+        """
+        try:
+            response = requests.get(f"{self.base_url}/api/ps", timeout=5)
+            if response.status_code != 200:
+                return {"placement": "unknown", "url": self.base_url}
+            for running_model in response.json().get("models", []):
+                if not self._matches_configured_model(running_model.get("name")):
+                    continue
+                size_vram = running_model.get("size_vram")
+                if size_vram is None:
+                    # An Ollama build that doesn't publish the field can't be read as CPU.
+                    return {"placement": "unknown", "url": self.base_url}
+                return {"placement": "gpu" if size_vram > 0 else "cpu", "url": self.base_url}
+            return {"placement": "unknown", "url": self.base_url}
+        except (requests.exceptions.RequestException, ValueError) as e:
+            # ValueError covers a 200 carrying a non-JSON body, as in check_connection.
+            logger.debug("Could not determine runtime placement at %s: %s", self.base_url, e)
+            return {"placement": "unknown", "url": self.base_url}
+
+    def _matches_configured_model(self, name: str | None) -> bool:
+        """Match a model name reported by Ollama against the configured one.
+
+        Ollama reports fully-qualified tags, so a configured bare name has to be compared
+        against its `:latest` form as well.
+        """
+        if name is None:
+            return False
+        return name == self.model_name or (":" not in self.model_name and name == f"{self.model_name}:latest")
+
     def _is_ollama_containerized(self) -> bool:
         """Detect whether the Ollama this client talks to runs in the compose network.
 
@@ -160,10 +200,19 @@ class OllamaClient:
         containerized: the app can run on the host against a compose-networked Ollama, or
         against a native Ollama on localhost, so the remedy has to match where Ollama is.
 
-        Matches positively against the compose service's DNS name (`docker/compose-dev.yml`
-        sets `OLLAMA_BASE_URL=http://ollama:11434` for the app service) rather than excluding
-        loopback-like hosts, so a LAN-hosted Ollama (`http://192.168.1.20:11434`) correctly
-        gets the plain `ollama pull` remedy instead of a `docker exec codebase-rag-ollama`
-        command naming a container that only exists in the compose network.
+        Two independent ways to reach that same container, and neither subsumes the other:
+
+        - The compose service's DNS name, from another service on the compose network.
+        - Loopback on the container's published host port, from a process on the host. The
+          container publishes 11435 so it cannot shadow a native Ollama on 11434, which
+          makes the port enough to tell the two apart.
+
+        Matches positively on those rather than excluding loopback-like hosts, so a
+        LAN-hosted Ollama (`http://192.168.1.20:11434`) correctly gets the plain
+        `ollama pull` remedy instead of a `docker exec codebase-rag-ollama` command naming
+        a container that only exists in the compose network.
         """
-        return urlparse(self.base_url).hostname == "ollama"
+        parsed = urlparse(self.base_url)
+        if parsed.hostname == "ollama":
+            return True
+        return parsed.hostname in _LOOPBACK_HOSTS and parsed.port == CONTAINER_OLLAMA_HOST_PORT

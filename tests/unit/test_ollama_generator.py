@@ -282,3 +282,195 @@ class TestOllamaClient:
         result = client.check_model_availability()
 
         assert result["status"] == "not_found"
+
+
+def _placement_client(mock_config_cls: MagicMock, base_url: str = "http://localhost:11434") -> OllamaClient:
+    """Build a client whose Config is stubbed, for the placement and remedy tests."""
+    mock_config = MagicMock()
+    mock_config.llm_model_name = "test-model"
+    mock_config.ollama_base_url = base_url
+    mock_config.ollama_num_ctx = 8192
+    mock_config_cls.get_instance.return_value = mock_config
+    return OllamaClient(model_name="test-model", base_url=base_url)
+
+
+def _ps_response(models: list[dict[str, object]], status_code: int = 200) -> MagicMock:
+    """Stub an `/api/ps` reply carrying the given running-model entries."""
+    response = MagicMock()
+    response.status_code = status_code
+    response.json.return_value = {"models": models}
+    return response
+
+
+class TestRuntimePlacement:
+    """Placement reporting from Ollama's running-models list."""
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_model_resident_in_vram_reports_gpu(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A loaded model holding VRAM is reported as running on the GPU."""
+        client = _placement_client(mock_config_cls)
+        mock_get.return_value = _ps_response([{"name": "test-model", "size": 900, "size_vram": 900}])
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "gpu"
+        assert result["url"] == "http://localhost:11434"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_model_loaded_with_no_vram_reports_cpu(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A loaded model holding zero VRAM is reported as running on the CPU."""
+        client = _placement_client(mock_config_cls)
+        mock_get.return_value = _ps_response([{"name": "test-model", "size": 900, "size_vram": 0}])
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "cpu"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_nothing_loaded_reports_unknown_not_cpu(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """An idle backend reports unknown, because claiming CPU here is wrong on GPU machines."""
+        client = _placement_client(mock_config_cls)
+        mock_get.return_value = _ps_response([])
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_another_model_loaded_reports_unknown(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A different model being loaded says nothing about the configured one."""
+        client = _placement_client(mock_config_cls)
+        mock_get.return_value = _ps_response([{"name": "other-model", "size_vram": 900}])
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_missing_size_vram_reports_unknown(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """An Ollama build that omits the field can't be read as CPU."""
+        client = _placement_client(mock_config_cls)
+        mock_get.return_value = _ps_response([{"name": "test-model", "size": 900}])
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_request_failure_reports_unknown(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A failed placement query degrades to unknown rather than raising."""
+        client = _placement_client(mock_config_cls)
+        mock_get.side_effect = requests.exceptions.ConnectionError("refused")
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+        assert result["url"] == "http://localhost:11434"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_non_json_body_reports_unknown(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A 200 carrying a non-JSON body must not escape as a decode error."""
+        client = _placement_client(mock_config_cls)
+        response = MagicMock()
+        response.status_code = 200
+        response.json.side_effect = ValueError("not JSON")
+        mock_get.return_value = response
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_non_200_reports_unknown(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A backend that answers but refuses the query reports unknown."""
+        client = _placement_client(mock_config_cls)
+        mock_get.return_value = _ps_response([], status_code=404)
+
+        result = client.check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_untagged_name_matches_latest(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """Placement reuses the availability check's bare-name-to-`:latest` matching."""
+        mock_config = MagicMock()
+        mock_config.llm_model_name = "llama3"
+        mock_config.ollama_base_url = "http://localhost:11434"
+        mock_config.ollama_num_ctx = 8192
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_get.return_value = _ps_response([{"name": "llama3:latest", "size_vram": 900}])
+
+        result = OllamaClient(model_name="llama3").check_runtime_placement()
+
+        assert result["placement"] == "gpu"
+
+
+class TestContainerizedRemedy:
+    """Which pull command the missing-model remedy suggests, per endpoint."""
+
+    @pytest.mark.parametrize(
+        ("base_url", "containerized"),
+        [
+            ("http://ollama:11434", True),
+            ("http://127.0.0.1:11435", True),
+            ("http://localhost:11435", True),
+            ("http://127.0.0.1:11434", False),
+            ("http://192.168.1.20:11434", False),
+        ],
+    )
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_container_detection(self, mock_config_cls: MagicMock, base_url: str, containerized: bool) -> None:
+        """The compose DNS name and the container's published host port both identify it.
+
+        A native Ollama on 11434 and a LAN-hosted one must not, since `docker exec` would
+        name a container that does not exist there.
+        """
+        client = _placement_client(mock_config_cls, base_url=base_url)
+
+        assert client._is_ollama_containerized() is containerized
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_remedy_names_container_on_published_port(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A host process pointed at the container's published port gets the docker exec remedy."""
+        client = _placement_client(mock_config_cls, base_url="http://127.0.0.1:11435")
+
+        version_resp = MagicMock()
+        version_resp.status_code = 200
+        version_resp.json.return_value = {"version": "0.1.0"}
+        tags_resp = MagicMock()
+        tags_resp.status_code = 200
+        tags_resp.json.return_value = {"models": [{"name": "other-model"}]}
+        mock_get.side_effect = [version_resp, tags_resp]
+
+        result = client.check_model_availability()
+
+        assert result["status"] == "not_found"
+        assert result["suggested_action"] == "Run 'docker exec codebase-rag-ollama ollama pull test-model'"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_remedy_stays_plain_for_native_endpoint(self, mock_config_cls: MagicMock, mock_get: MagicMock) -> None:
+        """A native Ollama on 11434 keeps the plain pull command."""
+        client = _placement_client(mock_config_cls, base_url="http://127.0.0.1:11434")
+
+        version_resp = MagicMock()
+        version_resp.status_code = 200
+        version_resp.json.return_value = {"version": "0.1.0"}
+        tags_resp = MagicMock()
+        tags_resp.status_code = 200
+        tags_resp.json.return_value = {"models": [{"name": "other-model"}]}
+        mock_get.side_effect = [version_resp, tags_resp]
+
+        result = client.check_model_availability()
+
+        assert result["suggested_action"] == "Run 'ollama pull test-model'"

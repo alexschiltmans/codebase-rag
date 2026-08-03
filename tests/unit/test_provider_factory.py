@@ -128,6 +128,28 @@ class TestOpenAICompatClientBehavior:
     @patch("codebase_rag.llm.openai_compat_client.requests.get")
     @patch("codebase_rag.llm.openai_compat_client.BaseChatOpenAI")
     @patch("codebase_rag.llm.openai_compat_client.Config")
+    def test_runtime_placement_is_never_determinable(
+        self, mock_config_cls: MagicMock, mock_base_chat_openai: MagicMock, mock_get: MagicMock
+    ) -> None:
+        """Placement is unknown for this backend, and is not inferred from the URL.
+
+        The chat-completions API has no running-models query, so no request is made either.
+        """
+        mock_config = MagicMock()
+        mock_config.llm_model_name = "test-model"
+        mock_config.llm_base_url = "http://localhost:1234/v1"
+        mock_config.llm_api_key = ""
+        mock_config_cls.get_instance.return_value = mock_config
+
+        result = OpenAICompatClient().check_runtime_placement()
+
+        assert result["placement"] == "unknown"
+        assert result["url"] == "http://localhost:1234/v1"
+        mock_get.assert_not_called()
+
+    @patch("codebase_rag.llm.openai_compat_client.requests.get")
+    @patch("codebase_rag.llm.openai_compat_client.BaseChatOpenAI")
+    @patch("codebase_rag.llm.openai_compat_client.Config")
     def test_check_connection_connection_error(
         self, mock_config_cls: MagicMock, mock_base_chat_openai: MagicMock, mock_get: MagicMock
     ) -> None:
