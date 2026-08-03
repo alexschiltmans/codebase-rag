@@ -414,29 +414,31 @@ class TestRuntimePlacement:
         assert result["placement"] == "gpu"
 
 
-class TestContainerizedRemedy:
+class TestBackendRemedy:
     """Which pull command the missing-model remedy suggests, per endpoint."""
 
     @pytest.mark.parametrize(
-        ("base_url", "containerized"),
+        ("base_url", "backend"),
         [
-            ("http://ollama:11434", True),
-            ("http://127.0.0.1:11435", True),
-            ("http://localhost:11435", True),
-            ("http://127.0.0.1:11434", False),
-            ("http://192.168.1.20:11434", False),
+            ("http://ollama:11434", "compose_ollama"),
+            ("http://127.0.0.1:11435", "compose_ollama"),
+            ("http://localhost:11435", "compose_ollama"),
+            ("http://127.0.0.1:11434", "ollama"),
+            ("http://192.168.1.20:11434", "ollama"),
+            ("http://localhost:12434", "model_runner"),
+            ("http://127.0.0.1:12434", "model_runner"),
+            ("http://model-runner.docker.internal", "model_runner"),
+            ("http://localhost:9999", "unrecognized"),
         ],
     )
     @patch("codebase_rag.llm.ollama_client.Config")
-    def test_container_detection(self, mock_config_cls: MagicMock, base_url: str, containerized: bool) -> None:
-        """The compose DNS name and the container's published host port both identify it.
-
-        A native Ollama on 11434 and a LAN-hosted one must not, since `docker exec` would
-        name a container that does not exist there.
+    def test_backend_detection(self, mock_config_cls: MagicMock, base_url: str, backend: str) -> None:
+        """The compose DNS name, Model Runner's port/hostname, and Ollama's default port
+        each identify their backend positively. Everything else is unrecognized.
         """
         client = _placement_client(mock_config_cls, base_url=base_url)
 
-        assert client._is_ollama_containerized() is containerized
+        assert client._resolve_backend() == backend
 
     @patch("codebase_rag.llm.ollama_client.requests.get")
     @patch("codebase_rag.llm.ollama_client.Config")
@@ -474,3 +476,46 @@ class TestContainerizedRemedy:
         result = client.check_model_availability()
 
         assert result["suggested_action"] == "Run 'ollama pull test-model'"
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_remedy_names_docker_model_pull_on_model_runner(
+        self, mock_config_cls: MagicMock, mock_get: MagicMock
+    ) -> None:
+        """Model Runner gets `docker model pull`, never `ollama pull`."""
+        client = _placement_client(mock_config_cls, base_url="http://localhost:12434")
+
+        version_resp = MagicMock()
+        version_resp.status_code = 200
+        version_resp.json.return_value = {"version": "0.1.0"}
+        tags_resp = MagicMock()
+        tags_resp.status_code = 200
+        tags_resp.json.return_value = {"models": [{"name": "other-model"}]}
+        mock_get.side_effect = [version_resp, tags_resp]
+
+        result = client.check_model_availability()
+
+        assert result["suggested_action"] == "Run 'docker model pull test-model'"
+        assert "ollama pull" not in result["suggested_action"]
+
+    @patch("codebase_rag.llm.ollama_client.requests.get")
+    @patch("codebase_rag.llm.ollama_client.Config")
+    def test_remedy_lists_models_for_unrecognized_endpoint(
+        self, mock_config_cls: MagicMock, mock_get: MagicMock
+    ) -> None:
+        """An endpoint matching no known backend gets the reported models, no pull command."""
+        client = _placement_client(mock_config_cls, base_url="http://localhost:9999")
+
+        version_resp = MagicMock()
+        version_resp.status_code = 200
+        version_resp.json.return_value = {"version": "0.1.0"}
+        tags_resp = MagicMock()
+        tags_resp.status_code = 200
+        tags_resp.json.return_value = {"models": [{"name": "some-model"}, {"name": "another-model"}]}
+        mock_get.side_effect = [version_resp, tags_resp]
+
+        result = client.check_model_availability()
+
+        assert "some-model" in result["suggested_action"]
+        assert "another-model" in result["suggested_action"]
+        assert "pull" not in result["suggested_action"]

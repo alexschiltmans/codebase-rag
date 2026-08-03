@@ -20,6 +20,12 @@ CHARS_PER_TOKEN = 4
 MIN_PROMPT_BUDGET_CHARS = 2000
 # The compose Ollama publishes here, off 11434, so it can't shadow a native install.
 CONTAINER_OLLAMA_HOST_PORT = 11435
+# Docker Desktop's documented host port for Model Runner once TCP is enabled.
+MODEL_RUNNER_HOST_PORT = 12434
+# The in-container hostname Model Runner answers on; never exercised by this project's own tests.
+MODEL_RUNNER_INTERNAL_HOST = "model-runner.docker.internal"
+# Ollama's own default port, matched on any host so a LAN-hosted instance is still recognized.
+OLLAMA_DEFAULT_PORT = 11434
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
@@ -139,15 +145,10 @@ class OllamaClient:
                 model_names = [m.get("name") for m in models]
                 if any(self._matches_configured_model(name) for name in model_names):
                     return {"status": "available", "model": self.model_name, "all_models": model_names}
-                docker_cmd = (
-                    f"docker exec codebase-rag-ollama ollama pull {self.model_name}"
-                    if self._is_ollama_containerized()
-                    else f"ollama pull {self.model_name}"
-                )
                 return {
                     "status": "not_found",
                     "message": f"Model '{self.model_name}' not found",
-                    "suggested_action": f"Run '{docker_cmd}'",
+                    "suggested_action": self._suggest_remedy(model_names),
                     "available_models": model_names,
                 }
             return {"status": "error", "message": f"Failed to get model list: {response.status_code}"}
@@ -183,6 +184,25 @@ class OllamaClient:
             logger.debug("Could not determine runtime placement at %s: %s", self.base_url, e)
             return {"placement": "unknown", "url": self.base_url}
 
+    def _suggest_remedy(self, model_names: list[str | None]) -> str:
+        """Build the `not_found` remedy for the configured model, backend-appropriate.
+
+        The compose and native Ollama cases keep their known-good commands. Model Runner
+        gets `docker model pull`, verified to accept the same normalized name it reports
+        back through `/api/tags`, so no separate reference form is needed. An unrecognized
+        endpoint gets no guessed command at all, only the models the server actually has,
+        matching the shape `OpenAICompatClient` uses for the same situation.
+        """
+        backend = self._resolve_backend()
+        if backend == "compose_ollama":
+            return f"Run 'docker exec codebase-rag-ollama ollama pull {self.model_name}'"
+        if backend == "ollama":
+            return f"Run 'ollama pull {self.model_name}'"
+        if backend == "model_runner":
+            return f"Run 'docker model pull {self.model_name}'"
+        models_str = ", ".join(str(m) for m in model_names[:5] if m is not None)
+        return f"Load '{self.model_name}' or set LLM_MODEL_NAME to: {models_str}"
+
     def _matches_configured_model(self, name: str | None) -> bool:
         """Match a model name reported by Ollama against the configured one.
 
@@ -193,26 +213,38 @@ class OllamaClient:
             return False
         return name == self.model_name or (":" not in self.model_name and name == f"{self.model_name}:latest")
 
-    def _is_ollama_containerized(self) -> bool:
-        """Detect whether the Ollama this client talks to runs in the compose network.
+    def _resolve_backend(self) -> str:
+        """Identify which backend `config.ollama_base_url` names.
 
         Based on `config.ollama_base_url`'s host rather than whether the app itself is
         containerized: the app can run on the host against a compose-networked Ollama, or
         against a native Ollama on localhost, so the remedy has to match where Ollama is.
 
-        Two independent ways to reach that same container, and neither subsumes the other:
+        Returns one of "compose_ollama", "model_runner", "ollama", or "unrecognized".
 
-        - The compose service's DNS name, from another service on the compose network.
-        - Loopback on the container's published host port, from a process on the host. The
-          container publishes 11435 so it cannot shadow a native Ollama on 11434, which
-          makes the port enough to tell the two apart.
+        Compose Ollama has two independent ways to be reached, and neither subsumes the
+        other: the compose service's DNS name, from another service on the compose network,
+        or loopback on the container's published host port, from a process on the host. The
+        container publishes 11435 so it cannot shadow a native Ollama on 11434, which makes
+        the port enough to tell the two apart.
 
-        Matches positively on those rather than excluding loopback-like hosts, so a
-        LAN-hosted Ollama (`http://192.168.1.20:11434`) correctly gets the plain
-        `ollama pull` remedy instead of a `docker exec codebase-rag-ollama` command naming
-        a container that only exists in the compose network.
+        Model Runner is matched the same way: loopback on its published host port, or the
+        in-container hostname it answers on when reached from inside the compose network.
+
+        Ollama proper is matched on port 11434 alone, on any host, rather than restricted to
+        loopback. That is deliberate: it is what keeps a LAN-hosted Ollama
+        (`http://192.168.1.20:11434`) on the plain `ollama pull` remedy instead of falling
+        through to the unrecognized case, since no container claims that port.
         """
         parsed = urlparse(self.base_url)
         if parsed.hostname == "ollama":
-            return True
-        return parsed.hostname in _LOOPBACK_HOSTS and parsed.port == CONTAINER_OLLAMA_HOST_PORT
+            return "compose_ollama"
+        if parsed.hostname in _LOOPBACK_HOSTS and parsed.port == CONTAINER_OLLAMA_HOST_PORT:
+            return "compose_ollama"
+        if parsed.hostname == MODEL_RUNNER_INTERNAL_HOST:
+            return "model_runner"
+        if parsed.hostname in _LOOPBACK_HOSTS and parsed.port == MODEL_RUNNER_HOST_PORT:
+            return "model_runner"
+        if parsed.port == OLLAMA_DEFAULT_PORT:
+            return "ollama"
+        return "unrecognized"
