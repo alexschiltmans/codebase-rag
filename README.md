@@ -34,12 +34,11 @@
 - **Source citations.** Every answer includes the source files and repositories it drew from, so answers are verifiable.
 
 **Infrastructure Choices**
-- **Fully local stack.** Ollama, LM Studio, llama.cpp, vLLM, or Jan for inference; Qdrant for vectors; SQLite for chat history. No external API calls, no data egress.
+- **Fully local stack.** A local inference backend of your choice (see [LLM Backends](#llm-backends)); Qdrant for vectors. No external API calls, no data egress.
 - **Multi-repo ingestion.** Clone and index any public GitHub repository from the UI or CLI.
 - **Idempotent ingestion.** Deterministic chunk IDs make re-ingestion safe and duplicate-free, so it's safe to run repeatedly in scheduled jobs or CI.
 
 **Developer Experience**
-- **Local LLM inference.** Choose your backend: Ollama, LM Studio, llama.cpp, vLLM, or Jan. Supports any model these platforms can run.
 - **Conversation memory.** Multi-turn conversations with persistent SQLite-backed chat history.
 - **LLM observability.** Optional Langfuse integration for tracing retrieval and generation with per-span metrics.
 
@@ -119,41 +118,7 @@ LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 ```
 
-**Docker Model Runner**
-```bash
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:12434
-LLM_MODEL_NAME=huggingface.co/liquidai/lfm2-350m-gguf:Q8_0
-```
-Model Runner serves an Ollama-compatible API, so the `ollama` provider reaches it unchanged. Unlike a containerized Ollama it *is* GPU-accelerated on macOS, because it runs the inference engine as a host process outside the Docker VM. Three things to know here: the endpoint is off by default and needs `docker desktop enable model-runner --tcp=12434`; its prompt evaluation measured roughly half native Ollama's, which matters more than generation speed for RAG; and a name that doesn't match gets you an `ollama pull` suggestion that cannot work against this backend. Pull with `docker model pull hf.co/LiquidAI/LFM2-350M-GGUF:Q8_0`, then configure the name the way Model Runner reports it back, as above: `hf.co` expanded, the repository path lowercased, the quantization tag left alone. The app matches names exactly. [The Model Runner investigation](docker-model-runner-findings.md) has the measurements and the rest of the caveats.
-
-**LM Studio**
-```bash
-LLM_PROVIDER=openai-compat
-LLM_BASE_URL=http://localhost:1234/v1
-# LLM_API_KEY is optional
-```
-
-**llama.cpp server**
-```bash
-LLM_PROVIDER=openai-compat
-LLM_BASE_URL=http://localhost:8000/v1
-```
-
-**vLLM**
-```bash
-LLM_PROVIDER=openai-compat
-LLM_BASE_URL=http://localhost:8000/v1
-LLM_API_KEY=token-abc123  # if authentication is enabled
-```
-
-**Jan**
-```bash
-LLM_PROVIDER=openai-compat
-LLM_BASE_URL=http://localhost:1337/v1
-```
-
-All OpenAI-compatible backends use the same interface, so you can switch between them by just changing `LLM_BASE_URL`.
+Docker Model Runner, LM Studio, llama.cpp server, vLLM, and Jan are also supported. See the [configuration reference](docs/configuration.md) for the settings each one needs.
 
 ## Command-Line Interface
 

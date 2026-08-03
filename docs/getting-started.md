@@ -63,7 +63,7 @@ Qdrant, Ollama, Langfuse, and the Streamlit app all start in one command, with n
 
 Use this option for a disposable or reproducible environment, in CI, or on a Linux host with GPU passthrough. On a Mac you actually work on, install Ollama natively and use Option A.
 
-If you want a Docker-shaped setup on macOS without giving up the GPU, Docker Model Runner runs the inference engine as a host process rather than inside the VM. See the LLM Backends section of the [README](../README.md) for the configuration.
+If you want a Docker-shaped setup on macOS without giving up the GPU, Docker Model Runner runs the inference engine as a host process rather than inside the VM. See the [configuration reference](configuration.md#docker-model-runner) for the settings.
 
 ```bash
 git clone <your-repo-url>

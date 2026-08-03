@@ -32,16 +32,18 @@ Use when `LLM_PROVIDER=openai-compat` to connect to LM Studio, llama.cpp server,
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_BASE_URL` | _(empty)_ | Base URL of the OpenAI-compatible server (e.g., `http://localhost:1234/v1` for LM Studio). Trailing slashes are stripped. From inside the Docker app container, `localhost` refers to the container itself; point this at `host.docker.internal` instead if the server runs on the host. |
+| `LLM_BASE_URL` | _(empty)_ | Base URL of the OpenAI-compatible server. Trailing slashes are stripped. From inside the Docker app container, `localhost` refers to the container itself; point this at `host.docker.internal` instead if the server runs on the host. |
 | `LLM_API_KEY` | _(empty)_ | API key if required by the server; sent as a Bearer token on every request, including the `/models` availability check. Most local servers don't require it. |
+
+Each server's own default port: LM Studio serves on `http://localhost:1234/v1`, llama.cpp server and vLLM both default to `http://localhost:8000/v1`, and Jan defaults to `http://localhost:1337/v1`. `LLM_API_KEY` is typically only needed for vLLM when it's started with authentication enabled.
 
 ## Docker Model Runner
 
-Model Runner serves an Ollama-compatible API, so it uses the Ollama settings above rather than the OpenAI-compatible ones: set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL=http://localhost:12434`. It runs the inference engine as a host process rather than inside the Docker VM, so unlike the containerized Ollama it is GPU-accelerated on macOS.
+Model Runner serves an Ollama-compatible API, so it uses the Ollama settings above rather than the OpenAI-compatible ones: set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL=http://localhost:12434`. It runs the inference engine as a host process rather than inside the Docker VM, so unlike the containerized Ollama it is GPU-accelerated on macOS. That does not make it a drop-in match for a native Ollama: its prompt evaluation measured roughly half native Ollama's, which matters more than generation speed for RAG, where every query carries a long retrieved context.
 
-The endpoint is disabled by default and connections are refused until you run `docker desktop enable model-runner --tcp=12434`. Model names are normalized on the way back out: `hf.co` expands to `huggingface.co` and the repository path is lowercased, while the quantization tag keeps its case. `LLM_MODEL_NAME` has to reproduce that form exactly, so take it from the endpoint's own `/api/tags` rather than retyping what you pulled. See the LLM Backends section of the [README](../README.md) for a worked example.
+The endpoint is disabled by default and connections are refused until you run `docker desktop enable model-runner --tcp=12434`. Model names are normalized on the way back out: `hf.co` expands to `huggingface.co` and the repository path is lowercased, while the quantization tag keeps its case. Pull models with `docker model pull`, which accepts either spelling: `docker model pull hf.co/LiquidAI/LFM2-350M-GGUF:Q8_0` and the normalized `huggingface.co/liquidai/lfm2-350m-gguf:Q8_0` both work. `LLM_MODEL_NAME` has to reproduce the normalized form exactly, so take it from the endpoint's own `/api/tags` rather than retyping what you pulled.
 
-Two rough edges to expect. Placement reporting does not work against this backend: its `/api/ps` omits the VRAM field the sidebar reads, so the sidebar names the endpoint but states no placement. And when the configured name matches nothing, the health check suggests `ollama pull`, which cannot succeed against Model Runner; use `docker model pull` with the `hf.co/...` spelling instead.
+One rough edge to expect. Placement reporting does not work against this backend: its `/api/ps` omits the VRAM field the sidebar reads, so the sidebar names the endpoint but states no placement.
 
 [The Model Runner investigation](../docker-model-runner-findings.md) records the measurements behind this section.
 
