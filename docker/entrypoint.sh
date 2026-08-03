@@ -52,6 +52,13 @@ if [ "${LLM_PROVIDER:-ollama}" = "ollama" ]; then
         *:*) MODEL_TAG_PATTERN="\"name\":\"${MODEL}\"" ;;
         *) MODEL_TAG_PATTERN="\"name\":\"${MODEL}(:latest)?\"" ;;
     esac
+    # Same backend split the Python client makes: an Ollama-compatible endpoint is not always Ollama.
+    case "${OLLAMA_URL}" in
+        *//ollama:*|*:11435*) PULL_COMMAND="docker exec codebase-rag-ollama ollama pull ${MODEL}" ;;
+        *:12434*|*model-runner.docker.internal*) PULL_COMMAND="docker model pull ${MODEL}" ;;
+        *) PULL_COMMAND="ollama pull ${MODEL}" ;;
+    esac
+
     if ! curl -s "${OLLAMA_URL}/api/tags" | grep -qE "${MODEL_TAG_PATTERN}"; then
         cat << EOF
 ================================================================================
@@ -59,7 +66,7 @@ WARNING: Model '${MODEL}' not found in Ollama
 ================================================================================
 The configured model is not available. To pull it manually, run:
 
-    docker exec codebase-rag-ollama ollama pull ${MODEL}
+    ${PULL_COMMAND}
 
 Then restart the app. The check will refresh on app restart.
 ================================================================================
