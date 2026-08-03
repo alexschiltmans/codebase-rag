@@ -1,7 +1,6 @@
 # Docker Model Runner on this Mac: is it GPU accelerated?
 
-Investigation date: 2026-08-02 to 2026-08-03. Run under the OpenSpec change
-`spike-docker-model-runner-gpu`.
+Investigation date: 2026-08-02 to 2026-08-03.
 
 **Verdict: yes, Docker Model Runner runs local models on the Metal GPU on this machine.
 Confidence: very high, and it rests on direct measurement rather than on documentation.**
