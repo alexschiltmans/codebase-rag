@@ -896,6 +896,7 @@ def publish_retriever_results(
             indent=2,
             default=str,
         )
+        f.write("\n")
     logger.info("Raw results saved to %s", results_path)
 
     md = generate_results_markdown(
@@ -903,7 +904,7 @@ def publish_retriever_results(
     )
     md_path = evals_dir / f"results_{retriever_type}.md"
     with open(md_path, "w") as f:
-        f.write(md)
+        f.write(md.rstrip("\n") + "\n")
     logger.info("Markdown report saved to %s", md_path)
 
 
@@ -1019,7 +1020,7 @@ def main() -> None:
     ablation_md = generate_ablation_markdown(all_custom_metrics, testset)
     ablation_path = EVALS_DIR / "ablation.md"
     with open(ablation_path, "w") as f:
-        f.write(ablation_md)
+        f.write(ablation_md.rstrip("\n") + "\n")
     logger.info("Ablation report saved to %s", ablation_path)
     print("\n" + ablation_md)
 

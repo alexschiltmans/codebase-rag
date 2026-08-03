@@ -1,22 +1,22 @@
 # Evaluation Results
 
-**Date:** 2026-07-31 14:45
+**Date:** 2026-08-03 15:56
 
 **Test set:** 30 questions
 
-**Latency probe:** 1.10s (single generation timed before the test set ran; compare `avg_latency_s` only against runs with a similar probe — a high probe means the run was contended)
+**Latency probe:** 1.03s (single generation timed before the test set ran; compare `avg_latency_s` only against runs with a similar probe — a high probe means the run was contended)
 
 ## Custom Metrics
 
 | Metric | Score |
 |--------|-------|
-| avg_keyword_recall | 0.4413 |
+| avg_keyword_recall | 0.4713 |
 | avg_source_precision | 0.2600 |
 | avg_hit_rate | 0.5862 |
 | avg_mrr | 0.5029 |
 | questions_answered | 30 |
 | questions_failed | 0 |
-| avg_latency_s | 0.9219 |
+| avg_latency_s | 0.9755 |
 
 ## RAGAS Scores (judge: `sam860/LFM2:350m`)
 
@@ -24,44 +24,44 @@
 
 | Metric | Score | Coverage |
 |--------|-------|----------|
-| faithfulness | 0.9500 | 30/30 |
-| answer_relevancy | 0.1113 | 30/30 |
-| context_recall | 0.6869 | 30/30 |
+| faithfulness | 0.8750 | 28/30 |
+| answer_relevancy | 0.1233 | 30/30 |
+| context_recall | 0.6508 | 30/30 |
 
 ## Per-Question Breakdown
 
 | # | Difficulty | Category | Hit | RR | Keyword Recall | Docs | Latency | Expected Failure |
 |---|-----------|----------|-----|----|-----------------|------|---------|------------------|
-| 1 | easy | factual_lookup | 0 | 0.00 | 1.00 | 5 | 0.7s | False |
-| 2 | easy | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.9s | False |
+| 1 | easy | factual_lookup | 0 | 0.00 | 1.00 | 5 | 0.6s | False |
+| 2 | easy | factual_lookup | 0 | 0.00 | 0.50 | 5 | 0.8s | False |
 | 3 | easy | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.5s | False |
-| 4 | medium | cross_file_reasoning | 1 | 0.50 | 0.57 | 5 | 0.6s | False |
+| 4 | medium | cross_file_reasoning | 1 | 0.50 | 0.86 | 5 | 1.3s | False |
 | 5 | medium | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.4s | False |
-| 6 | medium | how_does_it_work | 0 | 0.00 | 0.50 | 5 | 1.5s | False |
-| 7 | medium | cross_file_reasoning | 0 | 0.00 | 0.50 | 5 | 0.6s | False |
-| 8 | hard | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.7s | False |
-| 9 | medium | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.9s | False |
+| 6 | medium | how_does_it_work | 0 | 0.00 | 0.25 | 5 | 1.2s | False |
+| 7 | medium | cross_file_reasoning | 0 | 0.00 | 0.75 | 5 | 1.0s | False |
+| 8 | hard | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.8s | False |
+| 9 | medium | factual_lookup | 0 | 0.00 | 0.00 | 5 | 0.8s | False |
 | 10 | medium | factual_lookup | 0 | 0.00 | 0.50 | 5 | 0.7s | False |
 | 11 | hard | how_does_it_work | 1 | 1.00 | 0.20 | 5 | 1.1s | False |
-| 12 | hard | cross_file_reasoning | 1 | 1.00 | 0.00 | 5 | 0.5s | False |
-| 13 | easy | factual_lookup | 1 | 1.00 | 0.50 | 5 | 0.4s | False |
-| 14 | medium | factual_lookup | 0 | 0.00 | 0.25 | 5 | 1.2s | False |
-| 15 | hard | cross_file_reasoning | 0 | 0.00 | 1.00 | 5 | 0.7s | False |
-| 16 | easy | factual_lookup | - | - | 0.33 | 5 | 0.6s | True |
-| 17 | hard | conceptual | 1 | 0.33 | 0.20 | 5 | 0.7s | False |
-| 18 | medium | conceptual | 1 | 1.00 | 0.40 | 5 | 0.8s | False |
-| 19 | medium | conceptual | 1 | 0.50 | 0.25 | 5 | 1.4s | False |
-| 20 | medium | conceptual | 1 | 1.00 | 1.00 | 5 | 1.7s | False |
+| 12 | hard | cross_file_reasoning | 1 | 1.00 | 0.25 | 5 | 0.9s | False |
+| 13 | easy | factual_lookup | 1 | 1.00 | 0.50 | 5 | 0.3s | False |
+| 14 | medium | factual_lookup | 0 | 0.00 | 0.25 | 5 | 1.3s | False |
+| 15 | hard | cross_file_reasoning | 0 | 0.00 | 0.67 | 5 | 1.1s | False |
+| 16 | easy | factual_lookup | - | - | 0.33 | 5 | 0.5s | True |
+| 17 | hard | conceptual | 1 | 0.33 | 0.00 | 5 | 0.7s | False |
+| 18 | medium | conceptual | 1 | 1.00 | 0.60 | 5 | 0.7s | False |
+| 19 | medium | conceptual | 1 | 0.50 | 1.00 | 5 | 1.3s | False |
+| 20 | medium | conceptual | 1 | 1.00 | 1.00 | 5 | 1.5s | False |
 | 21 | medium | conceptual | 1 | 1.00 | 0.50 | 5 | 1.6s | False |
-| 22 | hard | conceptual | 1 | 1.00 | 1.00 | 5 | 1.6s | False |
-| 23 | hard | conceptual | 1 | 1.00 | 0.40 | 5 | 0.8s | False |
+| 22 | hard | conceptual | 1 | 1.00 | 0.50 | 5 | 1.6s | False |
+| 23 | hard | conceptual | 1 | 1.00 | 0.60 | 5 | 1.2s | False |
 | 24 | hard | conceptual | 1 | 1.00 | 0.80 | 5 | 0.4s | False |
-| 25 | medium | conceptual | 1 | 1.00 | 0.75 | 5 | 0.7s | False |
-| 26 | medium | conceptual | 0 | 0.00 | 0.33 | 5 | 0.7s | False |
-| 27 | medium | conceptual | 1 | 1.00 | 0.50 | 5 | 1.7s | False |
+| 25 | medium | conceptual | 1 | 1.00 | 0.75 | 5 | 0.6s | False |
+| 26 | medium | conceptual | 0 | 0.00 | 0.33 | 5 | 1.0s | False |
+| 27 | medium | conceptual | 1 | 1.00 | 0.50 | 5 | 1.6s | False |
 | 28 | easy | conceptual | 1 | 1.00 | 0.75 | 5 | 1.0s | False |
-| 29 | medium | conceptual | 1 | 0.25 | 0.25 | 5 | 1.1s | False |
-| 30 | hard | conceptual | 1 | 1.00 | 0.75 | 5 | 1.3s | False |
+| 29 | medium | conceptual | 1 | 0.25 | 0.25 | 5 | 1.2s | False |
+| 30 | hard | conceptual | 1 | 1.00 | 0.50 | 5 | 1.2s | False |
 
 ## Failure Cases
 
@@ -69,11 +69,11 @@
 
 **Expected failure:** Yes
 
-**Answer:** The minimum Python version required for this Python package is **3.6**. The Python package uses the CMake build system, specifically version 3.23 or later. This can be found in the `CMakeLists.txt` file under the "Build Dependencies" section of the provided context.
+**Answer:** The minimum Python version required for this Python package is **3.6**. The package uses the CMake build system, which is specified in Document 5 of the provided context.
 
 Here's a breakdown:
 
-- **Python Version Requirement:** 3.6
-- **Build System Used:** CMake (specifically version 3.23 or later)
+- **Python Version Requirement:** `python=3.6`
+- **Build System Used:** CMake (version 3.23 or later)
 
-This ensures compatibility and proper compilation for this specific Python package, leveraging CMake's build automation capabilities.
+This ensures compatibility and proper compilation for Python 3.6, as specified by the documentation in Document 5.

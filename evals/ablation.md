@@ -1,6 +1,6 @@
 # Retrieval Ablation
 
-**Date:** 2026-07-31 14:45
+**Date:** 2026-08-03 15:56
 
 Same test set (`evals/testset.json`), same LLM, same top_k — only the retriever feeding the RAG chain changes. Full per-question detail for each configuration is in `results_<retriever>.md`.
 
@@ -12,6 +12,6 @@ Avg Latency figures are comparable only across runs with similar latency probes 
 
 | Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |
 |-----------|----------|-----|----------------|-------------------|----------|--------|-------------|
-| vector | 0.6207 | 0.5287 | 0.4543 | 0.2800 | 30 | 0 | 1.0s |
-| bm25 | 0.6552 | 0.4362 | 0.5217 | 0.2333 | 30 | 0 | 0.9s |
-| hybrid | 0.5862 | 0.5029 | 0.4413 | 0.2600 | 30 | 0 | 0.9s |
+| vector | 0.6207 | 0.5287 | 0.4104 | 0.2800 | 30 | 0 | 1.0s |
+| bm25 | 0.6552 | 0.4362 | 0.5086 | 0.2333 | 30 | 0 | 0.9s |
+| hybrid | 0.5862 | 0.5029 | 0.4713 | 0.2600 | 30 | 0 | 1.0s |
