@@ -13,8 +13,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 
+from codebase_rag.api.app import create_app
 from codebase_rag.api.ingest_manager import ApiIngestionManager, IngestJob
-from codebase_rag.api.routers import answer, ingest, repos, search
+from codebase_rag.api.routers import answer, health, ingest, repos, search
+from codebase_rag.config import Config
 
 
 class FakeApiState:
@@ -47,6 +49,7 @@ def client(state: FakeApiState) -> TestClient:
     app.include_router(answer.router)
     app.include_router(repos.router)
     app.include_router(ingest.router)
+    app.include_router(health.router)
     return TestClient(app)
 
 
@@ -211,3 +214,19 @@ class TestApiIngestionManager:
             second = manager.start("/two")
 
         assert second is not None
+
+
+class TestHealthEndpoint:
+    def test_returns_200(self, client: TestClient) -> None:
+        response = client.get("/health")
+
+        assert response.status_code == 200
+
+    def test_returns_200_without_reaching_qdrant(self) -> None:
+        """`create_app` must not need a live Qdrant: the healthcheck answers while the store is unreachable."""
+        config = Config(qdrant_host="qdrant-nothing-listens-here.invalid", qdrant_port=1)
+
+        app = create_app(config)
+        response = TestClient(app).get("/health")
+
+        assert response.status_code == 200

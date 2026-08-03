@@ -69,8 +69,6 @@ else
     echo "LLM_PROVIDER=${LLM_PROVIDER}: skipping Ollama wait/pull, model lives on the configured backend instead."
 fi
 
-# Start Streamlit
-exec .venv/bin/streamlit run src/codebase_rag/app/main.py \
-    --server.port=8501 \
-    --server.address=0.0.0.0 \
-    --server.headless=true
+# Run whichever process the container was configured with (image CMD or a
+# service-level command:), now that the shared dependency waits above are done.
+exec "$@"

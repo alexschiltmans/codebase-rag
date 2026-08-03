@@ -112,7 +112,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    command: ["python", "-m", "codebase_rag.api"]
+    command: [".venv/bin/python", "-m", "codebase_rag.api"]
     environment:
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
@@ -128,6 +128,12 @@ services:
       LANGFUSE_HOST: http://langfuse:3000
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     ports:
       # Loopback only on the host: the API has no auth (see README).
       # API_HOST=0.0.0.0 above is container-internal, required for the
