@@ -24,7 +24,7 @@ All settings are configured via environment variables or a `.env` file in the pr
 
 | Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API URL. The default targets a natively installed Ollama. The containerized Ollama (`make services-start PROFILE=ollama` or `PROFILE=full`) publishes on host port `11435` instead, to avoid shadowing a native install; point this at `http://127.0.0.1:11435` to use it from the host, or use `host.docker.internal` per the note below when connecting from inside another container. |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API URL. The default targets a natively installed Ollama. The containerized Ollama (`make services-start PROFILE=ollama` or `PROFILE=full`) publishes on host port `11435` instead, to avoid shadowing a native install; point this at `http://127.0.0.1:11435` to use it from the host, or use `host.docker.internal` per the note below when connecting from inside another container. **The two are not interchangeable on macOS.** Containers run inside a Linux VM with no Metal passthrough, so `11435` is CPU-only there: roughly 73 tok/s generation against 380 for the native endpoint ([measurements and caveats](../docker-model-runner-findings.md)). On Linux with the NVIDIA container runtime the container should have GPU access and the choice costs little, though that was not measured. The sidebar reports which endpoint resolved and whether the model is GPU-resident. |
 
 ## OpenAI-compatible backend
 
@@ -34,6 +34,16 @@ Use when `LLM_PROVIDER=openai-compat` to connect to LM Studio, llama.cpp server,
 |---|---|---|
 | `LLM_BASE_URL` | _(empty)_ | Base URL of the OpenAI-compatible server (e.g., `http://localhost:1234/v1` for LM Studio). Trailing slashes are stripped. From inside the Docker app container, `localhost` refers to the container itself; point this at `host.docker.internal` instead if the server runs on the host. |
 | `LLM_API_KEY` | _(empty)_ | API key if required by the server; sent as a Bearer token on every request, including the `/models` availability check. Most local servers don't require it. |
+
+## Docker Model Runner
+
+Model Runner serves an Ollama-compatible API, so it uses the Ollama settings above rather than the OpenAI-compatible ones: set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL=http://localhost:12434`. It runs the inference engine as a host process rather than inside the Docker VM, so unlike the containerized Ollama it is GPU-accelerated on macOS.
+
+The endpoint is disabled by default and connections are refused until you run `docker desktop enable model-runner --tcp=12434`. Model names are normalized on the way back out: `hf.co` expands to `huggingface.co` and the repository path is lowercased, while the quantization tag keeps its case. `LLM_MODEL_NAME` has to reproduce that form exactly, so take it from the endpoint's own `/api/tags` rather than retyping what you pulled. See the LLM Backends section of the [README](../README.md) for a worked example.
+
+Two rough edges to expect. Placement reporting does not work against this backend: its `/api/ps` omits the VRAM field the sidebar reads, so the sidebar names the endpoint but states no placement. And when the configured name matches nothing, the health check suggests `ollama pull`, which cannot succeed against Model Runner; use `docker model pull` with the `hf.co/...` spelling instead.
+
+[The Model Runner investigation](../docker-model-runner-findings.md) records the measurements behind this section.
 
 ## Storage settings
 

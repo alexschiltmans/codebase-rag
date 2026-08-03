@@ -2,6 +2,8 @@
 
 ## Option A: Local development (recommended)
 
+Recommended because a natively installed inference server reaches your GPU. On macOS a containerized one does not. Option B has the numbers.
+
 Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), [Ollama](https://ollama.com) installed natively.
 
 ```bash
@@ -53,9 +55,15 @@ streamlit run src/codebase_rag/app/main.py
 | Langfuse | http://localhost:3000 | LLM tracing (if enabled) |
 | Ollama (native) | http://127.0.0.1:11434 | LLM API |
 
-## Option B: Fully containerized
+## Option B: Fully containerized (CPU-only inference on macOS)
 
-Qdrant, Ollama, Langfuse, and the Streamlit app all start in one command. No native Ollama install needed.
+Qdrant, Ollama, Langfuse, and the Streamlit app all start in one command, with no native Ollama install.
+
+**Check your platform first.** On Linux with the NVIDIA container runtime the containerized Ollama should have GPU access and this option costs you little, though that was not measured. On macOS it is CPU-only, and that was: Docker Desktop runs containers inside a Linux VM, and there is no Metal passthrough into that VM. On the same model and quantization, the containerized endpoint generated roughly 73 tok/s against 380 for a native install, and evaluated prompts at roughly 716 tok/s against 2378. The two endpoints ran different Ollama versions as well as different devices, so read the gap as approximate. [The Model Runner investigation](../docker-model-runner-findings.md) has the full method and caveats.
+
+Use this option for a disposable or reproducible environment, in CI, or on a Linux host with GPU passthrough. On a Mac you actually work on, install Ollama natively and use Option A.
+
+If you want a Docker-shaped setup on macOS without giving up the GPU, Docker Model Runner runs the inference engine as a host process rather than inside the VM. See the LLM Backends section of the [README](../README.md) for the configuration.
 
 ```bash
 git clone <your-repo-url>

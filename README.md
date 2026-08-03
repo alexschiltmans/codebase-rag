@@ -24,7 +24,7 @@
 - **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 30 questions. See [Evaluation Results](docs/evaluation-results.md) for the retriever ablation and the model-size comparison.
 - **Observable.** Optional Langfuse integration traces every retrieval and generation step, so you can debug quality issues instead of guessing.
 - **Documented decisions.** Architecture Decision Records explain *why* each technology was chosen, not just *what* was used. See the [ADR index](docs/adr-index.md).
-- **Batteries included.** `make services-start` gives you the vector DB and tracing dashboard; `make app` starts the Streamlit app on the host. `make services-start PROFILE=full` containerizes everything, including the LLM server, in one command.
+- **Batteries included for the infrastructure.** `make services-start` gives you the vector DB and tracing dashboard with no configuration; `make app` starts the Streamlit app on the host. Inference is the one piece you choose: bring a native Ollama, any OpenAI-compatible server, or Docker Model Runner. A containerized Ollama is available too (`make services-start PROFILE=full`), but on macOS it runs on the CPU. [Getting Started](docs/getting-started.md) explains why that matters.
 
 ## Features
 
@@ -97,7 +97,9 @@ codebase-rag/
 
 ## Getting Started
 
-Quick start: install [Ollama](https://ollama.com) natively and `ollama pull sam860/LFM2:350m`, run `make services-start` to bring up Qdrant and Langfuse, then `make app` → open http://localhost:8501. For a fully containerized stack (including the LLM server) in one command, use `make services-start PROFILE=full`.
+Quick start: install [Ollama](https://ollama.com) natively and `ollama pull sam860/LFM2:350m`, run `make services-start` to bring up Qdrant and Langfuse, then `make app` → open http://localhost:8501. A native install is recommended because it reaches your GPU.
+
+`make services-start PROFILE=full` containerizes everything including the LLM server, which is convenient for a disposable environment or CI, and should reach the GPU on Linux with the NVIDIA container runtime (not measured here). On macOS it does not: Docker Desktop's Linux VM has no Metal passthrough, so the same model measured 73 tok/s in the container against 380 tok/s natively. Those figures and the method behind them are in [the Model Runner investigation](docker-model-runner-findings.md). The app's sidebar reports which endpoint answered and whether the model is on the GPU, so you can always check.
 
 The default model is small enough to run on any machine, and answers accordingly; set `LLM_MODEL_NAME` (env or compose) to a larger Ollama model for better answers. See [Evaluation Results](docs/evaluation-results.md) for the numbers behind that tradeoff.
 
@@ -116,6 +118,14 @@ By default, the app uses Ollama for inference. To use a different backend, set `
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 ```
+
+**Docker Model Runner**
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:12434
+LLM_MODEL_NAME=huggingface.co/liquidai/lfm2-350m-gguf:Q8_0
+```
+Model Runner serves an Ollama-compatible API, so the `ollama` provider reaches it unchanged. Unlike a containerized Ollama it *is* GPU-accelerated on macOS, because it runs the inference engine as a host process outside the Docker VM. Three things to know here: the endpoint is off by default and needs `docker desktop enable model-runner --tcp=12434`; its prompt evaluation measured roughly half native Ollama's, which matters more than generation speed for RAG; and a name that doesn't match gets you an `ollama pull` suggestion that cannot work against this backend. Pull with `docker model pull hf.co/LiquidAI/LFM2-350M-GGUF:Q8_0`, then configure the name the way Model Runner reports it back, as above: `hf.co` expanded, the repository path lowercased, the quantization tag left alone. The app matches names exactly. [The Model Runner investigation](docker-model-runner-findings.md) has the measurements and the rest of the caveats.
 
 **LM Studio**
 ```bash
@@ -215,12 +225,12 @@ fi
 
 ## HTTP API
 
-`make api` starts a FastAPI server (`uvicorn`) alongside Streamlit, giving coding agents (Copilot, Claude Code, OpenCode, Cursor, aider) direct, token-budgeted access to the retrieval stack instead of falling back to grep/whole-file reads. It binds to `127.0.0.1` by default (`API_HOST`/`API_PORT`) — **exposing it beyond localhost requires adding authentication first; there is none today.**
+`make api` starts a FastAPI server (`uvicorn`) alongside Streamlit, giving coding agents (Copilot, Claude Code, OpenCode, Cursor, aider) direct, token-budgeted access to the retrieval stack instead of falling back to grep/whole-file reads. It binds to `127.0.0.1` by default (`API_HOST`/`API_PORT`). **Exposing it beyond localhost requires adding authentication first; there is none today.**
 
-- `POST /search` — `{"query": str, "k": int, "repo": str | null, "token_budget": int, "format": "json" | "compact"}`. Ranks chunks with the configured retriever (BM25 by default, matching the app; set `RETRIEVER=hybrid` to switch), drops overlapping chunks from the same file, and stops once the combined token estimate would exceed `token_budget` (default 2000). Each result has `path`, `start_line`, `end_line`, `score`, `snippet`, `token_estimate`. `format=compact` returns plain text (`path:start-end (score)` + snippet) instead of a JSON envelope.
-- `POST /answer` — `{"question": str, "stream": bool}`. Runs the full RAG chain and returns `answer` plus `sources` (file path + line range). `stream: true` returns Server-Sent Events (`event: token`, then a final `event: done` carrying `sources`).
-- `GET /repos` — ingested repositories with freshness metadata (last-ingest time, and the indexed HEAD SHA for git-backed repos).
-- `POST /ingest` — `{"source": str}`, accepting a git URL or a local filesystem path. Local paths are ingested from the working tree in place, without cloning. Re-ingesting diffs files by content hash so only changed files re-embed; unchanged chunks are left untouched. Returns a job status immediately (`202`); a second ingest while one is running gets `409`. Poll `GET /ingest/status` for completion.
+- `POST /search`, `{"query": str, "k": int, "repo": str | null, "token_budget": int, "format": "json" | "compact"}`. Ranks chunks with the configured retriever (BM25 by default, matching the app; set `RETRIEVER=hybrid` to switch), drops overlapping chunks from the same file, and stops once the combined token estimate would exceed `token_budget` (default 2000). Each result has `path`, `start_line`, `end_line`, `score`, `snippet`, `token_estimate`. `format=compact` returns plain text (`path:start-end (score)` + snippet) instead of a JSON envelope.
+- `POST /answer`, `{"question": str, "stream": bool}`. Runs the full RAG chain and returns `answer` plus `sources` (file path + line range). `stream: true` returns Server-Sent Events (`event: token`, then a final `event: done` carrying `sources`).
+- `GET /repos`, ingested repositories with freshness metadata (last-ingest time, and the indexed HEAD SHA for git-backed repos).
+- `POST /ingest`, `{"source": str}`, accepting a git URL or a local filesystem path. Local paths are ingested from the working tree in place, without cloning. Re-ingesting diffs files by content hash so only changed files re-embed; unchanged chunks are left untouched. Returns a job status immediately (`202`); a second ingest while one is running gets `409`. Poll `GET /ingest/status` for completion.
 
 ## Development
 
