@@ -23,7 +23,7 @@ from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
-from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
+from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
 from codebase_rag.services.folder_picker import FolderPicker
 
 logger = logging.getLogger(__name__)
@@ -263,7 +263,9 @@ class AppRuntime:
                 config.collection_name,
             )
 
-        self.vector_retriever = VectorRetriever(self.qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
+        self.vector_retriever = VectorRetriever(
+            self.qdrant_store, score_threshold=resolve_score_threshold(config.embedding_model)
+        )
         self.bm25_retriever = _load_or_create_bm25_retriever()
 
         self.llm = create_llm_client(

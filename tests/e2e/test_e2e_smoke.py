@@ -34,6 +34,8 @@ def qdrant_store() -> Iterator[QdrantStore]:
     yield store
     client = QdrantClient(host="localhost", port=6333)
     client.delete_collection("test_e2e_smoke")
+    # The model-binding sidecar is a separate collection and does not go with its parent.
+    client.delete_collection("test_e2e_smoke__meta")
 
 
 @pytest.fixture
@@ -160,6 +162,7 @@ class TestVectorRetriever:
 
         client = QdrantClient(host="localhost", port=6333)
         client.delete_collection("test_retriever_smoke")
+        client.delete_collection("test_retriever_smoke__meta")
 
 
 @pytest.mark.e2e

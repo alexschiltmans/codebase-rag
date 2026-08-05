@@ -20,8 +20,8 @@
 ## Why This Project?
 
 - **Fully local.** Runs entirely on your machine. Your code never leaves your hardware.
-- **BM25 retrieval by default.** The eval framework ran the same test set through vector-only, BM25-only, and hybrid RRF retrieval and measured recall for each, rather than assuming hybrid would win; BM25-only came out ahead, so that's what the app queries with. See the [retrieval ablation](evals/ablation.md).
-- **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 30 questions. See [Evaluation Results](docs/evaluation-results.md) for the retriever ablation and the model-size comparison.
+- **BM25 retrieval by default.** The eval framework ran the same test set through vector-only, BM25-only, and hybrid RRF retrieval and measured recall for each, rather than assuming hybrid would win; BM25-only came out ahead, so that's what the app queries with. See the [retrieval stack findings](evals/retrieval-stack-findings.md).
+- **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 30 questions. See [retrieval stack findings](evals/retrieval-stack-findings.md) for the current embedder, candidate-depth and reranker measurements.
 - **Observable.** Optional Langfuse integration traces every retrieval and generation step, so you can debug quality issues instead of guessing.
 - **Documented decisions.** Architecture Decision Records explain *why* each technology was chosen, not just *what* was used. See the [ADR index](docs/adr-index.md).
 - **Batteries included for the infrastructure.** `make services-start` gives you the vector DB and tracing dashboard with no configuration; `make app` starts the Streamlit app on the host. Inference is the one piece you choose: bring a native Ollama, any OpenAI-compatible server, or Docker Model Runner. A containerized Ollama is available too (`make services-start PROFILE=full`), but on macOS it runs on the CPU. [Getting Started](docs/getting-started.md) explains why that matters.
@@ -100,7 +100,7 @@ Quick start: install [Ollama](https://ollama.com) natively and `ollama pull sam8
 
 `make services-start PROFILE=full` containerizes everything including the LLM server, which is convenient for a disposable environment or CI, and should reach the GPU on Linux with the NVIDIA container runtime (not measured here). On macOS it does not: Docker Desktop's Linux VM has no Metal passthrough, so the same model measured 73 tok/s in the container against 380 tok/s natively. Those figures and the method behind them are in [the Model Runner investigation](docker-model-runner-findings.md). The app's sidebar reports which endpoint answered and whether the model is on the GPU, so you can always check.
 
-The default model is small enough to run on any machine, and answers accordingly; set `LLM_MODEL_NAME` (env or compose) to a larger Ollama model for better answers. See [Evaluation Results](docs/evaluation-results.md) for the numbers behind that tradeoff.
+The default model is small enough to run on any machine, and answers accordingly; set `LLM_MODEL_NAME` (env or compose) to a larger Ollama model for better answers. See [docs/deprecated/evaluation-results.md](docs/deprecated/evaluation-results.md) for the numbers behind that tradeoff, noting they are not reproducible against the current corpus.
 
 See the [setup guide](docs/getting-started.md) for Docker and local installation, repository ingestion, and example queries.
 

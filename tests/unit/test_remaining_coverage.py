@@ -452,6 +452,18 @@ class TestVectorRetrieverExtra:
         assert len(results) == 2
 
 
+class TestResolveScoreThreshold:
+    """Tests for per-model relevance cutoff resolution."""
+
+    def test_default_model_resolves_to_calibrated_value(self) -> None:
+        threshold = vector_search.resolve_score_threshold("sentence-transformers/all-mpnet-base-v2")
+        assert threshold == vector_search.VECTOR_SCORE_THRESHOLD
+
+    def test_unknown_model_resolves_to_no_threshold(self) -> None:
+        threshold = vector_search.resolve_score_threshold("some/uncalibrated-model")
+        assert threshold is None
+
+
 class TestBM25RetrieverExtra:
     """Additional tests for BM25Retriever."""
 

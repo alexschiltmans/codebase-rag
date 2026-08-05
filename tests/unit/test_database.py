@@ -190,13 +190,15 @@ class TestQdrantStore:
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_embedding_model_passed_through(self, mock_client_cls: MagicMock, mock_emb: MagicMock) -> None:
         QdrantStore(embedding_model="sentence-transformers/other-model")
-        mock_emb.assert_called_once_with(model_name="sentence-transformers/other-model")
+        mock_emb.assert_called_once_with(
+            model_name="sentence-transformers/other-model", max_seq_length=None, dtype=None
+        )
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_embedding_model_defaults_to_none(self, mock_client_cls: MagicMock, mock_emb: MagicMock) -> None:
         QdrantStore()
-        mock_emb.assert_called_once_with(model_name=None)
+        mock_emb.assert_called_once_with(model_name=None, max_seq_length=None, dtype=None)
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
@@ -261,7 +263,31 @@ class TestQdrantStore:
         docs = [Document(page_content="hello", metadata={"source": "test.py", "chunk_index": 0})]
         store.add_documents(docs)
 
-        mock_client.upsert.assert_called_once()
+        # One upsert records the model binding on the new meta collection, one upserts the batch.
+        assert mock_client.upsert.call_count == 2
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_add_documents_reuses_surviving_meta_collection(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """Dropping a collection leaves its `__meta` sidecar behind, so a rebuild has to overwrite
+        the binding rather than try to create the sidecar a second time and get a 409."""
+        mock_client = MagicMock()
+        mock_client.get_collections.return_value = MagicMock(collections=[])
+        mock_client.collection_exists.return_value = True
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.get_embeddings.return_value = [[0.1, 0.2, 0.3]]
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        store.add_documents([Document(page_content="hello", metadata={"source": "test.py", "chunk_index": 0})])
+
+        created = [c.kwargs.get("collection_name") for c in mock_client.create_collection.call_args_list]
+        assert "test_collection__meta" not in created
+        assert mock_client.upsert.call_count == 2
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
@@ -312,6 +338,9 @@ class TestQdrantStore:
     def test_similarity_search(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
 
         mock_client = MagicMock()
+        # No `__meta` sidecar, which is the state of any collection created before
+        # model binding existed. Verification is a no-op there rather than a failure.
+        mock_client.collection_exists.return_value = False
         coll = MagicMock()
         coll.name = "documents"
         mock_client.get_collections.return_value = MagicMock(collections=[coll])
@@ -337,6 +366,9 @@ class TestQdrantStore:
     def test_similarity_search_with_score(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
 
         mock_client = MagicMock()
+        # No `__meta` sidecar, which is the state of any collection created before
+        # model binding existed. Verification is a no-op there rather than a failure.
+        mock_client.collection_exists.return_value = False
         coll = MagicMock()
         coll.name = "documents"
         mock_client.get_collections.return_value = MagicMock(collections=[coll])
@@ -359,6 +391,113 @@ class TestQdrantStore:
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_add_documents_raises_on_model_mismatch_before_writing(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """Checking only on the read path reports the corruption after it has happened. A
+        same-dimension model re-ingested into an existing collection is accepted by Qdrant and
+        leaves two models' vectors under one index."""
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+        mock_client.collection_exists.return_value = True
+
+        meta_point = MagicMock()
+        meta_point.payload = {"embedding_model": "other/model", "dimension": 3}
+        mock_client.retrieve.return_value = [meta_point]
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "sentence-transformers/all-mpnet-base-v2"
+        mock_emb.get_embeddings.return_value = [[0.1, 0.2, 0.3]]
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        with pytest.raises(ValueError, match="other/model.*all-mpnet-base-v2"):
+            store.add_documents([Document(page_content="hello", metadata={"source": "a.py"})])
+
+        mock_client.upsert.assert_not_called()
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_transport_failure_does_not_latch_the_guard_off(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """A failed read must not be mistaken for 'nothing recorded'. Swallowing it would
+        disable the guard for the rest of the process after a single connection blip."""
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+        mock_client.collection_exists.return_value = True
+        mock_client.retrieve.side_effect = ConnectionError("qdrant restarting")
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "sentence-transformers/all-mpnet-base-v2"
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        with pytest.raises(ConnectionError):
+            store.similarity_search_with_score("query")
+        assert store._model_binding_verified is False
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_encoding_settings_mismatch_is_caught_not_just_model_name(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """A prompt prefix changes the vectors as much as changing the model does."""
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+        mock_client.collection_exists.return_value = True
+
+        meta_point = MagicMock()
+        meta_point.payload = {
+            "embedding_model": "same/model",
+            "document_prompt": "passage: ",
+            "dimension": 768,
+        }
+        mock_client.retrieve.return_value = [meta_point]
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "same/model"
+        mock_emb.document_prompt = ""
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        with pytest.raises(ValueError, match="document_prompt"):
+            store.similarity_search_with_score("query")
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_similarity_search_raises_on_model_mismatch(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+
+        meta_point = MagicMock()
+        meta_point.payload = {"embedding_model": "other/model", "dimension": 768}
+        mock_client.retrieve.return_value = [meta_point]
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "sentence-transformers/all-mpnet-base-v2"
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        with pytest.raises(ValueError, match="other/model.*all-mpnet-base-v2"):
+            store.similarity_search_with_score("query")
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_similarity_search_no_collection(self, mock_client_cls: MagicMock, mock_emb: MagicMock) -> None:
 
         mock_client = MagicMock()
@@ -374,6 +513,9 @@ class TestQdrantStore:
     def test_similarity_search_error(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
 
         mock_client = MagicMock()
+        # No `__meta` sidecar, which is the state of any collection created before
+        # model binding existed. Verification is a no-op there rather than a failure.
+        mock_client.collection_exists.return_value = False
         coll = MagicMock()
         coll.name = "documents"
         mock_client.get_collections.return_value = MagicMock(collections=[coll])
@@ -393,6 +535,9 @@ class TestQdrantStore:
     def test_similarity_search_with_filter(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
 
         mock_client = MagicMock()
+        # No `__meta` sidecar, which is the state of any collection created before
+        # model binding existed. Verification is a no-op there rather than a failure.
+        mock_client.collection_exists.return_value = False
         coll = MagicMock()
         coll.name = "documents"
         mock_client.get_collections.return_value = MagicMock(collections=[coll])

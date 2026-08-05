@@ -10,7 +10,9 @@ Two checks:
   1. Every codebase_rag import in a tracked src/, evals/, scripts/, or tests/ file resolves
      to a tracked file (covers both `from codebase_rag.llm.x import y` and the submodule
      form `from codebase_rag.llm import x` / `from .llm import x`).
-  2. Every .py path the Makefile invokes directly (`$(PYTHON) scripts/foo.py`) is tracked.
+  2. Every bare-name import that resolves to a sibling .py file is tracked. evals/ puts its
+     own directory on sys.path and imports by bare name, a form check 1 does not see at all.
+  3. Every .py path the Makefile invokes directly (`$(PYTHON) scripts/foo.py`) is tracked.
      Without this, a Makefile hunk referencing an untracked script (this script, the first
      time it was added) passes here and dies on a clean clone with a missing-file error,
      the exact failure class this script exists to catch, one level up.
@@ -147,6 +149,31 @@ def check_imports(tracked: set[Path]) -> list[str]:
     return problems
 
 
+def check_sibling_imports(tracked: set[Path]) -> list[str]:
+    """Catch bare-name imports of a file sitting next to the importer.
+
+    `evals/` puts its own directory on sys.path and then imports by bare module name
+    (`from retrieval_metrics import ...`). `check_imports` only resolves `codebase_rag`
+    imports, so that form slipped past it entirely and a tracked `run_eval.py` importing an
+    untracked sibling reported clean while dying on a clean clone.
+
+    Only a bare name that actually resolves to a `.py` file in the importer's own directory
+    counts, which keeps third-party imports out of it.
+    """
+    problems = []
+    for file_path in sorted(tracked):
+        for module in imported_modules(file_path):
+            if "." in module:
+                continue
+            sibling = file_path.parent / f"{module}.py"
+            if not sibling.is_file() or sibling in tracked:
+                continue
+            rel_source = file_path.relative_to(REPO_ROOT)
+            rel_target = sibling.relative_to(REPO_ROOT)
+            problems.append(f"{rel_source} imports sibling '{module}' -> {rel_target}, which is not tracked by git")
+    return problems
+
+
 def check_makefile_scripts() -> list[str]:
     makefile = REPO_ROOT / "Makefile"
     if not makefile.is_file():
@@ -177,7 +204,7 @@ def main() -> int:
         print("check_tracked_imports: no tracked Python files found, skipping")
         return 0
 
-    problems = check_imports(tracked) + check_makefile_scripts()
+    problems = check_imports(tracked) + check_sibling_imports(tracked) + check_makefile_scripts()
 
     if problems:
         print("check_tracked_imports: found references to untracked files:")

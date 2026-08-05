@@ -1,5 +1,13 @@
 # Evaluation Results
 
+> **Deprecated: not reproducible.** This run used an older 16-question test set and a multi-repository corpus.
+> The current test set is the 30-question `evals/testset.json`, against a single
+> repository.
+> Kept as a record of what was measured and when. Do not compare these figures against
+> newer numbers or cite them as current.
+>
+> Current retrieval measurements are in [retrieval-stack-findings.md](../retrieval-stack-findings.md).
+
 **Test set:** 16 questions against the PowerGridModel repository
 **LLM:** sam860/LFM2:350m (via Ollama)
 **Retriever:** Vector search (Qdrant, sentence-transformers/all-mpnet-base-v2)

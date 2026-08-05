@@ -35,6 +35,8 @@ class QdrantStore:
         collection_name: str = "documents",
         embedding_model: str | None = None,
         recreate_collection: bool = False,
+        embedding_max_seq_length: int | None = None,
+        embedding_dtype: str | None = None,
     ) -> None:
         """Initialize the Qdrant vector store.
 
@@ -45,6 +47,8 @@ class QdrantStore:
             embedding_model: Name of the HuggingFace model for embeddings. When None,
                 EmbeddingManager falls back to Config.embedding_model.
             recreate_collection: Whether to recreate the collection if it exists.
+            embedding_max_seq_length: Optional sequence-length override for the embedding model.
+            embedding_dtype: Optional load precision for the embedding model.
         """
         self.host = host
         self.port = port
@@ -52,7 +56,12 @@ class QdrantStore:
         self.embedding_model = embedding_model
         self.recreate_collection = recreate_collection
 
-        self.embedding_manager = EmbeddingManager(model_name=embedding_model)
+        self.embedding_manager = EmbeddingManager(
+            model_name=embedding_model,
+            max_seq_length=embedding_max_seq_length,
+            dtype=embedding_dtype,
+        )
+        self._model_binding_verified = False
 
         self.client = QdrantClient(host=host, port=port)
 
@@ -61,6 +70,87 @@ class QdrantStore:
             logger.info("Deleted existing collection '%s' for recreation", collection_name)
 
         logger.info("Initialized QdrantStore with collection '%s'", collection_name)
+
+    def _meta_collection_name(self) -> str:
+        return f"{self.collection_name}__meta"
+
+    def _encoding_identity(self) -> dict[str, object]:
+        """Everything that changes the vectors a text produces.
+
+        The model name alone is not enough: a prompt prefix or a sequence-length cap changes
+        the output as surely as swapping the model does, and a collection built one way cannot
+        be queried the other way.
+        """
+        manager = self.embedding_manager
+        return {
+            "embedding_model": manager.model_name,
+            "query_prompt": getattr(manager, "query_prompt", ""),
+            "document_prompt": getattr(manager, "document_prompt", ""),
+            "max_seq_length": getattr(manager, "max_seq_length", None),
+            "dtype": getattr(manager, "dtype", None),
+        }
+
+    def _record_model_binding(self, vector_size: int) -> None:
+        """Record the encoding configuration a newly created collection was built with."""
+        meta_name = self._meta_collection_name()
+        # The sidecar outlives its collection: dropping a collection does not drop this, so a
+        # recreated collection finds the old sidecar still there and must overwrite the binding
+        # rather than fail trying to create it again.
+        if not self.client.collection_exists(meta_name):
+            self.client.create_collection(
+                collection_name=meta_name,
+                vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+            )
+        self.client.upsert(
+            collection_name=meta_name,
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid5(uuid.NAMESPACE_URL, meta_name)),
+                    vector=[0.0],
+                    payload={**self._encoding_identity(), "dimension": vector_size},
+                )
+            ],
+        )
+
+    def _verify_model_binding(self) -> None:
+        """Verify the collection's recorded embedding model matches the configured one.
+
+        Raises:
+            ValueError: If the collection was built with a different embedding model
+                than the one currently configured, naming both.
+        """
+        if self._model_binding_verified:
+            return
+
+        meta_name = self._meta_collection_name()
+        # Existence is checked rather than inferred from a failed read. Catching every
+        # exception here would read a connection blip as "nothing recorded" and then latch
+        # the guard off for the rest of the process, which is the opposite of what it is for.
+        # A transport failure propagates instead; the query it guards would have failed anyway.
+        if not self.client.collection_exists(meta_name):
+            self._model_binding_verified = True
+            return
+
+        points = self.client.retrieve(
+            collection_name=meta_name,
+            ids=[str(uuid.uuid5(uuid.NAMESPACE_URL, meta_name))],
+        )
+        payload = points[0].payload if points and points[0].payload else {}
+
+        mismatches = []
+        for field, configured in self._encoding_identity().items():
+            recorded = payload.get(field)
+            # A field absent from the payload predates this check and is not evidence of a match.
+            if recorded is not None and recorded != configured:
+                mismatches.append(f"{field}: recorded '{recorded}', configured '{configured}'")
+
+        if mismatches:
+            raise ValueError(
+                f"Collection '{self.collection_name}' was built with a different embedding "
+                f"configuration than the one now in use ({'; '.join(mismatches)}). "
+                "Querying it with vectors produced a different way gives meaningless scores."
+            )
+        self._model_binding_verified = True
 
     def _ensure_collection(self, vector_size: int) -> None:
         """Ensure the collection exists with the correct configuration.
@@ -78,6 +168,8 @@ class QdrantStore:
                 field_name="repo",
                 field_schema=PayloadSchemaType.KEYWORD,
             )
+            self._record_model_binding(vector_size)
+            self._model_binding_verified = True
             logger.info("Created new Qdrant collection '%s' with vector size %d", self.collection_name, vector_size)
 
     def add_documents(self, documents: list[Document]) -> None:
@@ -100,6 +192,11 @@ class QdrantStore:
             embeddings = self.embedding_manager.get_embeddings(texts)
 
             self._ensure_collection(vector_size=len(embeddings[0]))
+            # Verify before writing, not just before reading. Re-ingesting into an existing
+            # collection with a different model of the same dimension is accepted by Qdrant and
+            # leaves two models' vectors under one index; checking only on the read path would
+            # report that after the damage rather than prevent it.
+            self._verify_model_binding()
 
             points = []
             for doc, embedding in zip(documents, embeddings, strict=True):
@@ -184,6 +281,8 @@ class QdrantStore:
         if not self.collection_exists():
             logger.error("Collection '%s' does not exist, cannot perform search", self.collection_name)
             return []
+
+        self._verify_model_binding()
 
         try:
             query_embedding = self.embedding_manager.get_query_embedding(query)

@@ -1,8 +1,20 @@
 # Evaluation Results
 
+> **Deprecated: not reproducible.** These numbers were measured against a corpus of `power-grid-model` and
+> `power-grid-model-ds`. Evaluation has since moved to a single repository
+> (`power-grid-model` alone).
+> Kept as a record of what was measured and when. Do not compare these figures against
+> newer numbers or cite them as current.
+>
+> Current retrieval measurements are in [retrieval-stack-findings.md](../../evals/retrieval-stack-findings.md).
+>
+> The default-retriever decision this document drove (BM25-only in `AppRuntime`) is still the
+> shipped behavior and is not reversed by this deprecation. What lapsed is the reproducibility
+> of the figures, not the choice they justified.
+
 This repo ships with a reproducible evaluation framework. The system was evaluated on 16 hand-picked questions against the PowerGridModel repository with two different model sizes.
 
-See [evals/results_small_model.md](../evals/results_small_model.md) and [evals/results_large_model.md](../evals/results_large_model.md) for full breakdowns, or run your own:
+See [evals/results_small_model.md](../../evals/deprecated/results_small_model.md) and [evals/results_large_model.md](../../evals/deprecated/results_large_model.md) for full breakdowns, or run your own:
 
 ```bash
 python evals/run_eval.py
@@ -23,9 +35,9 @@ The "large model" column is a past run with `qwen3-coder:30b`, kept here as a hi
 
 ## Retrieval Ablation
 
-The app's default retriever is BM25-only (see "Default retriever decision" below). To measure the alternatives, the eval runs the full test set through vector-only, BM25-only, and hybrid (RRF) retrieval. The test set is now 30 questions: the original 16 (10 exact-term lookups of function/class/enum names plus 6 multi-file/how-it-works reasoning questions) and 14 conceptual/paraphrased questions added to stop the comparison being biased toward BM25's home turf. Full results: [evals/ablation.md](../evals/ablation.md), [evals/results_vector.md](../evals/results_vector.md), [evals/results_bm25.md](../evals/results_bm25.md), [evals/results_hybrid.md](../evals/results_hybrid.md).
+The app's default retriever is BM25-only (see "Default retriever decision" below). To measure the alternatives, the eval runs the full test set through vector-only, BM25-only, and hybrid (RRF) retrieval. The test set is now 30 questions: the original 16 (10 exact-term lookups of function/class/enum names plus 6 multi-file/how-it-works reasoning questions) and 14 conceptual/paraphrased questions added to stop the comparison being biased toward BM25's home turf. Full results: [evals/ablation.md](../../evals/deprecated/ablation.md), [evals/results_vector.md](../../evals/deprecated/results_vector.md), [evals/results_bm25.md](../../evals/deprecated/results_bm25.md), [evals/results_hybrid.md](../../evals/deprecated/results_hybrid.md).
 
-Figures below are from the 2026-08-03 re-run (`evals/ablation.md`), which supersedes the 2026-07-31 and 2026-07-28 runs and the 2026-07-21 baseline.
+Figures below are from the 2026-08-03 re-run (`evals/deprecated/ablation.md`), which supersedes the 2026-07-31 and 2026-07-28 runs and the 2026-07-21 baseline.
 
 | Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Avg Latency |
 |-----------|----------|-----|----------------|------------------|-------------|

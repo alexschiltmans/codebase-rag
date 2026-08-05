@@ -33,6 +33,17 @@ def _env_int(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer, got '{raw}'") from None
 
 
+def _env_optional_int(name: str, default: int | None) -> int | None:
+    """Read an optional int env var, treating an empty value as unset."""
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got '{raw}'") from None
+
+
 @dataclass
 class Config:
     """Configuration settings for the application.
@@ -66,6 +77,10 @@ class Config:
     llm_api_key: str = ""
     llm_model_name: str = "sam860/LFM2:350m"
     embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
+    embedding_query_prompt: str = ""
+    embedding_document_prompt: str = ""
+    embedding_max_seq_length: int | None = None
+    embedding_dtype: str = ""
     ollama_num_ctx: int = 8192
 
     # Default repository for auto-ingestion on first startup
@@ -126,6 +141,10 @@ class Config:
                 llm_api_key=_env("LLM_API_KEY", cls.llm_api_key),
                 llm_model_name=_env("LLM_MODEL_NAME", cls.llm_model_name),
                 embedding_model=_env("EMBEDDING_MODEL", cls.embedding_model),
+                embedding_query_prompt=_env("EMBEDDING_QUERY_PROMPT", cls.embedding_query_prompt),
+                embedding_document_prompt=_env("EMBEDDING_DOCUMENT_PROMPT", cls.embedding_document_prompt),
+                embedding_max_seq_length=_env_optional_int("EMBEDDING_MAX_SEQ_LENGTH", cls.embedding_max_seq_length),
+                embedding_dtype=_env("EMBEDDING_DTYPE", cls.embedding_dtype),
                 ollama_num_ctx=_env_int("OLLAMA_NUM_CTX", cls.ollama_num_ctx),
                 default_repo_url=_env("DEFAULT_REPO_URL", cls.default_repo_url),
                 log_level=_env("LOG_LEVEL", cls.log_level),

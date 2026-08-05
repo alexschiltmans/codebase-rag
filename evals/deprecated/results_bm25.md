@@ -1,5 +1,13 @@
 # Evaluation Results
 
+> **Deprecated: not reproducible.** These numbers were measured against a corpus of `power-grid-model` and
+> `power-grid-model-ds`. Evaluation has since moved to a single repository
+> (`power-grid-model` alone).
+> Kept as a record of what was measured and when. Do not compare these figures against
+> newer numbers or cite them as current.
+>
+> Current retrieval measurements are in [retrieval-stack-findings.md](../retrieval-stack-findings.md).
+
 **Date:** 2026-08-03 15:54
 
 **Test set:** 30 questions

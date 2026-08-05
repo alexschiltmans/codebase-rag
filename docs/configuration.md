@@ -12,7 +12,7 @@ All settings are configured via environment variables or a `.env` file in the pr
 | `LLM_PROVIDER` | `ollama` | LLM backend: `ollama` or `openai-compat` (LM Studio, llama.cpp, vLLM, Jan) |
 | `LLM_MODEL_NAME` | `sam860/LFM2:350m` | Model name for generation |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | HuggingFace embedding model |
-| `RETRIEVER` | `bm25` | Retriever the HTTP API serves search and answer requests from: `bm25` or `hybrid`. `bm25` matches the Streamlit app's default, on ablation evidence in `evals/ablation.md` (hit rate 0.6552 vs 0.5862 for hybrid). `HybridRetriever` is still built and used by the eval ablation and by the ingestion pipeline's duplicate-detection search regardless of this setting. |
+| `RETRIEVER` | `bm25` | Retriever the HTTP API serves search and answer requests from: `bm25` or `hybrid`. `bm25` matches the Streamlit app's default, on ablation evidence in `evals/deprecated/ablation.md` (hit rate 0.6552 vs 0.5862 for hybrid; those figures are deprecated but the decision stands). `HybridRetriever` is still built and used by the eval ablation and by the ingestion pipeline's duplicate-detection search regardless of this setting. |
 
 ## Generation settings (all backends)
 

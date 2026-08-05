@@ -1,49 +1,112 @@
 """Embedding models for converting text to vector representations."""
 
 import logging
-from typing import cast
+from typing import Any, cast
 
+import torch
 from sentence_transformers import SentenceTransformer
 
 from ..config import Config
 
 logger = logging.getLogger(__name__)
 
+# Load precisions worth offering. `SentenceTransformer` loads float32 unless told
+# otherwise, so a 4B model stored at bf16 (7.5GB on disk) occupies ~16GB in memory —
+# enough, with a large encode batch, to push this machine into swap.
+_SUPPORTED_DTYPES = ("float32", "float16", "bfloat16")
+
 
 class EmbeddingManager:
     """Manager class for text embedding models.
 
-    Caches one instance per model name so repeated construction with the same
-    model reuses the already-loaded `SentenceTransformer`, while a different
-    model name gets its own instance instead of silently reusing the wrong one.
+    Caches one instance per (model name, encoding settings) key so repeated
+    construction with the same settings reuses the already-loaded
+    `SentenceTransformer`, while different settings get their own instance
+    instead of silently reusing the wrong one.
     """
 
-    _instances: dict[str, "EmbeddingManager"] = {}
+    _instances: dict[tuple[str, str, str, int | None, str | None], "EmbeddingManager"] = {}
 
-    def __new__(cls, model_name: str | None = None) -> "EmbeddingManager":
+    def __new__(
+        cls,
+        model_name: str | None = None,
+        query_prompt: str | None = None,
+        document_prompt: str | None = None,
+        max_seq_length: int | None = None,
+        dtype: str | None = None,
+    ) -> "EmbeddingManager":
         config = Config.get_instance()
         resolved_model_name = model_name or config.embedding_model
+        resolved_query_prompt = query_prompt if query_prompt is not None else config.embedding_query_prompt
+        resolved_document_prompt = document_prompt if document_prompt is not None else config.embedding_document_prompt
+        resolved_max_seq_length = max_seq_length if max_seq_length is not None else config.embedding_max_seq_length
+        resolved_dtype = dtype if dtype is not None else config.embedding_dtype
 
-        if resolved_model_name not in cls._instances:
+        if resolved_dtype and resolved_dtype not in _SUPPORTED_DTYPES:
+            raise ValueError(f"embedding dtype must be one of {_SUPPORTED_DTYPES}, got '{resolved_dtype}'")
+
+        cache_key = (
+            resolved_model_name,
+            resolved_query_prompt,
+            resolved_document_prompt,
+            resolved_max_seq_length,
+            resolved_dtype or None,
+        )
+
+        if cache_key not in cls._instances:
             instance = super().__new__(cls)
-            instance._initialize(resolved_model_name)
-            cls._instances[resolved_model_name] = instance
+            instance._initialize(
+                resolved_model_name,
+                resolved_query_prompt,
+                resolved_document_prompt,
+                resolved_max_seq_length,
+                resolved_dtype or None,
+            )
+            cls._instances[cache_key] = instance
 
-        return cls._instances[resolved_model_name]
+        return cls._instances[cache_key]
 
-    def _initialize(self, model_name: str) -> None:
+    def _initialize(
+        self,
+        model_name: str,
+        query_prompt: str,
+        document_prompt: str,
+        max_seq_length: int | None,
+        dtype: str | None,
+    ) -> None:
         self.model_name = model_name
+        self.dtype = dtype
 
         logger.info("Initializing embedding model: %s", self.model_name)
-        self.model = SentenceTransformer(self.model_name)
-        logger.info("Embedding model initialized")
+        model_kwargs: dict[str, Any] | None = {"torch_dtype": getattr(torch, dtype)} if dtype else None
+        self.model = SentenceTransformer(self.model_name, model_kwargs=model_kwargs)
+
+        # Resolution order: explicit config wins, then the model's own declared prompts,
+        # then no prefix at all.
+        declared_prompts = self.model.prompts or {}
+        self.query_prompt = query_prompt or declared_prompts.get("query", "")
+        self.document_prompt = document_prompt or declared_prompts.get("document", "")
+
+        if max_seq_length is not None:
+            self.model.max_seq_length = max_seq_length
+        self.max_seq_length = self.model.max_seq_length
+
+        logger.info(
+            "Embedding model initialized (query_prompt=%r, document_prompt=%r, max_seq_length=%s, dtype=%s)",
+            self.query_prompt,
+            self.document_prompt,
+            self.max_seq_length,
+            self.dtype or "default (float32)",
+        )
 
     def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for a list of texts."""
-        embeddings = self.model.encode(texts, normalize_embeddings=True)
+        prompt = self.document_prompt or None
+        embeddings = self.model.encode(texts, prompt=prompt, normalize_embeddings=True)
         return cast(list[list[float]], embeddings.tolist())
 
     def get_query_embedding(self, text: str) -> list[float]:
         """Get embedding for a query text."""
-        embedding = self.model.encode(text, normalize_embeddings=True)
+        prompt = self.query_prompt or None
+        embedding = self.model.encode(text, prompt=prompt, normalize_embeddings=True)
         return cast(list[float], embedding.tolist())

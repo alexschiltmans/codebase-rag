@@ -81,8 +81,13 @@ from ragas.metrics._context_recall import ContextRecall
 from ragas.metrics._faithfulness import Faithfulness
 from ragas.run_config import RunConfig
 
-# Add project root to path
+# Add project root and this script's own directory to path (the latter so
+# `retrieval_metrics` resolves as a bare import both when run as a script and
+# when imported as `evals.run_eval`).
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent))
+
+from retrieval_metrics import compute_retrieval_hit_and_reciprocal_rank
 
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
@@ -91,7 +96,7 @@ from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever as Bm25Index
 from codebase_rag.retrieval.bm25_search import load_bm25_corpus
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
-from codebase_rag.retrieval.vector_search import VECTOR_SCORE_THRESHOLD, VectorRetriever
+from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -287,11 +292,14 @@ def load_testset() -> list[dict[Any, Any]]:
 def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     """Build the requested retriever (vector-only, BM25-only, or hybrid).
 
-    The hybrid arm applies `VECTOR_SCORE_THRESHOLD` to its vector component,
-    matching the configuration `AppRuntime` ships — otherwise the ablation
-    would measure a retrieval setup no user actually runs. The vector-only
-    arm stays unthresholded on purpose: it isolates the embedding model's
-    raw ranking quality, independent of the production relevance cutoff.
+    The hybrid arm resolves its cutoff the same way `AppRuntime` and `ApiState`
+    do, through `resolve_score_threshold` on the configured embedding model,
+    rather than hardcoding one model's calibrated value. Hardcoding it would
+    make the ablation measure a setup no user runs as soon as the configured
+    embedder is one with no calibrated cutoff, which is the very thing this
+    arm exists to avoid. The vector-only arm stays unthresholded on purpose:
+    it isolates the embedding model's raw ranking quality, independent of the
+    production relevance cutoff.
 
     Args:
         retriever_type: One of "vector", "bm25", "hybrid".
@@ -311,7 +319,8 @@ def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     if retriever_type == "bm25":
         return bm25_retriever
     if retriever_type == "hybrid":
-        vector_retriever = VectorRetriever(qdrant_store, score_threshold=VECTOR_SCORE_THRESHOLD)
+        threshold = resolve_score_threshold(Config.get_instance().embedding_model)
+        vector_retriever = VectorRetriever(qdrant_store, score_threshold=threshold)
         return HybridRetriever(vector_retriever, bm25_retriever)
     raise ValueError(f"Unknown retriever type: {retriever_type}")
 
@@ -408,27 +417,6 @@ def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict]) -> list[dict]:
                 }
             )
     return results
-
-
-def compute_retrieval_hit_and_reciprocal_rank(expected: list[str], actual: list[str]) -> tuple[int, float]:
-    """Score one question's retrieval against its expected sources, independent of the generated answer.
-
-    Args:
-        expected: Expected source patterns (e.g. `"enum.py"`), matched as
-            case-insensitive substrings, same convention as source precision.
-        actual: Retrieved document paths, in rank order.
-
-    Returns:
-        `(hit, reciprocal_rank)` — hit is 1 if any expected source matches any
-        retrieved document, else 0; reciprocal_rank is `1 / (1-based rank of
-        the first match)`, or 0 if there is no match.
-    """
-    expected_lower = [s.lower() for s in expected]
-    for rank, src in enumerate(actual, start=1):
-        src_lower = src.lower()
-        if any(exp in src_lower for exp in expected_lower):
-            return 1, 1 / rank
-    return 0, 0.0
 
 
 def compute_custom_metrics(results: list[dict]) -> dict:
@@ -807,12 +795,18 @@ def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]
         "quoting source identifiers, so a retriever's hit rate on them reflects semantic matching "
         "rather than keyword overlap.\n"
     )
+    embedding_model = Config.get_instance().embedding_model
+    resolved_threshold = resolve_score_threshold(embedding_model)
+    cutoff_text = (
+        f"the cosine relevance cutoff calibrated for `{embedding_model}` (`{resolved_threshold}`)"
+        if resolved_threshold is not None
+        else f"no relevance cutoff, because `{embedding_model}` has no calibrated value"
+    )
     lines.append(
-        f"The hybrid arm applies the production cosine relevance cutoff "
-        f"(`VECTOR_SCORE_THRESHOLD={VECTOR_SCORE_THRESHOLD}`) to its vector component, matching "
-        "the app's shipped configuration. The vector-only arm is unthresholded to isolate raw "
-        "embedding ranking quality; BM25 scores are never thresholded (zero-overlap documents "
-        "are excluded by construction).\n"
+        f"The hybrid arm applies {cutoff_text} to its vector component, resolved the same way the "
+        "app resolves it, so this arm matches the shipped configuration for whichever embedder is "
+        "configured. The vector-only arm is unthresholded to isolate raw embedding ranking quality; "
+        "BM25 scores are never thresholded (zero-overlap documents are excluded by construction).\n"
     )
     lines.append(
         "Avg Latency figures are comparable only across runs with similar latency probes — see "
