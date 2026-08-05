@@ -205,6 +205,63 @@ hybrid arm's hit rate (0.8333 to 0.8571) and lifts the poorly ordered BM25 list'
 every input it shares with it. "Worse than no reranker" is better read as "unreliable, and still not
 worth it on this corpus" than as "always worse."
 
+### An ensemble of the two strongest embedders is bounded out without building one
+
+The original measurement left one question open: bge-m3 and Qwen3-Embedding-0.6B tied at 0.7931 while
+failing on different questions, which is the shape of an ensemble opportunity rather than of
+equivalence, and no combination was ever measured. It can be answered from what is already on disk.
+
+A combined first stage draws its output from the union of its components' candidate lists, and
+truncating that union to an output depth can only drop documents from it. The recall of the union at
+matched input depth is therefore a ceiling on any fusion of those components, whether by rank, by
+score, or by anything else. Every arm's retrieved order is saved per question, so that ceiling is
+computable without retrieving anything.
+
+| arm | bge-m3 | 0.6B | union ceiling | headroom over best component |
+|---|---|---|---|---|
+| vector d10 | 37/42 | 34/42 | 38/42 | 1 |
+| hybrid d10 | 36/42 | 35/42 | 37/42 | 1 |
+| vector d50 | 39/42 | 37/42 | 39/42 | **0** |
+| hybrid d50 | 39/42 | 37/42 | 39/42 | **0** |
+| hybrid d100 | 41/42 | 39/42 | 41/42 | **0** |
+| vector d10 (N=29, historical) | 23/29 | 23/29 | 24/29 | 1 |
+| hybrid d50 (N=29, historical) | 26/29 | 26/29 | 26/29 | **0** |
+| hybrid d100 (N=29, historical) | 27/29 | 27/29 | 27/29 | **0** |
+
+**The union column is an upper bound on a combination nobody built, not a measured arm.** A real
+fusion can fall short of these numbers and cannot exceed them. Nothing in this table was retrieved,
+embedded, or reranked for it.
+
+**At depth 50 and beyond, the 0.6B retrieves nothing bge-m3 misses**, on both test sets. The best case
+anywhere is one question at depth 10, which is 2.38 points against a floor of 3 questions, so even a
+fusion that reached its ceiling exactly would produce nothing this document would report as a ranking.
+The result does not rest on the corrected ground truth either: the headroom was already zero at depth
+50 and 100 on the original 29-question set, before the correction removed the tie that motivated the
+question.
+
+Which question supplies the headroom moved, while the headroom itself did not. At both depth-10 arms
+on the current set bge-m3 is the single best component, and the union gains *"How do you create input
+data for a power-grid-model calculation?"* over it, the question that no arm at any depth could
+retrieve on the original set. On the original set the two models tie, so there is no single best
+component to attribute the gain to: the union gains the C++ standard question over bge-m3 and the
+short circuit fault types question over the 0.6B, one question either way. The C++ standard question
+is the one the source-pattern audit later reclassified as an honest miss for both models.
+
+Two limits on this. Both components were measured at 12346 chunks, while the shipped arms have since
+been re-measured at 19637; a component and its union move together under a re-chunk, which is a reason
+to expect the headroom to be the stable quantity rather than a measurement that it is. And there is no
+0.6B vector d100 arm at the corrected set, so that one cell is absent rather than computed. Filling it
+means a full index build of roughly 22 minutes, and the hybrid d100 row already covers that depth at
+zero headroom, so the build was declined.
+
+**Recommendation: do not ensemble these two embedders.** Judged against bge-m3, its own best component
+rather than against the shipped model, a fusion is bounded at one question at depth 10 and at exactly
+nothing at the depths a reranker actually consumes. No cost figure is needed to reach that: an
+ensemble means two models resident, two index builds and two query encodings, and the quality column
+it would have to justify is empty. This is a result about these two models on this corpus. A model
+less correlated with bge-m3 than the 0.6B is could have headroom against it, and nothing here measures
+that.
+
 ### Recommendations, restated
 
 **Embedder: nothing measured here justifies a migration.** The original case was a 4-question hit-rate
@@ -217,7 +274,9 @@ index roughly three times faster than 0.6B. Do not go above 1B regardless.
 
 The honest next step before any embedder decision is a larger test set. Every pairwise difference in
 that table except bge-m3 over 0.6B is 2 questions or fewer, and this set has now reversed its own
-headline result under correction.
+headline result under correction. Combining the two strongest embedders instead of choosing between
+them is not the way out: it is bounded at zero questions of gain at the depths that matter, as the
+ensemble section above shows.
 
 **Depth: the case for 100 over 50 is stronger than it was.** The original recommendation of 50 rested
 on depth 100 buying exactly one more question. At N=42 it buys 2 on three of the five first stages and
@@ -264,7 +323,8 @@ this slot on a corpus of this kind.
 
 Between the two winners, 0.6B has the better ordering (MRR 0.6371 against 0.5931) and bge-m3 builds
 its index roughly three times faster. They tie exactly on hit rate, but see the ensemble note below,
-because that tie is not the whole story.
+because that tie is not the whole story. Both the tie and the ensemble opportunity it suggested have
+since been answered; see the ensemble section in the update above.
 
 ## Candidate depth (original measurement, N=29 — historical, see the update above)
 
@@ -363,6 +423,12 @@ those call for different decisions.
 fault types question that 0.6B misses; 0.6B recovers the C++ standard question that bge-m3 misses.
 That is an ensemble result rather than a tie, and it means the ceiling for a combination of the two is
 above either one alone. Nothing here measured such a combination.
+
+**Since measured, and the answer is no.** The ceiling for a combination is above either component by
+exactly one question at depth 10 and by nothing at all at depth 50 and 100, on this set and on the
+corrected one. The two questions named just above are exactly what the combination would have gained
+here, one over each model, and the source-pattern audit later reclassified the C++ standard one as a
+miss for both. See the ensemble section in the update above.
 
 ## Recommendations per slot (embedder bullet superseded, see the update above; rest still current)
 
@@ -509,6 +575,24 @@ roughly 100 minutes at those settings on the measurement machine, slower than th
 above but consistent with it; treat this as a floor, not a guarantee. Swap usage climbed to within
 ~1.5GB of exhaustion partway through and did not degrade further, but a machine under more concurrent
 load than this one was under should expect it to be closer.
+
+**Bounding a combination of arms, without building one:** `evals/fusion_bound.py` scores the union of
+two or more saved arms at matched depth, through the same metric code as every other number here, and
+prints each component's recall, the union's, and the headroom between them. It refuses arms scored
+against different test sets, at different candidate depths, over different repositories or under
+different ground truth, and it refuses the same arm given twice: `bench_results/` holds arms from more
+than one test set under filenames that say nothing about the questions. Chunking it cannot refuse.
+Arm records do not save the chunk configuration their index was built with, and two arms of the same
+model over different chunkings agree in every field that is saved, so the report prints that gate as
+missing and matching it is the caller's job. When two components tie for best, both are named with
+the questions the union gains over each, since the headroom is the same number against either and the
+questions supplying it are not. This is what produced the ensemble table above:
+
+```
+python evals/fusion_bound.py \
+  baai-bge-m3_vector_d10_float16_seq768 \
+  qwen-qwen3-embedding-0-6b_vector_d10_float16_seq768
+```
 
 **Rescoring only, when just `testset.json` changed and retrieval did not:** `evals/rescore_testset.py`
 recomputes hit rate, MRR, recall, and category breakdown for every saved arm in `evals/bench_results/`
