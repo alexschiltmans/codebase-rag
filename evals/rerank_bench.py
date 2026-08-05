@@ -31,6 +31,7 @@ from typing import Any, cast
 sys.path.insert(0, str(Path(__file__).parent))
 
 from retrieval_metrics import compute_recall_at_depth, compute_retrieval_hit_and_reciprocal_rank
+from testset_provenance import testset_provenance
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -297,7 +298,8 @@ def main() -> None:
     with open(args.candidates) as f:
         candidate_lists: list[dict[str, Any]] = json.load(f)
 
-    expected_by_question = expected_sources_by_question(load_testset())
+    testset = load_testset()
+    expected_by_question = expected_sources_by_question(testset)
     saved_depth = max(len(entry["candidates"]) for entry in candidate_lists)
     input_depth = args.input_depth or saved_depth
 
@@ -315,6 +317,7 @@ def main() -> None:
     reranker = build_reranker(args)
     result = run_rerank(reranker, candidate_lists, expected_by_question, input_depth, args.output_depth)
     result |= {
+        **testset_provenance(testset),
         "arm": arm,
         "candidates_file": str(args.candidates),
         "reranker": args.reranker,

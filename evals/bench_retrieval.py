@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import torch
 from langchain_core.documents import Document
 from retrieval_metrics import compute_recall_at_depth, compute_retrieval_hit_and_reciprocal_rank
+from testset_provenance import testset_provenance
 
 from codebase_rag.database.embeddings import EmbeddingManager
 from codebase_rag.database.qdrant_store import QdrantStore
@@ -335,6 +336,7 @@ def main() -> None:
 
         manager = store.embedding_manager if store else None
         arm_record = {
+            **testset_provenance(testset),
             "embedding_model": args.embedding_model,
             "dimension": dimension,
             "max_seq_length": manager.max_seq_length if manager else None,

@@ -214,6 +214,9 @@ CLAUDE.md
 # 24MB of regenerable intermediates; the numbers live in evals/bench_results/
 evals/bench_candidates/
 
+# Default output of rescore_testset.py: a before/after diff of a run, not a result
+evals/rescore_summary.json
+
 # Planning artifacts, like openspec/
 docs/feature-plan-*.md
 docs/spec-*.md

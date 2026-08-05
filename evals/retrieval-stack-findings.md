@@ -1,8 +1,9 @@
 # Retrieval Stack Findings
 
-**Date:** 2026-08-05
+**Date:** 2026-08-05, updated same day after the test set was strengthened
 **Corpus:** power-grid-model only, 12346 chunks
-**Test set:** `evals/testset.json`, 29 scored questions (one is marked `expected_failure` and excluded)
+**Test set:** `evals/testset.json`, 42 scored questions as of the update below (originally 29; one
+question is marked `expected_failure` and excluded either way)
 **Harness:** `evals/bench_retrieval.py` for first stages, `evals/rerank_bench.py` for rerankers
 
 This measures four model slots that had never been measured separately: the embedder, the candidate
@@ -12,7 +13,197 @@ of this work.
 The retrieval sections are retrieval-only, produced without an LLM and without a judge, so they say
 nothing directly about answer quality. The generation and judge section is separate and says so.
 
-## Read this before reading any table
+## Update: measured against the strengthened test set (42 scored, was 29)
+
+The test set changed after this document was first published: expected sources were widened where
+they omitted a file that legitimately answers the question, one previously unanswerable question was
+given real ground truth, and 13 new questions were added. Every source pattern was then scoped against
+the corpus so it can only match the files it was meant to name, which corrected a set of hits that were
+being scored against files that do not answer the question; see the two sections on the CMake case
+below. The isolated effect of widening alone, at the set still held to 30 questions, is in
+`evals/widening-rescore-n30.md`.
+
+**Figures below this point and figures above it are not comparable.** The denominator, the ground
+truth, and in most cases the retrieved candidate set all changed. Do not read a number changing across
+this line as retrieval improving or regressing; read it as the instrument changing, exactly as
+`evals/widening-rescore-n30.md` demonstrates for the widening-only case. The tables above this section
+are kept as the historical record of what was measured on 2026-08-05 against the original 29-question
+set, not as something to compare against.
+
+**Resolution is now 100/42 = 2.38 points per question.** Following the same convention as the original
+measurement, a difference is only called a ranking here when it spans at least 3 questions (roughly
+7.1 points), a full question wider than the 2-question ambiguity zone the original set could not clear.
+
+### The headline embedder claim reverses at the corrected N
+
+| embedder | dim | hit | MRR |
+|---|---|---|---|
+| BAAI/bge-m3 | 1024 | 0.8810 | 0.7002 |
+| all-mpnet-base-v2 (shipped) | 768 | 0.8571 | **0.7133** |
+| Qwen3-Embedding-4B | 2560 | 0.8333 | 0.5998 |
+| Qwen3-Embedding-0.6B | 1024 | 0.8095 | 0.6271 |
+
+Same arms as the original embedder table: vector retrieval, depth 10, unthresholded, fp16.
+
+**"Both sub-1B modern embedders beat the shipped one by 13.8 points" is withdrawn; at the corrected
+ground truth neither beats it at all.** The shipped model is second on hit rate, 1 question behind
+bge-m3, and first on MRR ahead of every modern embedder. 0.6B, the model that led the original table,
+is now last on hit rate, 2 questions behind the shipped model. The only difference in this table wide
+enough to call a ranking is bge-m3 over 0.6B: 7.15 points, exactly 3 questions.
+
+Two separate corrections produced this, and it is worth keeping them apart. Growing the set from 29 to
+42 questions cost the modern embedders their margin; scoping the source patterns cost them the lead.
+Two of the four questions the modern embedders were originally credited with recovering are the C++
+build questions, and both were scored against a bare `CMakeLists.txt` pattern that matches 16 files in
+this corpus. Scoped to the root file that actually answers them, both become misses for every modern
+embedder, while the shipped model still hits both, reaching them through `build-guide.md` rather than
+through any build file.
+
+**Scaling still doesn't help.** 4B trails bge-m3 by 2 questions and beats 0.6B by 1, so it is no longer
+the worst modern embedder, but it is worst on MRR of anything measured and still costs 16 times bge-m3's
+index build. Nothing here argues for going above 1B, so that recommendation stands, now on cost rather
+than on a measured quality gap.
+
+**Per-question net movement against the shipped hybrid-d10 baseline (0.8810), corrected testset:**
+
+| arm | hit | gained | lost | net |
+|---|---|---|---|---|
+| bge-m3 vector d10 | 0.8810 | 2 | 2 | 0 |
+| 0.6B hybrid d10 | 0.8333 | 3 | 5 | −2 |
+| 4B vector d10 | 0.8333 | 3 | 5 | −2 |
+| 0.6B vector d10 | 0.8095 | 3 | 6 | −3 |
+
+No modern embedder is now net positive against the shipped configuration, against the +3/+4 the
+original table reported. The gains are real and stable across all three corrections: each modern arm
+still recovers 2 to 3 questions the shipped model misses. What changed is the other column. The losses
+were being undercounted, first by a test set too small to expose them and then by source patterns loose
+enough to score a miss as a hit.
+
+### One new question had the same defect this work targets, and one only looked like it
+
+Reviewing the newly added questions against what the arms actually retrieved turned up one real
+narrow-source case and one false alarm, and the difference between them is worth recording.
+
+The real one: Qwen3-Embedding-4B missed *"What serialization formats does power-grid-model's
+serializer support?"* by retrieving `_core/serialization.py`, which defines `SerializationType.JSON`
+and the msgpack path, against ground truth that listed only `serialization.md`. Widening the sources
+to include `serialization.py` is correct and the numbers above reflect it.
+
+The false alarm: *"What is the minimum CMake version required to build power-grid-model?"* looked like
+the same defect, because 0.6B and 4B both retrieved a file named `CMakeLists.txt` and both scored a
+miss. Widening the sources to a bare `CMakeLists.txt` did turn both into hits, and that was wrong.
+Sources are matched as case-insensitive substrings of the full path, so `CMakeLists.txt` credits any
+of the 16 `CMakeLists.txt` files in this corpus, ten of which are under `tests/`. The file that
+actually states `cmake_minimum_required(VERSION 3.23)` is the repository root `CMakeLists.txt`, and no
+arm retrieves it at any depth; what 0.6B and 4B retrieved were the `power_grid_model_c` subdirectory
+build files, which do not state a minimum version. The ground truth now reads
+`power-grid-model/CMakeLists.txt`, scoped so it can only match the root file, and both arms are back
+to a miss, which is the honest answer.
+
+Finding it prompted an audit of every source pattern in the test set against the corpus, on the theory
+that a defect this easy to introduce is unlikely to be alone. It was not. Eleven more patterns matched
+more than one file, and two of them were doing real damage. `LICENSE` matched 671 paths, because this
+repository carries a `.license` sidecar next to almost every data file and all of them are ingested, so
+that question could be scored a hit on any of them. `CMakeLists.txt` appeared in two further questions,
+the C++ standard and the third-party dependencies, both predating this work and both credited on the
+strength of build files that do not answer them. Those two are what moved the embedder table above.
+Every pattern is now scoped with enough of its parent path to be unambiguous, verified by matching each
+one against the corpus file list and requiring exactly one file.
+
+Three things to carry forward. Widening ground truth is not free: a source pattern loose enough to catch
+the file you meant is often loose enough to catch files you did not, and the substring convention gives
+no warning when it does. A miss is only evidence of narrow ground truth once you have read the chunk
+that was actually retrieved, not merely its filename. And a basename is not an identifier: check a new
+pattern against the corpus before trusting a number it produces.
+
+### Depth and reranker tables at the new N
+
+| first stage | d10 | d50 | d100 |
+|---|---|---|---|
+| bge-m3 hybrid | 0.8571 | 0.9286 | 0.9762 |
+| shipped hybrid | 0.8810 | 0.9048 | 0.9762 |
+| shipped vector | 0.8571 | 0.8810 | 0.9286 |
+| shipped BM25 | 0.8571 | 0.9048 | 0.9048 |
+| 0.6B hybrid | 0.8333 | 0.8810 | 0.9286 |
+
+**0.9762 (41/42) is the new ceiling**, but unlike the original 0.9310 ceiling it is not a shared wall.
+Two first stages reach it at depth 100 and they miss different questions: bge-m3 hybrid misses the line
+voltage question, shipped hybrid misses the per-unit base power question, and each retrieves the other's
+miss. No question in the corrected set is missed by every arm at every depth, which the original set had
+one of. The combined ceiling across arms is therefore 42/42, and the gap to it is an ordering problem
+rather than a coverage one.
+
+The hardest single question is *"What happens when you try to connect a line between nodes with different
+rated voltages?"* (`component/line.hpp`, checked to be genuinely single-source: no other file in the corpus
+explains this validation rule), missed by 20 of the 22 first-stage arms. It is not unanswerable — the
+shipped model's d100 vector and hybrid arms both retrieve it, at ranks 62 and 71 — just consistently
+missed by every other arm's top 10.
+
+| reranker | first stage | hit | MRR | baseline hit | baseline MRR |
+|---|---|---|---|---|---|
+| none | shipped hybrid d100 | 0.8810 | **0.7667** | — | — |
+| none | shipped BM25 d100 | 0.8571 | 0.5830 | — | — |
+| none | bge-m3 hybrid d50 | 0.8333 | 0.7280 | — | — |
+| bge-reranker-v2-m3 | bge-m3 hybrid d50 | **0.9048** | 0.7280 | 0.8333 | 0.7280 |
+| bge-reranker-v2-m3 | 0.6B hybrid d100 | **0.9048** | 0.7643 | 0.8333 | 0.6616 |
+| bge-reranker-v2-m3 | 0.6B hybrid d50 | 0.8571 | 0.7292 | 0.8333 | 0.6616 |
+| bge-reranker-v2-m3 | 0.6B vector d50 | 0.8333 | 0.7016 | 0.8095 | 0.6271 |
+| bge-reranker-v2-m3 | shipped BM25 d100 | 0.8571 | 0.7294 | 0.8571 | 0.5830 |
+| bge-reranker-v2-m3 | shipped hybrid d100 | 0.8571 | 0.7068 | 0.8810 | 0.7667 |
+| qwen3.5:9b listwise | 0.6B hybrid d50 | 0.8810 | 0.6946 | 0.8333 | 0.6616 |
+| ms-marco-MiniLM-L6-v2 | bge-m3 hybrid d50 | 0.8571 | 0.7009 | 0.8333 | 0.7280 |
+| ms-marco-MiniLM-L6-v2 | shipped BM25 d100 | 0.8095 | 0.6683 | 0.8571 | 0.5830 |
+| ms-marco-MiniLM-L6-v2 | shipped hybrid d100 | 0.8571 | 0.6892 | 0.8810 | 0.7667 |
+
+The `none` rows are the unranked arms that were actually measured, not a no-reranker baseline for
+every first stage in the table; the `baseline` columns carry that per row.
+
+`bge-reranker-v2-m3` remains the strongest reranker measured and the only one that improves both
+metrics on most inputs. It gains hit rate on four of the six lists it was given, leaves one unchanged,
+and loses it only on the shipped hybrid d100 list, which is also the only list whose MRR it degrades
+(0.7667 to 0.7068). That list was already the best-ordered input in the table. The bge-m3 d50 row is
+the interesting one: it recovers a question (0.8333 to 0.9048) at exactly unchanged MRR, which is the
+reranker pulling something up from deep in the list without reordering what was already near the top.
+
+Two conclusions moved. **The best MRR in this table is now no reranker at all** (shipped hybrid
+d100, 0.7667), narrowly ahead of `bge-reranker-v2-m3` on the 0.6B d100 list at 0.7643. **The LLM
+listwise reranker is no longer close to the best**: it produces 0.6946, tenth of the thirteen arms in
+this table, for the same unusable latency profile as before. Its original selling point does not survive the corrected
+ground truth. Per-query latency was not re-measured, since nothing about the reranking cost changed,
+only what it is scored against.
+
+The cheap cross-encoder is confirmed unreliable rather than uniformly bad. It improves the bge-m3
+hybrid arm's hit rate (0.8333 to 0.8571) and lifts the poorly ordered BM25 list's MRR (0.5830 to
+0.6683), while degrading every other arm on at least one metric and losing to `bge-reranker-v2-m3` on
+every input it shares with it. "Worse than no reranker" is better read as "unreliable, and still not
+worth it on this corpus" than as "always worse."
+
+### Recommendations, restated
+
+**Embedder: nothing measured here justifies a migration.** The original case was a 4-question hit-rate
+win. At the corrected ground truth there is no win: bge-m3 is 1 question ahead of the shipped model,
+0.6B is 2 behind, and the shipped model has the best MRR of the four. Adopting an embedder forces a
+full re-ingestion of every existing collection, and a 1-question margin inside the resolution floor is
+not a reason to ask users for that. If a migration is wanted for other reasons, bge-m3 is the one to
+take: it is the only modern embedder not behind the shipped model on either metric, and it builds its
+index roughly three times faster than 0.6B. Do not go above 1B regardless.
+
+The honest next step before any embedder decision is a larger test set. Every pairwise difference in
+that table except bge-m3 over 0.6B is 2 questions or fewer, and this set has now reversed its own
+headline result under correction.
+
+**Depth: the case for 100 over 50 is stronger than it was.** The original recommendation of 50 rested
+on depth 100 buying exactly one more question. At N=42 it buys 2 on three of the five first stages and
+3 on the shipped hybrid arm, which is the first depth difference in this work wide enough to call a
+ranking. Depth 50 is still the better default once rerank latency is priced in, since the reranker cost
+scales with the input list, but "depth 100 buys nothing" is no longer an accurate summary of the table.
+
+**Reranker and score-threshold recommendations below are unchanged** from the original measurement:
+they were never resting on the embedder margin that just reversed, and the figures above confirm the
+same shape (bge-reranker-v2-m3 is the strongest reranker; no score threshold is safe for a newly
+adopted embedder). See those sections below for the original reasoning, which still applies.
+
+## Read this before reading any table (original measurement, N=29 — historical, see the update above)
 
 **29 questions means one question is 3.45 points of hit rate.** Differences smaller than roughly 7
 points are two questions or fewer and are reported here as not distinguishable, not as rankings. Four
@@ -23,7 +214,7 @@ MRR is the more informative metric in this test set. It is not quantized to whol
 hit rate is, and several of the conclusions below rest on MRR moving consistently while hit rate sits
 still.
 
-## Embedder
+## Embedder (original measurement, N=29 — historical, see the update above)
 
 All arms: vector retrieval, depth 10, unthresholded, fp16, one corpus, one metric.
 
@@ -48,7 +239,7 @@ Between the two winners, 0.6B has the better ordering (MRR 0.6371 against 0.5931
 its index roughly three times faster. They tie exactly on hit rate, but see the ensemble note below,
 because that tie is not the whole story.
 
-## Candidate depth
+## Candidate depth (original measurement, N=29 — historical, see the update above)
 
 Depth was fixed at 10 before this work and had never been varied.
 
@@ -80,7 +271,7 @@ Across every configuration measured, exactly one question is retrieved by nothin
 
 > How do you create input data for a power-grid-model calculation?
 
-## Reranker
+## Reranker (original measurement, N=29 — historical, see the update above)
 
 Scored at output depth 10, over frozen candidate lists so no first stage is re-run.
 
@@ -120,7 +311,7 @@ A note for anyone re-running the listwise arm: `qwen3.5:9b` is a reasoning model
 seconds on a single 20-passage window when allowed to think, against 7 to 10 seconds with thinking
 disabled. The orderings it produced were comparable either way.
 
-## Per-question flips against the shipped configuration
+## Per-question flips against the shipped configuration (original measurement, N=29 — historical, see the update above)
 
 Aggregates hide which questions moved. Baseline is the shipped configuration (all-mpnet-base-v2,
 hybrid, depth 10) at hit 0.6897.
@@ -146,16 +337,21 @@ fault types question that 0.6B misses; 0.6B recovers the C++ standard question t
 That is an ensemble result rather than a tie, and it means the ceiling for a combination of the two is
 above either one alone. Nothing here measured such a combination.
 
-## Recommendations per slot
+## Recommendations per slot (embedder bullet superseded, see the update above; rest still current)
 
 These are inputs to an adoption decision, not the decision. Adopting a new embedder forces a full
 re-ingestion of every existing collection, which is a user-visible migration.
 
-**Embedder: Qwen3-Embedding-0.6B**, or bge-m3 if index build time matters more than ordering quality.
-Either is worth 4 questions over the shipped model. Do not go above 1B.
+**Embedder: superseded.** This bullet originally read "Qwen3-Embedding-0.6B, or bge-m3 ... either is
+worth 4 questions over the shipped model." At the corrected ground truth 0.6B is 2 questions behind
+the shipped model and bge-m3 is 1 ahead; see "Recommendations, restated" in the update above. Do not go
+above 1B still holds.
 
-**Depth: 50.** Depth 100 buys one more question for double the rerank latency, which is inside the
-resolution limit. Depth 10 is too shallow and was leaving retrieved answers on the floor.
+**Depth: 50, on a narrower argument than this bullet originally made.** It read "depth 100 buys one
+more question for double the rerank latency, which is inside the resolution limit." The first half no
+longer holds at N=42, where depth 100 buys 2 to 3 questions; see the depth bullet in the update above.
+The latency argument is what carries the recommendation now. Depth 10 is too shallow and was leaving
+retrieved answers on the floor.
 
 **Reranker: `BAAI/bge-reranker-v2-m3`**, if seconds per query are affordable. If they are not, ship the
 first stage alone at depth 10 rather than reaching for a cheaper cross-encoder, because the cheap one
@@ -182,6 +378,10 @@ is cheap to run on this hardware, so a limit phrased in billions of parameters w
 models that run perfectly well.
 
 ## Generation and judge models
+
+**Not re-measured against the widened or grown test set.** This section is stale relative to the
+current 42-question set, and left to whoever wants the current numbers: this section takes tens of
+minutes per model where the retrieval sections above rescore in seconds.
 
 Measured at fixed BM25 retrieval on the same 29 questions, with model reasoning disabled (see the
 caveat below).
@@ -212,11 +412,18 @@ configured generation model does not reason.
 
 Published so the same ground is not re-covered:
 
-- `Qwen3-Embedding-4B`: worst modern embedder measured, 16x the index build cost. Do not retry.
-- `cross-encoder/ms-marco-MiniLM-L6-v2`: worse than no reranker on this corpus.
-- `qwen3.5:9b` listwise: best MRR, unusable latency profile.
-- Depth 5 on the shipped stack: 0.5862 hit, materially worse than depth 10 and included only to
-  confirm the direction.
+- `Qwen3-Embedding-4B`: 16x the index build cost of bge-m3 and the worst MRR of any embedder measured.
+  At N=42 it is no longer last on hit rate, but nothing about that makes the build cost worth paying.
+  Do not retry.
+- `cross-encoder/ms-marco-MiniLM-L6-v2`: unreliable on this corpus. It degrades most inputs, though
+  not uniformly all of them at N=42, and loses to `bge-reranker-v2-m3` on every input it was given.
+  Not worth reaching for.
+- `qwen3.5:9b` listwise: tenth of thirteen reranker arms on MRR at N=42 (0.6946 against a best of
+  0.7667), unusable latency profile. Its original near-best MRR did not survive the corrected ground
+  truth.
+- Depth 5 on the shipped stack: 0.5862 hit (N=29 measurement), materially worse than depth 10 and
+  included only to confirm the direction; re-measured at N=42 as 0.8333, still the shallowest and
+  worst depth-5 option, direction unchanged.
 
 ## Caveats
 
@@ -232,12 +439,23 @@ reference documentation. Results on a corpus of a different shape are not implie
 48GB M4 running one arm at a time, and in some cases while another sweep held the GPU. They are
 ordering information, not capacity planning.
 
-**Test set sources are narrow.** Several questions name fewer source files than legitimately answer
-them, which caps measured hit rate below what a user would judge correct. Widening the test set would
-change these numbers and is not attempted here.
+**Test set sources were narrow; this is now addressed, not eliminated.** The update above widened
+ground truth and grew the set from 29 to 42 scored questions. Any future question added to this set
+should be checked the same way: read what the corpus actually says before trusting a single source.
+
+**Source patterns are substrings of the full path, and two remain deliberately ambiguous.** Every
+pattern in the test set was audited against the corpus and scoped until it matched exactly one file,
+with two exceptions that substring matching cannot express. `power-grid-model/LICENSE` also matches
+`LICENSES/MPL-2.0.txt`, which is the actual licence text and a correct source for that question.
+`Power Flow Example.ipynb` also matches the `.ipynb.license` SPDX sidecar sitting next to it. Neither
+can be excluded without anchoring the end of a path, which the matcher does not do, and neither can
+credit a file that answers a different question. Any new pattern should be checked the same way:
+match it against the corpus file list and require exactly one file, or understand why not.
 
 **One embedder's index build time is missing.** The shipped model reused an existing collection rather
-than rebuilding, so its build cost is not comparable to the others.
+than rebuilding, so its build cost is not comparable to the others. Index build times were not
+re-measured for the N=42 update: retrieval itself did not change, only what it is scored against, so
+re-timing an unchanged build would have added cost without adding information.
 
 ## Reproducing
 
@@ -251,10 +469,32 @@ python evals/rerank_bench.py \
 ```
 
 Per-arm JSON is in `evals/bench_results/` and reranker output in `evals/rerank_results/`, both
-tracked. The frozen candidate lists are written to `evals/bench_candidates/`, which is not tracked:
+tracked. Each arm record carries `testset_size` and `testset_hash` for the test set it was scored
+against, because both directories hold arms from more than one test set under names that encode the
+model and depth but nothing about the questions. Compare two arms only when those two fields agree.
+Records written before this field existed carry neither, and are the N=29 historical runs. The frozen candidate lists are written to `evals/bench_candidates/`, which is not tracked:
 they run to 24MB because each one carries the full text of every candidate chunk, and re-running the
 first stage regenerates them. Rescoring a reranker arm without re-embedding needs those lists, so
 regenerate them before reaching for `rerank_bench.py`.
 
-Large embedders need `--batch-size 16` and `--dtype float16`. The 4B at the default batch size and
-float32 exhausted memory and stalled for over ten hours.
+Large embedders need `--batch-size 16` and `--dtype float16`. The 4B build for the N=42 update tracked
+roughly 100 minutes at those settings on the measurement machine, slower than the 122.7-minute figure
+above but consistent with it; treat this as a floor, not a guarantee. Swap usage climbed to within
+~1.5GB of exhaustion partway through and did not degrade further, but a machine under more concurrent
+load than this one was under should expect it to be closer.
+
+**Rescoring only, when just `testset.json` changed and retrieval did not:** `evals/rescore_testset.py`
+recomputes hit rate, MRR, recall, and category breakdown for every saved arm in `evals/bench_results/`
+and `evals/rerank_results/` directly from their recorded retrieved-document order, without querying
+Qdrant or a model. It only produces correct numbers for questions that already have a saved retrieval
+result; a newly added question has no saved order to rescore from, and needs a real
+`bench_retrieval.py` run before it means anything.
+
+By default it only reports a before/after summary. `--write` folds the recomputed numbers back into
+the arm files, and is what keeps the tables above in step with the JSON they came from after a
+`testset.json` edit. It writes only to arms that cover every scored question in the current test set,
+so the N=29 arms kept as historical record are left as the runs they were:
+
+```
+python evals/rescore_testset.py --write
+```

@@ -1,103 +1,27 @@
 {
-  "embedding_model": "sentence-transformers/all-mpnet-base-v2",
-  "dimension": null,
-  "max_seq_length": null,
-  "dtype": null,
-  "query_prompt": null,
-  "document_prompt": null,
-  "retriever_type": "bm25",
-  "candidate_depth": 10,
-  "applied_threshold": null,
-  "ingested_repositories": [
-    "power-grid-model"
-  ],
-  "index_build_time_s": 0.0,
-  "batch_size": 100,
+  "questions_scored": 42,
+  "input_recall": 0.9047619047619048,
+  "baseline_hit_rate": 0.8571428571428571,
+  "baseline_mrr": 0.5830026455026455,
   "hit_rate": 0.8571428571428571,
   "mrr": 0.5830026455026455,
-  "recall_at_depth": 0.8571428571428571,
-  "category_breakdown": {
-    "factual_lookup": {
-      "hit_rate": 0.6153846153846154,
-      "mrr": 0.39572649572649576,
-      "recall_at_depth": 0.6153846153846154,
-      "n": 13
-    },
-    "cross_file_reasoning": {
-      "hit_rate": 0.8333333333333334,
-      "mrr": 0.4583333333333333,
-      "recall_at_depth": 0.8333333333333334,
-      "n": 6
-    },
-    "how_does_it_work": {
-      "hit_rate": 1.0,
-      "mrr": 1.0,
-      "recall_at_depth": 1.0,
-      "n": 3
-    },
-    "conceptual": {
-      "hit_rate": 1.0,
-      "mrr": 0.6795833333333333,
-      "recall_at_depth": 1.0,
-      "n": 20
-    }
+  "latency_s": {
+    "mean": 0.0,
+    "median": 0.0,
+    "p95": 0.0,
+    "max": 0.0,
+    "total": 0.0
   },
-  "avg_query_latency_s": 0.013483988140554478,
-  "per_query_latency_s": [
-    0.009801791980862617,
-    0.006823834031820297,
-    0.011313959024846554,
-    0.011608958011493087,
-    0.009910708060488105,
-    0.011690374929457903,
-    0.010604417067952454,
-    0.012015208951197565,
-    0.0064646250102669,
-    0.008907875046133995,
-    0.011464458075352013,
-    0.008917624945752323,
-    0.00793399999383837,
-    0.00907816702965647,
-    0.011735667008906603,
-    0.015172166051343083,
-    0.015980541007593274,
-    0.015543124987743795,
-    0.014220332959666848,
-    0.017145833931863308,
-    0.01128025003708899,
-    0.011521957931108773,
-    0.01178362499922514,
-    0.01760995900258422,
-    0.01234062493313104,
-    0.018399958964437246,
-    0.013975666952319443,
-    0.014614292071200907,
-    0.01830604101996869,
-    0.009068874991498888,
-    0.012554834014736116,
-    0.017930208006873727,
-    0.01652012497652322,
-    0.025641499902121723,
-    0.011051040957681835,
-    0.01527116703800857,
-    0.022502749925479293,
-    0.01499266701284796,
-    0.01521716604474932,
-    0.01617891702335328,
-    0.014933124999515712,
-    0.018299082992598414
-  ],
   "per_question": [
     {
       "question": "What types of calculations does power-grid-model support?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "power-grid-model/README.md",
-        "src/power_grid_model/enum.py",
-        "_core/enum.py",
-        "calculations.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.3333333333333333,
+      "hit": 1,
+      "reciprocal_rank": 0.3333333333333333,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
@@ -108,19 +32,17 @@
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/index.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What C++ standard does power-grid-model require?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "power-grid-model/CMakeLists.txt",
-        "build-guide.md"
-      ],
-      "actual_sources": [
+      "input_recall": 0,
+      "baseline_hit": 0,
+      "baseline_reciprocal_rank": 0.0,
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/user_manual/components.md",
@@ -131,19 +53,17 @@
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/quickstart.md",
         "data/repos/power-grid-model/README.md"
-      ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      ]
     },
     {
       "question": "What are the third-party C++ dependencies of power-grid-model?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "power-grid-model/CMakeLists.txt",
-        "build-guide.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.1111111111111111,
+      "hit": 1,
+      "reciprocal_rank": 0.1111111111111111,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -154,20 +74,17 @@
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/user_manual/model-validation.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.1111111111111111,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What is the component type hierarchy in power-grid-model?",
-      "category": "cross_file_reasoning",
-      "expected_sources": [
-        "data-model.md",
-        "all_components.hpp",
-        "user_manual/components.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/data-model.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/code_generation/templates/src/power_grid_model/_core/dataset_class_maps.py.jinja",
@@ -178,19 +95,17 @@
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
         "data/repos/power-grid-model/docs/user_manual/model-validation.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What calculation methods are available and what are their enum values?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "src/power_grid_model/enum.py",
-        "_core/enum.py"
-      ],
-      "actual_sources": [
+      "input_recall": 0,
+      "baseline_hit": 0,
+      "baseline_reciprocal_rank": 0.0,
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
@@ -201,19 +116,17 @@
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp"
-      ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      ]
     },
     {
       "question": "How do you create input data for a power-grid-model calculation?",
-      "category": "how_does_it_work",
-      "expected_sources": [
-        "quickstart.md",
-        "Power Flow Example.ipynb"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/quickstart.md",
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
         "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
@@ -224,21 +137,17 @@
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/docs/index.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What error is raised when a state estimation system is not observable?",
-      "category": "cross_file_reasoning",
-      "expected_sources": [
-        "src/power_grid_model/errors.py",
-        "_core/errors.py",
-        "observability.hpp",
-        "calculations.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.25,
+      "hit": 1,
+      "reciprocal_rank": 0.25,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/common/exception.hpp",
@@ -249,18 +158,17 @@
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.25,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What is the base power constant used in power-grid-model per-unit calculations?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "common/common.hpp"
-      ],
-      "actual_sources": [
+      "input_recall": 0,
+      "baseline_hit": 0,
+      "baseline_reciprocal_rank": 0.0,
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/sym_load/README.md",
@@ -271,19 +179,17 @@
         "data/repos/power-grid-model/docs/quickstart.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb"
-      ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      ]
     },
     {
       "question": "What winding types are supported for transformers?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "src/power_grid_model/enum.py",
-        "_core/enum.py"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 0,
+      "baseline_reciprocal_rank": 0.0,
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
@@ -294,21 +200,17 @@
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
         "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb"
-      ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      ]
     },
     {
       "question": "What fault types can be modeled for short circuit analysis?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "src/power_grid_model/enum.py",
-        "_core/enum.py",
-        "fault.hpp",
-        "sc-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 0,
+      "baseline_reciprocal_rank": 0.0,
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
@@ -319,18 +221,17 @@
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/model-validation.md"
-      ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      ]
     },
     {
       "question": "How does the power-grid-model core architecture work from input to output?",
-      "category": "how_does_it_work",
-      "expected_sources": [
-        "core-design.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
         "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
         "data/repos/power-grid-model/docs/examples/Serialization Example.ipynb",
@@ -341,18 +242,17 @@
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/src/power_grid_model/enum.py",
         "data/repos/power-grid-model/docs/user_manual/model-validation.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What validation error classes exist for input data validation?",
-      "category": "cross_file_reasoning",
-      "expected_sources": [
-        "validation/errors.py"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/data-validator.md",
         "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
@@ -363,19 +263,17 @@
         "data/repos/power-grid-model/docs/quickstart.md",
         "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
         "data/repos/power-grid-model/src/power_grid_model/validation/utils.py"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What license is power-grid-model released under?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "power-grid-model/README.md",
-        "power-grid-model/LICENSE"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -386,19 +284,17 @@
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/safe_memory_handling.hpp",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/quickstart.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What are the tap changing strategies available for transformer regulation?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "src/power_grid_model/enum.py",
-        "_core/enum.py"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.2,
+      "hit": 1,
+      "reciprocal_rank": 0.2,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
@@ -409,18 +305,17 @@
         "data/repos/power-grid-model/docs/user_manual/model-validation.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.2,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What happens when you try to connect a line between nodes with different rated voltages?",
-      "category": "cross_file_reasoning",
-      "expected_sources": [
-        "component/line.hpp"
-      ],
-      "actual_sources": [
+      "input_recall": 0,
+      "baseline_hit": 0,
+      "baseline_reciprocal_rank": 0.0,
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
@@ -431,18 +326,17 @@
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb"
-      ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      ]
     },
     {
       "question": "How does power-grid-model decide whether it has enough sensor data to determine the grid's state statistically?",
-      "category": "conceptual",
-      "expected_sources": [
-        "calculations.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.125,
+      "hit": 1,
+      "reciprocal_rank": 0.125,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -453,18 +347,17 @@
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/power_grid_model_c_example/serialization.c"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.125,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What happens to a transformer's tap position when the controlled voltage drifts outside its target band during automatic regulation?",
-      "category": "conceptual",
-      "expected_sources": [
-        "tap-changing-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
@@ -475,19 +368,17 @@
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/docs/user_manual/components.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Why does power-grid-model skip automatic checks on the physical realism of input data by default?",
-      "category": "conceptual",
-      "expected_sources": [
-        "performance-guide.md",
-        "data-validator.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -498,19 +389,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What information does an object carry when input data fails validation, and how can a caller inspect it?",
-      "category": "conceptual",
-      "expected_sources": [
-        "data-validator.md",
-        "validation/errors.py"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/data-validator.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
@@ -521,18 +410,17 @@
         "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
         "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
         "data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "How can an ideal transformer be represented in power-grid-model even though there is no dedicated ideal-transformer component?",
-      "category": "conceptual",
-      "expected_sources": [
-        "non-pgm-components.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
@@ -543,18 +431,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "How would you model a grounding or earthing transformer using power-grid-model's existing components?",
-      "category": "conceptual",
-      "expected_sources": [
-        "non-pgm-components.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
@@ -565,18 +452,17 @@
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/docs/index.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What voltage scaling adjustment does power-grid-model apply during a short circuit calculation, and why?",
-      "category": "conceptual",
-      "expected_sources": [
-        "sc-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.3333333333333333,
+      "hit": 1,
+      "reciprocal_rank": 0.3333333333333333,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
@@ -587,18 +473,17 @@
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What assumptions about loads and generation does power-grid-model make when computing a short circuit current?",
-      "category": "conceptual",
-      "expected_sources": [
-        "sc-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
@@ -609,18 +494,17 @@
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Which bus is treated as the reference point with known voltage and angle in a power flow calculation, and what PGM component represents it?",
-      "category": "conceptual",
-      "expected_sources": [
-        "pf-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
@@ -631,19 +515,17 @@
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/math_solver/measured_values.hpp"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What extra requirement applies to asymmetric power flow calculations that doesn't apply to symmetric ones?",
-      "category": "conceptual",
-      "expected_sources": [
-        "pf-algorithms.md",
-        "calculations.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.2,
+      "hit": 1,
+      "reciprocal_rank": 0.2,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
@@ -654,19 +536,17 @@
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.2,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "How can memory usage be reduced when constructing input or update data for a use case that only touches a few optional attributes?",
-      "category": "conceptual",
-      "expected_sources": [
-        "performance-guide.md",
-        "native-data-interface.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
         "data/repos/power-grid-model/docs/user_manual/data-validator.md",
@@ -677,19 +557,17 @@
         "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/calculations.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What two ways can component data be laid out in memory, and how do they differ?",
-      "category": "conceptual",
-      "expected_sources": [
-        "dataset-terminology.md",
-        "native-data-interface.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -700,18 +578,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
         "data/repos/power-grid-model/src/power_grid_model/validation/_rules.py",
         "data/repos/power-grid-model/src/power_grid_model/validation/_rules.py"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "How does power-grid-model represent batch data where different scenarios update different numbers of components?",
-      "category": "conceptual",
-      "expected_sources": [
-        "dataset-terminology.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
         "data/repos/power-grid-model/docs/quickstart.md",
@@ -722,19 +599,17 @@
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/src/power_grid_model/utils.py"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Why might running the full Cartesian product of two batch datasets not require allocating memory for every combined scenario?",
-      "category": "conceptual",
-      "expected_sources": [
-        "performance-guide.md",
-        "calculations.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
@@ -745,19 +620,17 @@
         "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
         "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
         "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What serialization formats does power-grid-model's serializer support?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "serialization.md",
-        "_core/serialization.py"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/src/power_grid_model/_core/serialization.py",
         "data/repos/power-grid-model/docs/user_manual/serialization.md",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/serialization.h",
@@ -768,19 +641,17 @@
         "data/repos/power-grid-model/src/power_grid_model/utils.py",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What is the minimum CMake version required to build power-grid-model?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "build-guide.md",
-        "power-grid-model/CMakeLists.txt"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/pyproject.toml",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
@@ -791,18 +662,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What interface layers does power-grid-model provide out of the box, from the rawest to the most feature-rich?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "high-level-design.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -813,18 +683,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/doxygen/Doxyfile",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Where in the power-grid-model repository is the C++ calculation core located, and where is the input-data validation code located?",
-      "category": "factual_lookup",
-      "expected_sources": [
-        "folder-structure.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/contribution/folder-structure.md",
         "data/repos/power-grid-model/tests/data/state_estimation/current-sensor/power-from-global-current-sensor/README.md",
         "data/repos/power-grid-model/tests/data/state_estimation/current-sensor/power-from-local-current-sensor/README.md",
@@ -835,18 +704,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
         "data/repos/power-grid-model/docs/index.md",
         "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Why does power-grid-model encourage users to build their own custom library or interface instead of providing a full feature-rich library for every programming language, and what pattern should a custom interface follow?",
-      "category": "conceptual",
-      "expected_sources": [
-        "high-level-design.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
@@ -857,18 +725,17 @@
         "data/repos/power-grid-model/pyproject.toml",
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
         "data/repos/power-grid-model/docs/advanced_documentation/core-design.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What distinguishes a spurious edge case from a non-spurious one in power-grid-model's terminology?",
-      "category": "conceptual",
-      "expected_sources": [
-        "advanced_documentation/terminology.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.3333333333333333,
+      "hit": 1,
+      "reciprocal_rank": 0.3333333333333333,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
         "data/repos/power-grid-model/docs/user_manual/serialization.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -879,18 +746,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
         "data/repos/power-grid-model/docs/user_manual/components.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "How does power-grid-model combine multiple voltage sensor measurements on the same bus during state estimation?",
-      "category": "conceptual",
-      "expected_sources": [
-        "se-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
@@ -901,18 +767,17 @@
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/components.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "How does power-grid-model represent an unspecified value in an update dataset, and why is that different from an explicit default value?",
-      "category": "conceptual",
-      "expected_sources": [
-        "native-data-interface.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -923,18 +788,17 @@
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/data-validator.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What is the difference between 'unsupported input' and 'unreasonable input' in power-grid-model's classification of bad input?",
-      "category": "conceptual",
-      "expected_sources": [
-        "advanced_documentation/terminology.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
@@ -945,18 +809,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "What are the permission differences between the C API's const, mutable, and writable dataset types, and who owns each one?",
-      "category": "conceptual",
-      "expected_sources": [
-        "c-api.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.1,
+      "hit": 1,
+      "reciprocal_rank": 0.1,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/algorithms/dense-and-selective-inverse.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/dataset.hpp",
@@ -967,19 +830,17 @@
         "data/repos/power-grid-model/src/power_grid_model/validation/_validation.py",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.1,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Why can't power sensors and current sensors be mixed on the same terminal of the same component in power-grid-model?",
-      "category": "cross_file_reasoning",
-      "expected_sources": [
-        "user_manual/components.md",
-        "se-algorithms.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
@@ -990,20 +851,17 @@
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/main_core/calculation_input_preparation.hpp",
         "data/repos/power-grid-model/docs/user_manual/calculations.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Why does power-grid-model treat a NotObservableError or a PowerGridError wrapping a bad_alloc as a non-spurious edge case rather than a bug?",
-      "category": "cross_file_reasoning",
-      "expected_sources": [
-        "advanced_documentation/terminology.md",
-        "src/power_grid_model/errors.py",
-        "_core/errors.py"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 0.5,
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/serialization.md",
@@ -1014,18 +872,17 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 0.5,
-      "recall_at_depth": 1
+      ]
     },
     {
       "question": "Why does power-grid-model implement its own custom sparse LU solver, and how does separating factorization from solving help with repeated time-series calculations?",
-      "category": "how_does_it_work",
-      "expected_sources": [
-        "lu-solver.md"
-      ],
-      "actual_sources": [
+      "input_recall": 1,
+      "baseline_hit": 1,
+      "baseline_reciprocal_rank": 1.0,
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "latency_s": 0.0,
+      "top_sources": [
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
@@ -1036,12 +893,59 @@
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md"
-      ],
-      "hit": 1,
-      "reciprocal_rank": 1.0,
-      "recall_at_depth": 1
+      ]
     }
   ],
+  "per_query_latency_s": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "arm": "no-reranker_on-sentence-transformers-all-mpnet-base-v2_bm25_d100_in100_out10",
+  "candidates_file": "evals/bench_candidates/sentence-transformers-all-mpnet-base-v2_bm25_d100.json",
+  "reranker": null,
+  "kind": null,
+  "input_depth": 100,
+  "output_depth": 10,
   "testset_size": 42,
   "testset_hash": "085b41df9382"
 }
