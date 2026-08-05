@@ -12,6 +12,46 @@ from langchain_text_splitters import Language, MarkdownHeaderTextSplitter, Recur
 
 logger = logging.getLogger(__name__)
 
+# Characters per token used to turn a model's token budget into a character
+# budget. Measured on this corpus with the mpnet tokenizer: the median is
+# around 3.0, but the median is the wrong statistic here because a chunk only
+# has to be dense once to overflow. This is the 1st percentile of the densest
+# file type users query (Markdown tables), which keeps the p99 token length of
+# .cpp, .py, .hpp and .md inside a 384-token window.
+#
+# It is one tokenizer's number applied to every model. A model with a coarser
+# vocabulary packs more characters per token, so this under-fills its window
+# and produces chunks smaller than they need to be. That errs toward less
+# context rather than toward silent truncation, and the ingest-time truncation
+# report is what would show the ratio being wrong in the dangerous direction.
+CHARS_PER_TOKEN = 1.6
+
+# Overlap as a share of chunk size, carried over from the previous 200/1000.
+OVERLAP_RATIO = 0.2
+
+# Used only when no caller knows the configured model's window. The ingestion
+# path passes the real value; this is the smallest window this project has run
+# against, so guessing it low keeps chunks readable by any model.
+FALLBACK_MAX_SEQ_LENGTH = 384
+
+
+def derive_chunk_size(max_seq_length: int) -> int:
+    """Return the character chunk size that fits a model's token window."""
+    if max_seq_length <= 0:
+        raise ValueError(f"max_seq_length must be positive, got {max_seq_length}")
+    return int(max_seq_length * CHARS_PER_TOKEN)
+
+
+def chunking_fingerprint(chunker: "DocumentChunker", embedding_model: str) -> str:
+    """Identify the chunking that produced a set of chunks.
+
+    Every cache in the ingestion path answers "has this file changed", never
+    "were these chunks cut the same way". Without this, changing the chunk size
+    or the embedding model leaves a hash-matched file untouched and its
+    old-size chunks in the index for good.
+    """
+    return f"{embedding_model}|{chunker.max_seq_length}|{chunker.chunk_size}|{chunker.chunk_overlap}"
+
 
 class ChunkingStrategy(StrEnum):
     """Enumeration of available chunking strategies."""
@@ -31,17 +71,31 @@ class DocumentChunker:
 
     def __init__(
         self,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
+        max_seq_length: int | None = None,
     ) -> None:
         """Initialize the DocumentChunker.
 
         Args:
-            chunk_size: Target size of each chunk in characters.
+            chunk_size: Target size of each chunk in characters. Derived from
+                ``max_seq_length`` when omitted.
             chunk_overlap: Number of characters to overlap between chunks.
+                Defaults to a fixed share of the chunk size.
+            max_seq_length: Token window of the embedding model the chunks are
+                destined for. Falls back to the smallest window this project
+                has run against when the caller doesn't know it.
         """
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
+        self.max_seq_length = max_seq_length if max_seq_length is not None else FALLBACK_MAX_SEQ_LENGTH
+        self.chunk_size = chunk_size if chunk_size is not None else derive_chunk_size(self.max_seq_length)
+        self.chunk_overlap = chunk_overlap if chunk_overlap is not None else int(self.chunk_size * OVERLAP_RATIO)
+
+        logger.debug(
+            "Chunking at %d characters with %d overlap for a %d-token window",
+            self.chunk_size,
+            self.chunk_overlap,
+            self.max_seq_length,
+        )
 
         self.code_splitter = RecursiveCharacterTextSplitter.from_language(
             language=Language.PYTHON,

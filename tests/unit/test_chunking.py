@@ -3,7 +3,51 @@
 import json
 from pathlib import Path
 
-from codebase_rag.data_ingestion.chunking import ChunkingStrategy, DocumentChunker
+import pytest
+
+from codebase_rag.data_ingestion.chunking import (
+    FALLBACK_MAX_SEQ_LENGTH,
+    ChunkingStrategy,
+    DocumentChunker,
+    chunking_fingerprint,
+    derive_chunk_size,
+)
+
+
+class TestDeriveChunkSize:
+    """Tests for chunk size derivation from the embedding model's window."""
+
+    def test_larger_window_yields_larger_chunks(self) -> None:
+        assert derive_chunk_size(2048) > derive_chunk_size(384)
+
+    def test_smaller_window_yields_smaller_chunks(self) -> None:
+        assert derive_chunk_size(128) < derive_chunk_size(384)
+
+    def test_chunker_sizes_itself_from_the_window(self) -> None:
+        small = DocumentChunker(max_seq_length=384)
+        large = DocumentChunker(max_seq_length=2048)
+
+        assert small.chunk_size == derive_chunk_size(384)
+        assert large.chunk_size > small.chunk_size
+
+    def test_overlap_scales_with_size(self) -> None:
+        small = DocumentChunker(max_seq_length=384)
+        large = DocumentChunker(max_seq_length=2048)
+
+        assert 0 < small.chunk_overlap < small.chunk_size
+        assert large.chunk_overlap > small.chunk_overlap
+
+    def test_explicit_size_overrides_derivation(self) -> None:
+        chunker = DocumentChunker(chunk_size=333, chunk_overlap=11, max_seq_length=2048)
+
+        assert (chunker.chunk_size, chunker.chunk_overlap) == (333, 11)
+
+    def test_unknown_window_falls_back_rather_than_guessing_high(self) -> None:
+        assert DocumentChunker().chunk_size == derive_chunk_size(FALLBACK_MAX_SEQ_LENGTH)
+
+    def test_non_positive_window_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must be positive"):
+            derive_chunk_size(0)
 
 
 class TestDetermineStrategy:
@@ -237,3 +281,31 @@ class TestProcessNotebookFile:
         assert len(indices) > 2
         assert indices == list(range(len(chunks)))
         assert all(c.metadata["chunk_count"] == len(chunks) for c in chunks)
+
+
+class TestChunkingFingerprint:
+    """Tests for chunking_fingerprint, which caches use to spot resized chunks."""
+
+    def test_same_settings_fingerprint_alike(self) -> None:
+        a = chunking_fingerprint(DocumentChunker(max_seq_length=384), "some/model")
+        b = chunking_fingerprint(DocumentChunker(max_seq_length=384), "some/model")
+
+        assert a == b
+
+    def test_a_different_window_changes_the_fingerprint(self) -> None:
+        small = chunking_fingerprint(DocumentChunker(max_seq_length=384), "some/model")
+        large = chunking_fingerprint(DocumentChunker(max_seq_length=2048), "some/model")
+
+        assert small != large
+
+    def test_a_different_model_changes_the_fingerprint(self) -> None:
+        one = chunking_fingerprint(DocumentChunker(max_seq_length=384), "some/model")
+        other = chunking_fingerprint(DocumentChunker(max_seq_length=384), "other/model")
+
+        assert one != other
+
+    def test_an_explicit_size_change_at_one_window_changes_the_fingerprint(self) -> None:
+        derived = chunking_fingerprint(DocumentChunker(max_seq_length=384), "some/model")
+        pinned = chunking_fingerprint(DocumentChunker(chunk_size=900, max_seq_length=384), "some/model")
+
+        assert derived != pinned

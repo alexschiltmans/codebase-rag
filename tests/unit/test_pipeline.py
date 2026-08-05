@@ -1,5 +1,6 @@
 """Unit tests for data_ingestion/pipeline.py."""
 
+import hashlib
 import json
 import logging
 import pickle
@@ -26,6 +27,7 @@ from codebase_rag.data_ingestion.pipeline import (
     setup_logging,
 )
 from codebase_rag.retrieval.bm25_search import BM25Retriever
+from tests.conftest import stub_embedding_manager
 
 
 class TestDiscoverIncludedDirs:
@@ -335,6 +337,7 @@ class TestIngestPipeline:
         mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 
         mock_store = MagicMock()
+        stub_embedding_manager(mock_store)
         mock_qdrant_cls.return_value = mock_store
 
         pipeline = IngestPipeline()
@@ -366,6 +369,7 @@ class TestIngestPipeline:
 
         calls: list[tuple[str, int, int]] = []
         pipeline = IngestPipeline(progress_callback=lambda phase, current, total: calls.append((phase, current, total)))
+        stub_embedding_manager(cast(MagicMock, pipeline.vector_store))
 
         docs = [
             Document(page_content=f"content{i}", metadata={"source": f"{i}.py", "repo": "my-repo"}) for i in range(250)
@@ -447,6 +451,7 @@ class TestIngestPipeline:
                 cancel_event.set()
 
         pipeline = IngestPipeline(progress_callback=_maybe_cancel, cancel_event=cancel_event)
+        stub_embedding_manager(cast(MagicMock, pipeline.vector_store))
         docs = [
             Document(page_content=f"content{i}", metadata={"source": f"{i}.py", "repo": "my-repo"}) for i in range(250)
         ]
@@ -825,6 +830,7 @@ class TestIngestPipeline:
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline(repo_url="https://github.com/test/myrepo")
             pipeline.cache_dir = Path(tmpdir)
+            stub_embedding_manager(cast(MagicMock, pipeline.vector_store))
 
             # Create cached docs
             cached_docs = [
@@ -838,6 +844,11 @@ class TestIngestPipeline:
             meta_path = Path(tmpdir) / "myrepo_cache_meta.json"
             with open(meta_path, "w") as f:
                 json.dump({"commit_sha": "abc123", "timestamp": 0}, f)
+
+            # The cache also has to have been chunked the way this run chunks.
+            pipeline._cache_chunking_path_for_repo("myrepo").write_text(
+                json.dumps({"chunking": pipeline._chunking_fingerprint(pipeline._build_chunker())})
+            )
 
             result = pipeline._process_single_repo("https://github.com/test/myrepo")
 
@@ -880,6 +891,7 @@ class TestIngestPipeline:
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline(repo_url="https://github.com/test/myrepo")
             pipeline.cache_dir = Path(tmpdir)
+            stub_embedding_manager(cast(MagicMock, pipeline.vector_store))
 
             cache_path = Path(tmpdir) / "processed_documents_myrepo.pkl"
             with open(cache_path, "wb") as f:
@@ -893,3 +905,235 @@ class TestIngestPipeline:
 
         # The stale cache didn't match HEAD, so the pipeline had to reprocess.
         mock_doc_proc_cls.return_value.process.assert_called_once()
+
+
+class TestTruncationReporting:
+    """Tests for the truncation report and the model-sized chunker."""
+
+    @staticmethod
+    def _make_pipeline(
+        mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, max_seq_length: int = 384
+    ) -> tuple[IngestPipeline, MagicMock]:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        logger = MagicMock()
+        mock_logging.return_value = (logger, Path("/tmp/ingest.log"))
+
+        mock_store = MagicMock()
+        stub_embedding_manager(mock_store, max_seq_length=max_seq_length)
+        mock_qdrant_cls.return_value = mock_store
+
+        return IngestPipeline(), logger
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_chunker_is_sized_from_the_configured_model(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        small, _ = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, max_seq_length=384)
+        large, _ = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, max_seq_length=2048)
+
+        assert large._build_chunker().chunk_size > small._build_chunker().chunk_size
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_indexing_reports_over_length_chunks_per_file_type(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        pipeline, logger = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls)
+
+        # The stubbed tokenizer counts one token per four characters.
+        pipeline.index_documents(
+            [
+                Document(page_content="x" * 4000, metadata={"source": "a.json", "file_type": ".json", "repo": "r"}),
+                Document(page_content="short", metadata={"source": "b.py", "file_type": ".py", "repo": "r"}),
+            ]
+        )
+
+        logged = " ".join(str(call.args[0]) for call in logger.info.call_args_list)
+        assert "1 of 2 chunks" in logged
+        assert "384-token" in logged
+        assert ".json: 1/1" in logged
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_a_clean_run_still_reports(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        pipeline, logger = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls)
+
+        pipeline.index_documents(
+            [Document(page_content="short", metadata={"source": "b.py", "file_type": ".py", "repo": "r"})]
+        )
+
+        logged = " ".join(str(call.args[0]) for call in logger.info.call_args_list)
+        assert "nothing was truncated" in logged
+
+
+class TestChunkingInvalidatesCaches:
+    """Tests that a chunk-size or model change is not hidden by a content-keyed cache."""
+
+    @staticmethod
+    def _make_pipeline(
+        mock_config_cls: MagicMock,
+        mock_logging: MagicMock,
+        mock_qdrant_cls: MagicMock,
+        cache_dir: Path,
+        max_seq_length: int = 384,
+    ) -> IngestPipeline:
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+
+        pipeline = IngestPipeline()
+        pipeline.cache_dir = cache_dir
+        store = cast(MagicMock, pipeline.vector_store)
+        stub_embedding_manager(store, max_seq_length=max_seq_length)
+        store.embedding_manager.model_name = "some/model"
+        return pipeline
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_resized_chunks_re_chunk_every_file_not_just_changed_ones(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("print('a')")
+        (tmp_path / "src" / "b.py").write_text("print('b')")
+        cache_dir = tmp_path / "cache"
+
+        first = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+        first._explicit_included_dirs = ["src"]
+        first.process_repo_incremental(str(tmp_path))
+
+        # Nothing on disk changed, only the model's window did.
+        second = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir, max_seq_length=2048)
+        second._explicit_included_dirs = ["src"]
+        result = second.process_repo_incremental(str(tmp_path))
+
+        assert result.files_changed == 2
+        assert result.files_unchanged == 0
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_unchanged_chunking_still_skips_unchanged_files(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("print('a')")
+        cache_dir = tmp_path / "cache"
+
+        first = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+        first._explicit_included_dirs = ["src"]
+        first.process_repo_incremental(str(tmp_path))
+
+        second = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+        second._explicit_included_dirs = ["src"]
+        result = second.process_repo_incremental(str(tmp_path))
+
+        assert (result.files_changed, result.files_unchanged) == (0, 1)
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_a_manifest_without_a_recorded_chunking_is_not_trusted(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        (tmp_path / "src").mkdir()
+        source = tmp_path / "src" / "a.py"
+        source.write_text("print('a')")
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        # The flat mapping written before chunking was recorded.
+        legacy = {str(source): hashlib.sha256(source.read_bytes()).hexdigest()}
+        (cache_dir / f"{tmp_path.name}_file_hashes.json").write_text(json.dumps(legacy))
+
+        pipeline = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+        pipeline._explicit_included_dirs = ["src"]
+        result = pipeline.process_repo_incremental(str(tmp_path))
+
+        assert result.files_changed == 1
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_document_cache_is_stale_when_chunking_changed_at_the_same_commit(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        pipeline = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+
+        save_documents_cache(
+            [Document(page_content="cached", metadata={"source": "a.py"})], pipeline._cache_path_for_repo("myrepo")
+        )
+        (cache_dir / "myrepo_freshness.json").write_text(json.dumps({"last_ingest_time": 0, "head_sha": "abc123"}))
+        pipeline._cache_chunking_path_for_repo("myrepo").write_text(json.dumps({"chunking": "some/model|384|1000|200"}))
+
+        assert pipeline._is_cache_fresh("myrepo", "abc123") is False
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_document_cache_is_fresh_when_commit_and_chunking_both_match(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        pipeline = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+
+        save_documents_cache(
+            [Document(page_content="cached", metadata={"source": "a.py"})], pipeline._cache_path_for_repo("myrepo")
+        )
+        (cache_dir / "myrepo_freshness.json").write_text(json.dumps({"last_ingest_time": 0, "head_sha": "abc123"}))
+        pipeline._cache_chunking_path_for_repo("myrepo").write_text(
+            json.dumps({"chunking": pipeline._chunking_fingerprint(pipeline._build_chunker())})
+        )
+
+        assert pipeline._is_cache_fresh("myrepo", "abc123") is True
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_a_cache_with_no_recorded_chunking_is_not_reused(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        pipeline = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, cache_dir)
+
+        save_documents_cache(
+            [Document(page_content="cached", metadata={"source": "a.py"})], pipeline._cache_path_for_repo("myrepo")
+        )
+        (cache_dir / "myrepo_freshness.json").write_text(json.dumps({"last_ingest_time": 0, "head_sha": "abc123"}))
+
+        assert pipeline._is_cache_fresh("myrepo", "abc123") is False
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_a_failing_truncation_check_does_not_stop_the_ingest(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        pipeline = self._make_pipeline(mock_config_cls, mock_logging, mock_qdrant_cls, tmp_path)
+        cast(MagicMock, pipeline.vector_store).embedding_manager.count_tokens.side_effect = RuntimeError("tokenizer")
+
+        pipeline.index_documents([Document(page_content="x", metadata={"source": "a.py", "repo": "r"})])
+
+        cast(MagicMock, pipeline.vector_store).add_documents.assert_called_once()
+        warnings = cast(MagicMock, pipeline.logger).warning.call_args_list
+        assert any("Truncation check failed" in str(call.args[0]) for call in warnings)

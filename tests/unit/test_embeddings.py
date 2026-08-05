@@ -142,3 +142,40 @@ def test_same_config_reuses_cached_instance(mock_st: MagicMock) -> None:
 
     assert first is second
     assert mock_st.call_count == 1
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_count_tokens_measures_with_the_models_own_tokenizer(mock_st: MagicMock) -> None:
+    """Token counts come from the model's tokenizer, specials included and untruncated."""
+    model = _mock_transformer({"query": "", "document": ""})
+    model.tokenizer.return_value = {"input_ids": [[1, 2, 3], [1, 2]]}
+    mock_st.return_value = model
+
+    manager = EmbeddingManager(model_name="some/model")
+    lengths = manager.count_tokens(["longer text", "short"])
+
+    assert lengths == [3, 2]
+    model.tokenizer.assert_called_once_with(["longer text", "short"], add_special_tokens=True, truncation=False)
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_count_tokens_on_nothing_does_not_call_the_tokenizer(mock_st: MagicMock) -> None:
+    """An empty batch is not a tokenizer call; some tokenizers reject one."""
+    model = _mock_transformer({"query": "", "document": ""})
+    mock_st.return_value = model
+
+    assert EmbeddingManager(model_name="some/model").count_tokens([]) == []
+    model.tokenizer.assert_not_called()
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_count_tokens_includes_the_document_prompt(mock_st: MagicMock) -> None:
+    """The prompt is prepended before embedding, so it spends the same token budget."""
+    model = _mock_transformer({"query": "query: ", "document": "passage: "})
+    model.tokenizer.return_value = {"input_ids": [[1, 2, 3, 4]]}
+    mock_st.return_value = model
+
+    EmbeddingManager(model_name="some/model").count_tokens(["chunk text"])
+
+    counted = model.tokenizer.call_args.args[0]
+    assert counted == ["passage: chunk text"]

@@ -99,6 +99,21 @@ class EmbeddingManager:
             self.dtype or "default (float32)",
         )
 
+    def count_tokens(self, texts: list[str]) -> list[int]:
+        """Return the token length each text would have before truncation.
+
+        Counts with the model's own tokenizer, including the special tokens
+        and the document prompt, both of which come out of the same budget as
+        the text itself. `get_embeddings` prepends that prompt, so counting the
+        bare text would under-report by its length and call a chunk safe that
+        the model will in fact cut.
+        """
+        if not texts:
+            return []
+        prompt = self.document_prompt or ""
+        encoded = self.model.tokenizer([prompt + text for text in texts], add_special_tokens=True, truncation=False)
+        return [len(ids) for ids in encoded["input_ids"]]
+
     def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for a list of texts."""
         prompt = self.document_prompt or None

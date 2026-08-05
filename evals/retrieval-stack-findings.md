@@ -1,7 +1,8 @@
 # Retrieval Stack Findings
 
-**Date:** 2026-08-05, updated same day after the test set was strengthened
-**Corpus:** power-grid-model only, 12346 chunks
+**Date:** 2026-08-05, updated same day after the test set was strengthened and again after chunking changed
+**Corpus:** power-grid-model only, 19637 chunks under the current chunking. Every table below the
+chunking update was measured at 12346, before it.
 **Test set:** `evals/testset.json`, 42 scored questions as of the update below (originally 29; one
 question is marked `expected_failure` and excluded either way)
 **Harness:** `evals/bench_retrieval.py` for first stages, `evals/rerank_bench.py` for rerankers
@@ -12,6 +13,32 @@ of this work.
 
 The retrieval sections are retrieval-only, produced without an LLM and without a judge, so they say
 nothing directly about answer quality. The generation and judge section is separate and says so.
+
+## Update: re-measured under model-derived chunking (19637 chunks, was 12346)
+
+Chunk size stopped being a fixed 1000 characters and is now derived from the embedding model's token
+window, which for `all-mpnet-base-v2` gives 614 characters with 122 overlap. The corpus was rebuilt at
+that size, growing from 12346 to 19637 chunks. The reason was truncation rather than retrieval: at
+1000 characters, 31.34% of chunks exceeded the model's 384-token limit and had their tails silently
+dropped before embedding, including 9.11% of `.cpp` chunks and 69.23% of `.json`. At 614 that falls to
+0.59% overall, and only `.svg` still truncates meaningfully.
+
+Every table below this section was measured at the old chunking. The three shipped arms were
+re-measured on the rebuilt index, against the same 42-question set:
+
+| arm | hit (12346) | hit (19637) | MRR (12346) | MRR (19637) |
+|---|---|---|---|---|
+| vector d10 | 0.8571 | 0.8571 | 0.7133 | **0.7345** |
+| hybrid d10 | 0.8810 | **0.9048** | 0.7508 | **0.7560** |
+| BM25 d10 | 0.8571 | 0.8571 | 0.5830 | **0.6111** |
+
+**Nothing regressed.** MRR rose on all three arms and hybrid picked up a question, though at 2.38 points
+per question none of that is wide enough to call a ranking by this document's own convention. The
+useful result is the negative one: cutting chunks to 61% of their former size was expected to cost
+context, and it cost no measurable retrieval quality.
+
+The other tables have not been re-run. Read them as what their arms scored at the chunking of the time,
+not as current figures.
 
 ## Update: measured against the strengthened test set (42 scored, was 29)
 

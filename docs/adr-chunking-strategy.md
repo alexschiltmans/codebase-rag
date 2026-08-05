@@ -10,11 +10,13 @@ When ingesting codebases for RAG, documents must be split into chunks small enou
 
 ## Decision
 
-### Chunk size: 1000 characters with 200-character overlap
+### Chunk size: derived from the embedding model's token window
 
-- **1000 characters** is a common default for code RAG systems. It's large enough to capture a complete function or class definition in most cases, while small enough to produce focused embeddings.
-- **200-character overlap** (20%) so context at chunk boundaries isn't lost. A function call that appears at the end of one chunk will also appear at the start of the next, preventing retrieval failures for queries about boundary content.
-- These values align with the typical context window of the embedding model (`all-mpnet-base-v2`, max 384 tokens ≈ ~1500 characters), keeping chunks well within the model's effective range.
+- The chunker takes the configured model's `max_seq_length` and multiplies it by a measured characters-per-token ratio (`CHARS_PER_TOKEN`, 1.6). For `all-mpnet-base-v2` at 384 tokens that gives **614 characters**, with a **122-character overlap** at a fixed 20% of size so context at chunk boundaries isn't lost.
+- The ratio is deliberately taken from the low tail of what was measured, not the median. Chars-per-token on this corpus has a median near 3.0 but drops to 1.6 for dense Markdown and below that for data formats, and a chunk only has to be dense once to overflow. Sizing at the median would produce chunks that fit on average and truncate wherever the content is packed.
+- The ingestion path reports the share of chunks that exceed the model's limit, per file type. Truncation is otherwise invisible: the model silently drops the tail, and the resulting vector says nothing about what was left out.
+
+This replaces a fixed 1000/200, which was chosen against an estimate of 384 tokens ≈ 1500 characters. Measured with the model's own tokenizer, 1000-character chunks put 31% of the corpus over the limit, including 9% of `.cpp` chunks.
 
 ### Language-specific splitting
 
@@ -50,5 +52,6 @@ Chunk point IDs in the vector store are deterministic, derived from `source_path
 ## Consequences
 
 - The chunking parameters are tuned for Python codebases and English documentation. Other languages (Java, Rust, etc.) would benefit from adding language-specific splitters.
-- The 1000/200 split works well for the `all-mpnet-base-v2` embedding model. If the embedding model is changed to one with a significantly different context window, these values should be re-evaluated.
+- Changing the embedding model resizes the chunks automatically, but it also invalidates the index: chunk boundaries feed the deterministic point IDs, so a model swap is a full re-ingest either way.
+- The characters-per-token ratio was measured on one corpus. A corpus of a different character (minified assets, a non-English language) could sit below it, which the ingest-time truncation report is there to surface.
 - Markdown header preservation means markdown chunks carry richer metadata than code chunks, which can improve retrieval for documentation-heavy repos.

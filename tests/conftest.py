@@ -2,10 +2,22 @@
 
 import logging
 from collections.abc import Iterator
+from unittest.mock import MagicMock
 
 import pytest
 
 from codebase_rag.config import Config
+
+
+def stub_embedding_manager(store: MagicMock, max_seq_length: int = 384) -> None:
+    """Give a mocked vector store an embedding manager that answers like a real one.
+
+    A bare MagicMock returns a MagicMock for `count_tokens` and for
+    `max_seq_length`, which is not something the pipeline can chunk with or
+    count against. Tests that drive ingestion need both to be numbers.
+    """
+    store.embedding_manager.max_seq_length = max_seq_length
+    store.embedding_manager.count_tokens.side_effect = lambda texts: [len(text) // 4 for text in texts]
 
 
 @pytest.fixture(autouse=True)

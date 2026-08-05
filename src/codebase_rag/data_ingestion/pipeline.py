@@ -19,9 +19,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from codebase_rag.config import Config
-from codebase_rag.data_ingestion.chunking import DocumentChunker
+from codebase_rag.data_ingestion.chunking import DocumentChunker, chunking_fingerprint
 from codebase_rag.data_ingestion.document_processor import DocumentProcessor
 from codebase_rag.data_ingestion.git_loader import GitLoader
+from codebase_rag.data_ingestion.truncation import format_truncation_report, measure_truncation
 from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.retrieval.bm25_search import BM25Retriever, rebuild_bm25_index
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
@@ -320,6 +321,38 @@ class IngestPipeline:
         # freshness metadata for GET /repos after indexing succeeds.
         self._ingest_head_shas: dict[str, str | None] = {}
 
+    def _chunking_fingerprint(self, chunker: DocumentChunker) -> str:
+        """Identify this run's chunking, so caches can tell it apart from an older one."""
+        return chunking_fingerprint(chunker, self.vector_store.embedding_manager.model_name)
+
+    def _build_chunker(self) -> DocumentChunker:
+        """Build a chunker sized for the model this run will embed with.
+
+        The token window is read off the loaded embedding model rather than
+        assumed, so swapping EMBEDDING_MODEL resizes the chunks with it instead
+        of leaving them cut for whatever model was configured when the size was
+        last chosen by hand.
+        """
+        return DocumentChunker(max_seq_length=self.vector_store.embedding_manager.max_seq_length)
+
+    def _report_truncation(self, documents: list) -> None:
+        """Log how much of what is about to be indexed the model cannot read.
+
+        Diagnostic only, so a failure here is reported and stepped over. An
+        ingest that embedded everything correctly must not be lost because the
+        measurement of it fell over.
+        """
+        manager = self.vector_store.embedding_manager
+        start_time = time.time()
+        try:
+            report = measure_truncation(documents, manager.count_tokens, manager.max_seq_length)
+        except Exception as e:
+            self.logger.warning("Truncation check failed, indexing anyway: %s", e)
+            return
+        for line in format_truncation_report(report):
+            self.logger.info(line)
+        self.logger.debug("Truncation check took %.2f seconds", time.time() - start_time)
+
     def _repo_name_from_url(self, url: str) -> str:
         """Derive a short repo name from a URL."""
         return url.rstrip("/").split("/")[-1].removesuffix(".git")
@@ -327,6 +360,26 @@ class IngestPipeline:
     def _cache_path_for_repo(self, repo_name: str) -> Path:
         """Return the document cache path for a specific repo."""
         return self.cache_dir / f"processed_documents_{repo_name}.pkl"
+
+    def _cache_chunking_path_for_repo(self, repo_name: str) -> Path:
+        """Return the sidecar recording how a repo's cached documents were chunked."""
+        return self.cache_dir / f"processed_documents_{repo_name}_chunking.json"
+
+    def _cached_chunking(self, repo_name: str) -> str | None:
+        """Return the chunking fingerprint a repo's document cache was built with.
+
+        None for a cache written before the fingerprint existed, which is
+        treated as a mismatch: chunks of unknown sizing are exactly what must
+        not be reused.
+        """
+        path = self._cache_chunking_path_for_repo(repo_name)
+        if not path.exists():
+            return None
+        try:
+            fingerprint = json.loads(path.read_text()).get("chunking")
+        except (json.JSONDecodeError, OSError, AttributeError):
+            return None
+        return str(fingerprint) if fingerprint else None
 
     def _get_head_sha(self, git_loader: GitLoader) -> str | None:
         """Return the HEAD commit SHA from a GitLoader's repo, or None."""
@@ -338,7 +391,7 @@ class IngestPipeline:
             return None
 
     def _is_cache_fresh(self, repo_name: str, head_sha: str | None) -> bool:
-        """Check whether the document cache matches the current HEAD SHA.
+        """Check whether the document cache matches the current HEAD SHA and chunking.
 
         Reads `{repo}_freshness.json`: `run()` writes both the pickle and
         freshness together, and `process_repo_incremental` deletes the pickle
@@ -348,13 +401,32 @@ class IngestPipeline:
         the pickle, which is safe precisely because nothing changed. Without
         this check, a second full `run()` after further upstream commits would
         treat a stale pickle as fresh and silently re-index old content.
+
+        Matching content is not enough on its own. The cached documents are
+        chunks, not files, so a pickle written under a different chunk size or
+        a different embedding model describes the same commit cut a different
+        way, and re-indexing it would put chunks in the collection that no
+        current run would produce.
         """
         if head_sha is None:
             return False
         if not self._cache_path_for_repo(repo_name).exists():
             return False
         _, cached_sha = repo_service.read_freshness(self.cache_dir, repo_name)
-        return cached_sha == head_sha
+        if cached_sha != head_sha:
+            return False
+
+        cached_chunking = self._cached_chunking(repo_name)
+        current_chunking = self._chunking_fingerprint(self._build_chunker())
+        if cached_chunking != current_chunking:
+            self.logger.info(
+                "Document cache for %s was chunked as %s, this run chunks as %s, reprocessing",
+                repo_name,
+                cached_chunking or "unrecorded",
+                current_chunking,
+            )
+            return False
+        return True
 
     def _process_single_repo(self, repo_url: str) -> list:
         """Process documents from a single repository.
@@ -382,7 +454,8 @@ class IngestPipeline:
 
         included_dirs = self._discover_included_dirs(local_path)
 
-        document_processor = DocumentProcessor(git_loader=git_loader)
+        chunker = self._build_chunker()
+        document_processor = DocumentProcessor(git_loader=git_loader, document_chunker=chunker)
         start_time = time.time()
         documents = document_processor.process(
             included_dirs=included_dirs,
@@ -405,6 +478,9 @@ class IngestPipeline:
 
         if self.use_cache:
             save_documents_cache(documents, cache_path)
+            self._cache_chunking_path_for_repo(repo_name).write_text(
+                json.dumps({"chunking": self._chunking_fingerprint(chunker)}, indent=2)
+            )
 
         return documents
 
@@ -453,6 +529,28 @@ class IngestPipeline:
         """Return the per-file content-hash manifest path for a specific repo."""
         return self.cache_dir / f"{repo_name}_file_hashes.json"
 
+    def _read_manifest(self, manifest_path: Path) -> tuple[dict[str, str], str | None]:
+        """Read a per-repo manifest as (file hashes, chunking fingerprint).
+
+        Manifests written before chunking was recorded are a bare
+        ``{path: hash}`` mapping. Those get a fingerprint of None, which never
+        matches, so the first run after an upgrade re-chunks the repo rather
+        than trusting chunks whose sizing is unknown.
+        """
+        if not manifest_path.exists():
+            return {}, None
+        try:
+            data = json.loads(manifest_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return {}, None
+
+        # A manifest that parsed but isn't a mapping is as unusable as one that didn't parse.
+        if not isinstance(data, dict):
+            return {}, None
+        if isinstance(data.get("files"), dict):
+            return data["files"], data.get("chunking")
+        return data, None
+
     def _bm25_corpus_path_for_repo(self, repo_name: str) -> Path:
         return self.cache_dir / "bm25_corpus" / f"{repo_name}.json"
 
@@ -475,24 +573,35 @@ class IngestPipeline:
         current_hashes = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in file_paths}
 
         manifest_path = self._file_hashes_path_for_repo(repo_name)
-        previous_hashes: dict[str, str] = {}
-        if manifest_path.exists():
-            try:
-                previous_hashes = json.loads(manifest_path.read_text())
-            except (json.JSONDecodeError, OSError):
-                previous_hashes = {}
+        previous_hashes, previous_chunking = self._read_manifest(manifest_path)
 
-        changed_paths = [p for p in file_paths if current_hashes[str(p)] != previous_hashes.get(str(p))]
+        chunker = self._build_chunker()
+        chunking = self._chunking_fingerprint(chunker)
+
+        if previous_chunking != chunking:
+            # The unchanged files are only safe to skip while the chunking that
+            # produced their indexed chunks still matches. It doesn't, so every
+            # file is stale regardless of its content hash.
+            self.logger.info(
+                "Chunking changed for %s (%s -> %s), re-chunking every file",
+                repo_name,
+                previous_chunking or "unrecorded",
+                chunking,
+            )
+            changed_paths = list(file_paths)
+        else:
+            changed_paths = [p for p in file_paths if current_hashes[str(p)] != previous_hashes.get(str(p))]
+
         deleted_sources = [path for path in previous_hashes if path not in current_hashes]
         unchanged_count = len(file_paths) - len(changed_paths)
-
-        chunker = DocumentChunker()
         new_documents = []
         for path in changed_paths:
             docs = chunker.process_file(path)
             for doc in docs:
                 doc.metadata["repo"] = repo_name
             new_documents.extend(docs)
+
+        self._report_truncation(new_documents)
 
         stale_sources = [str(p) for p in changed_paths] + deleted_sources
         for source_path in stale_sources:
@@ -502,14 +611,14 @@ class IngestPipeline:
 
         self._update_bm25_corpus_incremental(repo_name, stale_sources, new_documents)
 
-        manifest = {path: current_hashes[path] for path in current_hashes}
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(json.dumps(manifest, indent=2))
+        manifest_path.write_text(json.dumps({"chunking": chunking, "files": current_hashes}, indent=2))
 
         if changed_paths or deleted_sources:
             # A later run() must not load a document-cache pickle built from an
             # older commit than the one this incremental ingest just wrote.
             self._cache_path_for_repo(repo_name).unlink(missing_ok=True)
+            self._cache_chunking_path_for_repo(repo_name).unlink(missing_ok=True)
 
         repo_service.save_freshness(self.cache_dir, repo_name, head_sha)
 
@@ -573,6 +682,8 @@ class IngestPipeline:
         # run, wiping a repo's existing chunks with nothing indexed to replace them.
         if self.cancel_event is not None and self.cancel_event.is_set():
             raise IngestCancelled("Ingestion cancelled before indexing")
+
+        self._report_truncation(documents)
 
         # Remove ALL existing chunks for repos being re-ingested so that
         # deleted or shrunk files don't leave orphaned points.

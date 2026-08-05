@@ -7,6 +7,7 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.data_ingestion.pipeline import IngestPipeline
+from tests.conftest import stub_embedding_manager
 
 
 def _make_pipeline(
@@ -22,6 +23,7 @@ def _make_pipeline(
 
     pipeline = IngestPipeline()
     pipeline.cache_dir = Path(tmpdir)
+    stub_embedding_manager(cast(MagicMock, pipeline.vector_store))
     return pipeline
 
 
