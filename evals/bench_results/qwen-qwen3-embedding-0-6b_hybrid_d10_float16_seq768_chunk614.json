@@ -1,0 +1,1047 @@
+{
+  "testset_size": 42,
+  "testset_hash": "085b41df9382",
+  "embedding_model": "Qwen/Qwen3-Embedding-0.6B",
+  "dimension": 1024,
+  "max_seq_length": 768,
+  "dtype": "float16",
+  "query_prompt": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+  "document_prompt": "",
+  "retriever_type": "hybrid",
+  "candidate_depth": 10,
+  "applied_threshold": null,
+  "ingested_repositories": [
+    "power-grid-model"
+  ],
+  "index_build_time_s": 0.0,
+  "batch_size": 100,
+  "hit_rate": 0.7619047619047619,
+  "mrr": 0.5953325774754346,
+  "recall_at_depth": 0.7619047619047619,
+  "category_breakdown": {
+    "factual_lookup": {
+      "hit_rate": 0.46153846153846156,
+      "mrr": 0.34615384615384615,
+      "recall_at_depth": 0.46153846153846156,
+      "n": 13
+    },
+    "cross_file_reasoning": {
+      "hit_rate": 0.8333333333333334,
+      "mrr": 0.75,
+      "recall_at_depth": 0.8333333333333334,
+      "n": 6
+    },
+    "how_does_it_work": {
+      "hit_rate": 1.0,
+      "mrr": 0.41798941798941797,
+      "recall_at_depth": 1.0,
+      "n": 3
+    },
+    "conceptual": {
+      "hit_rate": 0.9,
+      "mrr": 0.7375,
+      "recall_at_depth": 0.9,
+      "n": 20
+    }
+  },
+  "avg_query_latency_s": 0.06569522620633333,
+  "per_query_latency_s": [
+    0.07566591689828783,
+    0.046359207946807146,
+    0.060187833034433424,
+    0.06050695909652859,
+    0.06123883405234665,
+    0.056463457993231714,
+    0.05530100001487881,
+    0.06618745799642056,
+    0.053356042015366256,
+    0.05229137500282377,
+    0.06610079202800989,
+    0.051579416962340474,
+    0.053475750028155744,
+    0.051991375046782196,
+    0.06531787489075214,
+    0.07250250002834946,
+    0.07141937490087003,
+    0.07220549997873604,
+    0.0664586250204593,
+    0.06971908290870488,
+    0.060427875025197864,
+    0.06104641710408032,
+    0.06316733406856656,
+    0.07993695791810751,
+    0.06645308306906372,
+    0.07696754194330424,
+    0.06422504095826298,
+    0.06166074995417148,
+    0.06913633295334876,
+    0.05884812504518777,
+    0.05550766596570611,
+    0.07227258302737027,
+    0.07792704191524535,
+    0.09401979204267263,
+    0.07805520796682686,
+    0.06272287492174655,
+    0.07112108403816819,
+    0.0637752499897033,
+    0.06608295894693583,
+    0.07067258306778967,
+    0.07409499993082136,
+    0.08274962496943772
+  ],
+  "per_question": [
+    {
+      "question": "What types of calculations does power-grid-model support?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "power-grid-model/README.md",
+        "src/power_grid_model/enum.py",
+        "_core/enum.py",
+        "calculations.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-min/sym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/pgm-automatic-tap-min/sym_output_batch.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-below-band-any/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/pgm-automatic-tap-line-drop-min/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-fast-any/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-max/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-meshed-any-max-iter/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-max/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-below-band-max/input.json.license"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What C++ standard does power-grid-model require?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "power-grid-model/CMakeLists.txt",
+        "build-guide.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/options.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-optional-id/params.json.license"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What are the third-party C++ dependencies of power-grid-model?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "power-grid-model/CMakeLists.txt",
+        "build-guide.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/options.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/sensor-update-il/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-min/sym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-optional-id/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-fast-any/sym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-newton/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pv-node/pv-node6/params.json.license"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What is the component type hierarchy in power-grid-model?",
+      "category": "cross_file_reasoning",
+      "expected_sources": [
+        "data-model.md",
+        "all_components.hpp",
+        "user_manual/components.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/all_components.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/__init__.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/utils.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/__init__.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/data-model.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/node/README.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/code_generation/templates/power_grid_model_c/power_grid_model_c/src/dataset_class_maps.cpp.jinja"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What calculation methods are available and what are their enum values?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "src/power_grid_model/enum.py",
+        "_core/enum.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/enum.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/native_api_tests/test_api_model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/options.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/benchmark_cpp/benchmark.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.25,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How do you create input data for a power-grid-model calculation?",
+      "category": "how_does_it_work",
+      "expected_sources": [
+        "quickstart.md",
+        "Power Flow Example.ipynb"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/assertions.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/quickstart.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.14285714285714285,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What error is raised when a state estimation system is not observable?",
+      "category": "cross_file_reasoning",
+      "expected_sources": [
+        "src/power_grid_model/errors.py",
+        "_core/errors.py",
+        "observability.hpp",
+        "calculations.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What is the base power constant used in power-grid-model per-unit calculations?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "common/common.hpp"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/common/common.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/floating_zero_sequence/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid5-with-capacitance/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid3-with-capacitance/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid5-no-capacitance/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid5-with-capacitance/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-line-into-itself/asym_output_batch.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid4-with-capacitance/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid5-with-capacitance/asym_output.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid5-no-capacitance/asym_output.json"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What winding types are supported for transformers?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "src/power_grid_model/enum.py",
+        "_core/enum.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/enum.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/component/three_winding_transformer.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/dataset_definitions.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/dataset_definitions.h"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What fault types can be modeled for short circuit analysis?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "src/power_grid_model/enum.py",
+        "_core/enum.py",
+        "fault.hpp",
+        "sc-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/math_solver/test_math_solver_sc.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/code_generation/data/attribute_classes/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/code_generation/data/attribute_classes/update.json"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.25,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How does the power-grid-model core architecture work from input to output?",
+      "category": "how_does_it_work",
+      "expected_sources": [
+        "core-design.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/__init__.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/api_reference/python-api-reference.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.1111111111111111,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What validation error classes exist for input data validation?",
+      "category": "cross_file_reasoning",
+      "expected_sources": [
+        "validation/errors.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/api_reference/python-api-reference.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/__init__.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/unit/validation/test_assertions.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/quickstart.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/data-validator.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/api_reference/python-api-reference.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What license is power-grid-model released under?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "power-grid-model/README.md",
+        "power-grid-model/LICENSE"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-independent-not-cacheable/sym_output_batch.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/line/asym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/sensor-update-il/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pv-node/pv-node6/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/node-injection-sensor-and-zero-injection/input.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/networks/symmetric/transmission-case/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-optional-id/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-fast-any/sym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-min/sym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-newton/input.json.license"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What are the tap changing strategies available for transformer regulation?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "src/power_grid_model/enum.py",
+        "_core/enum.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-fast-any/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-max/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-any/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-min/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-below-band-any/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-min/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-fast-any/input.json"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What happens when you try to connect a line between nodes with different rated voltages?",
+      "category": "cross_file_reasoning",
+      "expected_sources": [
+        "component/line.hpp"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-with-line-into-itself/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pv-node/pv-node-calc-methods/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pv-node/pv-node-source/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/inf-measurement-with-injection/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/current-sensor/global-current-sensor/input.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/current-sensor/power-from-local-current-sensor/input.json"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "How does power-grid-model decide whether it has enough sensor data to determine the grid's state statistically?",
+      "category": "conceptual",
+      "expected_sources": [
+        "calculations.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.25,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What happens to a transformer's tap position when the controlled voltage drifts outside its target band during automatic regulation?",
+      "category": "conceptual",
+      "expected_sources": [
+        "tap-changing-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "Why does power-grid-model skip automatic checks on the physical realism of input data by default?",
+      "category": "conceptual",
+      "expected_sources": [
+        "performance-guide.md",
+        "data-validator.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/utils.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What information does an object carry when input data fails validation, and how can a caller inspect it?",
+      "category": "conceptual",
+      "expected_sources": [
+        "data-validator.md",
+        "validation/errors.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/data-validator.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/error_handling.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.3333333333333333,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How can an ideal transformer be represented in power-grid-model even though there is no dedicated ideal-transformer component?",
+      "category": "conceptual",
+      "expected_sources": [
+        "non-pgm-components.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/model-validation.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/component/three_winding_transformer.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/non-pgm-components.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How would you model a grounding or earthing transformer using power-grid-model's existing components?",
+      "category": "conceptual",
+      "expected_sources": [
+        "non-pgm-components.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What voltage scaling adjustment does power-grid-model apply during a short circuit calculation, and why?",
+      "category": "conceptual",
+      "expected_sources": [
+        "sc-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/short_circuit/two_phase_to_ground_c_minimum/params.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/short_circuit/single_phase_to_ground_c_minimum/params.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/short_circuit/two_phase_c_minimum/params.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/short_circuit/single_node_source_three_phase_c_minimum/params.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/short_circuit/single_phase_to_ground_c_maximum/params.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/short_circuit/two_phase_to_ground_c_maximum/params.json"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What assumptions about loads and generation does power-grid-model make when computing a short circuit current?",
+      "category": "conceptual",
+      "expected_sources": [
+        "sc-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/model-validation.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/sc-algorithms.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "Which bus is treated as the reference point with known voltage and angle in a power flow calculation, and what PGM component represents it?",
+      "category": "conceptual",
+      "expected_sources": [
+        "pf-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/math_solver/newton_raphson_pf_solver.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-with-line-into-itself/asym_output_batch.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-system/grid5-no-capacitance/asym_output.json"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What extra requirement applies to asymmetric power flow calculations that doesn't apply to symmetric ones?",
+      "category": "conceptual",
+      "expected_sources": [
+        "pf-algorithms.md",
+        "calculations.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/asym_load/README.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.16666666666666666,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How can memory usage be reduced when constructing input or update data for a use case that only touches a few optional attributes?",
+      "category": "conceptual",
+      "expected_sources": [
+        "performance-guide.md",
+        "native-data-interface.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/unit/test_power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/native_api_tests/test_api_model.cpp"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What two ways can component data be laid out in memory, and how do they differ?",
+      "category": "conceptual",
+      "expected_sources": [
+        "dataset-terminology.md",
+        "native-data-interface.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/data_types.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/serialization.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/data_types.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/serialization.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How does power-grid-model represent batch data where different scenarios update different numbers of components?",
+      "category": "conceptual",
+      "expected_sources": [
+        "dataset-terminology.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/quickstart.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/utils.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-max/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/auto-tap-changer-small-u-band-max-iter-fast-any/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-below-band-any/params.json.license"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "Why might running the full Cartesian product of two batch datasets not require allocating memory for every combined scenario?",
+      "category": "conceptual",
+      "expected_sources": [
+        "performance-guide.md",
+        "calculations.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What serialization formats does power-grid-model's serializer support?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "serialization.md",
+        "_core/serialization.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/serialization.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Serialization Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/networks/asymmetric/distribution-case/README.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/source/README.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/symmetric/node/README.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-optional-id/params.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-fast-any/sym_output.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/sensor-update-il/input.json.license"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What is the minimum CMake version required to build power-grid-model?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "build-guide.md",
+        "power-grid-model/CMakeLists.txt"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/cmake/pgm_version.cmake",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/cmake/export_power_grid_model.cmake",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/CMakeLists.txt",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/CMakeLists.txt",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c_example/CMakeLists.txt",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/package_tests/CMakeLists.txt",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/dummy-test-batch-optional-id/params.json.license"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "What interface layers does power-grid-model provide out of the box, from the rawest to the most feature-rich?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "high-level-design.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/api_reference/python-api-reference.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/__init__.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/data-model.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/asym_load/README.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/package_tests/README.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/node/README.md"
+      ],
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
+    },
+    {
+      "question": "Where in the power-grid-model repository is the C++ calculation core located, and where is the input-data validation code located?",
+      "category": "factual_lookup",
+      "expected_sources": [
+        "folder-structure.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/contribution/folder-structure.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/main_core/topology.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/options.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/pgm-automatic-tap-any/sym_output_batch.json.license",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-below-band-max/params.json.license"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "Why does power-grid-model encourage users to build their own custom library or interface instead of providing a full feature-rich library for every programming language, and what pattern should a custom interface follow?",
+      "category": "conceptual",
+      "expected_sources": [
+        "high-level-design.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/api_reference/python-api-reference.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What distinguishes a spurious edge case from a non-spurious one in power-grid-model's terminology?",
+      "category": "conceptual",
+      "expected_sources": [
+        "advanced_documentation/terminology.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How does power-grid-model combine multiple voltage sensor measurements on the same bus during state estimation?",
+      "category": "conceptual",
+      "expected_sources": [
+        "se-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/math_solver/test_observability.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/math_solver/test_observability.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/math_solver/test_observability.cpp"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "How does power-grid-model represent an unspecified value in an update dataset, and why is that different from an explicit default value?",
+      "category": "conceptual",
+      "expected_sources": [
+        "native-data-interface.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What is the difference between 'unsupported input' and 'unreasonable input' in power-grid-model's classification of bad input?",
+      "category": "conceptual",
+      "expected_sources": [
+        "advanced_documentation/terminology.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_validation_tests/test_validation.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/unit/validation/test_input_validation.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/errors.py"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "What are the permission differences between the C API's const, mutable, and writable dataset types, and who owns each one?",
+      "category": "conceptual",
+      "expected_sources": [
+        "c-api.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/dataset.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_core.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/dataset.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/dataset.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_dataset.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/dataset.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/dataset.h",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/dataset.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/power_grid_dataset.py"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "Why can't power sensors and current sensors be mixed on the same terminal of the same component in power-grid-model?",
+      "category": "cross_file_reasoning",
+      "expected_sources": [
+        "user_manual/components.md",
+        "se-algorithms.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/user_manual/components.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/component/current_sensor.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/_rules.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/math_solver/test_observability.cpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/unit/validation/test_input_validation.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/validation/_rules.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/test_topology.cpp"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 0.5,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "Why does power-grid-model treat a NotObservableError or a PowerGridError wrapping a bad_alloc as a non-spurious edge case rather than a bug?",
+      "category": "cross_file_reasoning",
+      "expected_sources": [
+        "advanced_documentation/terminology.md",
+        "src/power_grid_model/errors.py",
+        "_core/errors.py"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp/handle.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/error_handling.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/src/power_grid_model/_core/errors.py",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    },
+    {
+      "question": "Why does power-grid-model implement its own custom sparse LU solver, and how does separating factorization from solving help with repeated time-series calculations?",
+      "category": "how_does_it_work",
+      "expected_sources": [
+        "lu-solver.md"
+      ],
+      "actual_sources": [
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/data/state_estimation/ill-conditioned-by-line-meshed/params.json",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/math_solver/short_circuit_solver.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/tests/cpp_unit_tests/math_solver/test_math_solver_pf.hpp",
+        "/Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/model.cpp"
+      ],
+      "hit": 1,
+      "reciprocal_rank": 1.0,
+      "recall_at_depth": 1
+    }
+  ]
+}

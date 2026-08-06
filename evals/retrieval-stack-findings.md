@@ -1,6 +1,7 @@
 # Retrieval Stack Findings
 
-**Date:** 2026-08-05, updated same day after the test set was strengthened and again after chunking changed
+**Date:** 2026-08-05, updated same day after the test set was strengthened, again after chunking
+changed, and again after the modern embedders were re-measured under that chunking
 **Corpus:** power-grid-model only, 19637 chunks under the current chunking. Every table below the
 chunking update was measured at 12346, before it.
 **Test set:** `evals/testset.json`, 42 scored questions as of the update below (originally 29; one
@@ -13,6 +14,64 @@ of this work.
 
 The retrieval sections are retrieval-only, produced without an LLM and without a judge, so they say
 nothing directly about answer quality. The generation and judge section is separate and says so.
+
+## Update: the modern embedders re-measured under current chunking
+
+Every modern-embedder arm in this document was built at the old fixed 1000-character chunking. Both
+bench collections held 12346 points. When chunking changed, only the shipped model was re-measured on
+the rebuilt 19637-chunk index; the alternatives were left at the chunking of the time. The corrected
+embedder table below is internally consistent, since all four of its rows sit at 12346, but it stopped
+describing what ships the moment chunk size changed.
+
+The two leading alternatives were therefore re-embedded over the current corpus at the same encoding
+settings their published arms used (`--dtype float16 --max-seq-length 768`), so chunk size is the only
+variable that moved. All figures N=42, unthresholded.
+
+| arm | hit @614 | MRR @614 | hit @1000 | MRR @1000 |
+|---|---|---|---|---|
+| shipped vector d10 | 0.8571 | **0.7345** | 0.8571 | 0.7133 |
+| shipped hybrid d10 | **0.9048** | **0.7560** | 0.8810 | 0.7508 |
+| shipped vector d50 | 0.9286 | **0.7392** | 0.8810 | — |
+| shipped hybrid d50 | 0.9286 | **0.7583** | 0.9048 | — |
+| bge-m3 vector d10 | 0.8571 | 0.6739 | 0.8810 | 0.7002 |
+| bge-m3 hybrid d10 | 0.8571 | 0.7167 | 0.8571 | — |
+| bge-m3 vector d50 | 0.9286 | 0.6788 | — | — |
+| bge-m3 hybrid d50 | 0.9286 | 0.7268 | 0.9286 | — |
+| 0.6B vector d10 | 0.7143 | 0.5378 | 0.8095 | 0.6271 |
+| 0.6B hybrid d10 | 0.7619 | 0.5953 | 0.8333 | 0.6755 |
+| 0.6B vector d50 | 0.7619 | 0.5415 | — | — |
+| 0.6B hybrid d50 | 0.7619 | 0.5916 | 0.8810 | — |
+
+**Both alternatives lost ground when chunks shrank, and the shipped model gained it.** At 614 characters
+the shipped model is at least tied on hit rate and ahead on MRR at every arm measured here. bge-m3
+matches it on hit rate at both depths and trails on MRR by 0.03 to 0.06 throughout.
+Qwen3-Embedding-0.6B falls to net −6 questions against the shipped model at d10, gaining 3 and losing 9,
+against net −3 at the old chunking.
+
+**Chunk size and embedder are not independent slots, and this document had been treating them as if
+they were.** The four questions the 0.6B lost to the chunking change are the serialization formats,
+the batch-data representation, the sensor-mixing rule, and the default realism checks. The likely
+mechanism is window under-fill: a 768-token window at 614 characters holds about a third of capacity,
+so the capacity that distinguishes these models from a 384-token one goes unused, while the shipped
+model's window is well matched to that size. This is a hypothesis consistent with the direction and
+size of the movement, not something these runs isolate; testing it would mean sweeping chunk size per
+embedder, which has not been done.
+
+Depth does not rescue the 0.6B. Its d50 arms reach the same 0.7619 as d10, so what it loses at this
+chunking is coverage rather than ordering, and no amount of candidate depth returns a document the
+first stage never surfaced.
+
+**Nothing measured justifies an embedder migration, and that now holds at two chunkings rather than
+one.** The fallback previously recorded here, that bge-m3 is the one to take if a
+migration is wanted anyway, is weaker than it was: at current chunking it buys no hit rate at either
+depth and costs MRR at both. That sentence also overstated its case when written, describing bge-m3 as
+the only modern embedder not behind the shipped model on either metric while the table it sat above
+showed 0.7002 against 0.7133 on MRR. It was behind on MRR then too, by less than a question's worth.
+
+Method note: arm records encode the model, retriever, depth, precision and sequence length in their
+filenames, but not the chunking, so a re-run at a new chunk size overwrites the old arm in place. The
+runs above are saved under `_chunk614` names for that reason. This is the same gap `fusion_bound.py`
+reports as unmatchable, and it now bites `bench_results/` directly rather than only the fusion report.
 
 ## Update: re-measured under model-derived chunking (19637 chunks, was 12346)
 
@@ -269,8 +328,10 @@ win. At the corrected ground truth there is no win: bge-m3 is 1 question ahead o
 0.6B is 2 behind, and the shipped model has the best MRR of the four. Adopting an embedder forces a
 full re-ingestion of every existing collection, and a 1-question margin inside the resolution floor is
 not a reason to ask users for that. If a migration is wanted for other reasons, bge-m3 is the one to
-take: it is the only modern embedder not behind the shipped model on either metric, and it builds its
-index roughly three times faster than 0.6B. Do not go above 1B regardless.
+take: it is the only modern embedder within a question of the shipped model on both metrics, and it
+builds its index roughly three times faster than 0.6B. Do not go above 1B regardless. Both claims in
+this paragraph were measured at the old chunking; see the re-measurement at the top of this document,
+which weakens the bge-m3 fallback further.
 
 The honest next step before any embedder decision is a larger test set. Every pairwise difference in
 that table except bge-m3 over 0.6B is 2 questions or fewer, and this set has now reversed its own
