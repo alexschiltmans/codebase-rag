@@ -337,11 +337,15 @@ def main() -> None:
                 # the collection name too: point IDs are deterministic, and a re-run under
                 # different settings would otherwise overwrite the previous run's points in
                 # place while the binding check, which compares the model, saw nothing wrong.
+                # Chunking is worse than a silent overwrite. A smaller corpus does not even
+                # cover the points a larger one wrote, so the stale ones survive and are
+                # retrieved alongside the new, from a chunking the arm does not claim.
                 collection_name = f"bench_{slug}_{dimension}"
                 if args.dtype:
                     collection_name += f"_{args.dtype}"
                 if args.max_seq_length:
                     collection_name += f"_seq{args.max_seq_length}"
+                collection_name += chunking_suffix(chunking)
                 store = build_vector_store(args.embedding_model, collection_name, args.max_seq_length, args.dtype)
                 build_time_s = embed_corpus(store, corpus, batch_size=args.batch_size)
 
