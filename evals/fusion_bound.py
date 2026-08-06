@@ -17,10 +17,9 @@ hit produces every number in the output; the `hit` fields saved in the arm recor
 Arms are only comparable when they were scored against the same questions at the same depth over the
 same corpus, and `bench_results/` holds arms from more than one test set under filenames that encode
 the model, retriever and depth but nothing about the questions. Every mismatch below exits non-zero
-rather than producing a union that averages over two different instruments. One dimension cannot be
-checked here: arm records do not save the chunk configuration their index was built with, and two
-arms of the same model over different chunkings are identical in every recorded field, so matching
-that is the caller's job and the report says so.
+rather than producing a union that averages over two different instruments. Chunking is gated the
+same way, including its absence: arms written before the chunk configuration was recorded carry no
+value for it, and an arm that records one is not comparable against an arm that does not.
 
 Usage:
     uv run python evals/fusion_bound.py baai-bge-m3_vector_d10_float16_seq768 \\
@@ -43,7 +42,14 @@ from retrieval_metrics import compute_recall_at_depth
 EVALS_DIR = Path(__file__).parent
 BENCH_RESULTS_DIR = EVALS_DIR / "bench_results"
 
-GATED_FIELDS = ("testset_hash", "testset_size", "candidate_depth", "ingested_repositories")
+GATED_FIELDS = (
+    "testset_hash",
+    "testset_size",
+    "candidate_depth",
+    "ingested_repositories",
+    "chunk_size",
+    "chunk_overlap",
+)
 REQUIRED_ROW_FIELDS = ("question", "expected_sources", "actual_sources")
 
 
@@ -236,6 +242,7 @@ def fusion_bound(arms: list[dict[str, Any]]) -> dict[str, Any]:
         "testset_size": arms[0].get("testset_size"),
         "candidate_depth": arms[0]["candidate_depth"],
         "ingested_repositories": arms[0].get("ingested_repositories"),
+        "chunk_size": arms[0].get("chunk_size"),
         "components": components,
         "best_components": best_components,
         "best_component_hits": best_hits,
@@ -255,8 +262,8 @@ def format_report(result: dict[str, Any]) -> str:
     lines = [
         f"test set: {n} questions (hash {result['testset_hash'] or 'none recorded'}), "
         f"candidate depth {result['candidate_depth']}, "
-        f"corpus {', '.join(repositories) if repositories else 'none recorded'}",
-        "not gated: chunk configuration, which arm records do not save; components must come from one chunking",
+        f"corpus {', '.join(repositories) if repositories else 'none recorded'}, "
+        f"chunk size {result['chunk_size'] or 'none recorded'}",
     ]
     tied = len(result["best_components"]) > 1
     for name, stats in result["components"].items():

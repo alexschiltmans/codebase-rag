@@ -32,6 +32,8 @@ def _arm(
     testset_hash: str | None = "abc123",
     testset_size: int | None = 3,
     repositories: list[str] | None = None,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
 ) -> dict[str, Any]:
     """Build an arm record from (question, expected_sources, actual_sources) rows."""
     record: dict[str, Any] = {
@@ -41,6 +43,10 @@ def _arm(
             {"question": q, "expected_sources": expected, "actual_sources": actual} for q, expected, actual in rows
         ],
     }
+    if chunk_size is not None:
+        record["chunk_size"] = chunk_size
+    if chunk_overlap is not None:
+        record["chunk_overlap"] = chunk_overlap
     if testset_hash is not None:
         record["testset_hash"] = testset_hash
     if testset_size is not None:
@@ -187,6 +193,35 @@ class TestComparabilityGates:
             ]
         )
         assert result["union_hits"] == 2
+
+    def test_mismatched_chunk_size_is_refused(self) -> None:
+        with pytest.raises(IncomparableArmsError, match="chunk_size"):
+            fusion_bound([_arm("a", ROWS_A, chunk_size=614), _arm("b", ROWS_B, chunk_size=1000)])
+
+    def test_missing_chunk_size_does_not_match_a_present_one(self) -> None:
+        # Arms predating the chunking field are a separate population. Reading an absent value as
+        # agreeing with a recorded one is how two chunkings get fused into one table.
+        with pytest.raises(IncomparableArmsError, match="chunk_size"):
+            fusion_bound([_arm("a", ROWS_A, chunk_size=614), _arm("b", ROWS_B)])
+
+    def test_matching_chunk_size_is_allowed(self) -> None:
+        result = fusion_bound(
+            [
+                _arm("a", ROWS_A, chunk_size=614, chunk_overlap=122),
+                _arm("b", ROWS_B, chunk_size=614, chunk_overlap=122),
+            ]
+        )
+        assert result["union_hits"] == 2
+        assert result["chunk_size"] == 614
+
+    def test_same_size_cut_with_a_different_overlap_is_refused(self) -> None:
+        with pytest.raises(IncomparableArmsError, match="chunk_overlap"):
+            fusion_bound(
+                [
+                    _arm("a", ROWS_A, chunk_size=614, chunk_overlap=122),
+                    _arm("b", ROWS_B, chunk_size=614, chunk_overlap=61),
+                ]
+            )
 
     def test_a_single_arm_is_refused(self) -> None:
         with pytest.raises(IncomparableArmsError, match="at least two arms"):

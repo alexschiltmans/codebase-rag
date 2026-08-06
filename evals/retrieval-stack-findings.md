@@ -626,7 +626,18 @@ Per-arm JSON is in `evals/bench_results/` and reranker output in `evals/rerank_r
 tracked. Each arm record carries `testset_size` and `testset_hash` for the test set it was scored
 against, because both directories hold arms from more than one test set under names that encode the
 model and depth but nothing about the questions. Compare two arms only when those two fields agree.
-Records written before this field existed carry neither, and are the N=29 historical runs. The frozen candidate lists are written to `evals/bench_candidates/`, which is not tracked:
+Records written before this field existed carry neither, and are the N=29 historical runs.
+
+Arm records also carry `chunk_size`, `chunk_overlap` and `chunk_max_seq_length`, read from the corpus
+they scored rather than from the command line, and the chunk size appears in the arm name. The same
+reading rule applies and for the same reason: an arm written before this field existed carries `null`
+for all three, and `null` is not evidence that it matches an arm that records a value. Two arms of one
+model at two chunk sizes used to be identical in every saved field, so the second overwrote the first,
+which is how a tracked result was lost while producing the re-measurement at the top of this document.
+`fusion_bound.py` now gates on chunking as it does on the test set, and refuses an arm that records it
+against one that does not.
+
+The frozen candidate lists are written to `evals/bench_candidates/`, which is not tracked:
 they run to 24MB because each one carries the full text of every candidate chunk, and re-running the
 first stage regenerates them. Rescoring a reranker arm without re-embedding needs those lists, so
 regenerate them before reaching for `rerank_bench.py`.

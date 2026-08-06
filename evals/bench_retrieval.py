@@ -18,6 +18,11 @@ The benchmark builds its own Qdrant collection per embedding model
 `data/cache/bm25_corpus`, rather than re-running ingestion, and tears the
 collection down on exit (including on failure) unless `--keep-collections`
 is passed.
+
+It re-embeds that corpus but never re-chunks it, so scoring a model at a
+different chunk size means pointing `--corpus-dir` at a corpus cut that way.
+The chunking is read from the corpus rather than from the command line, and
+lands in both the arm record and the arm name.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 import torch
+from corpus_chunking import chunking_suffix, read_chunking_sidecar
 from langchain_core.documents import Document
 from retrieval_metrics import compute_recall_at_depth, compute_retrieval_hit_and_reciprocal_rank
 from testset_provenance import testset_provenance
@@ -287,12 +293,22 @@ def main() -> None:
         ),
     )
     parser.add_argument("--output", type=Path, default=None, help="Path to write the result JSON.")
+    parser.add_argument(
+        "--corpus-dir",
+        type=Path,
+        default=CORPUS_DIR,
+        help=(
+            "Corpus to embed and score. Defaults to the application's own corpus. A corpus cut at "
+            "a different chunk size lives in its own directory and carries a chunking sidecar."
+        ),
+    )
     args = parser.parse_args()
 
     testset = load_testset()
-    corpus = load_bm25_corpus(CORPUS_DIR)
+    corpus = load_bm25_corpus(args.corpus_dir)
     if not corpus:
-        raise RuntimeError(f"No corpus found in {CORPUS_DIR}. Run ingestion first.")
+        raise RuntimeError(f"No corpus found in {args.corpus_dir}. Run ingestion first.")
+    chunking = read_chunking_sidecar(args.corpus_dir)
 
     store: QdrantStore | None = None
     collection_name: str | None = None
@@ -343,6 +359,7 @@ def main() -> None:
             "dtype": (manager.dtype or "float32") if manager else None,
             "query_prompt": manager.query_prompt if manager else None,
             "document_prompt": manager.document_prompt if manager else None,
+            **chunking,
             "retriever_type": args.retriever,
             "candidate_depth": args.depth,
             "applied_threshold": threshold,
@@ -359,12 +376,15 @@ def main() -> None:
         }
 
         # Everything that changes the numbers goes in the name. Without dtype and sequence
-        # length, an fp16 sweep silently overwrites the fp32 results it should be compared to.
+        # length, an fp16 sweep silently overwrites the fp32 results it should be compared to,
+        # and without chunk size a re-run at a new size overwrites the arm it should be
+        # compared against, which is how a tracked result was once lost.
         arm_name = f"{slugify_model_name(args.embedding_model)}_{args.retriever}_d{args.depth}"
         if args.dtype:
             arm_name += f"_{args.dtype}"
         if args.max_seq_length:
             arm_name += f"_seq{args.max_seq_length}"
+        arm_name += chunking_suffix(chunking)
         if args.threshold is not None:
             arm_name += f"_t{args.threshold}"
         if args.collection:
