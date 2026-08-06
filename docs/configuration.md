@@ -24,7 +24,7 @@ All settings are configured via environment variables or a `.env` file in the pr
 
 | Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API URL. The default targets a natively installed Ollama. The containerized Ollama (`make services-start PROFILE=ollama` or `PROFILE=full`) publishes on host port `11435` instead, to avoid shadowing a native install; point this at `http://127.0.0.1:11435` to use it from the host, or use `host.docker.internal` per the note below when connecting from inside another container. **The two are not interchangeable on macOS.** Containers run inside a Linux VM with no Metal passthrough, so `11435` is CPU-only there: roughly 73 tok/s generation against 380 for the native endpoint ([measurements and caveats](../docker-model-runner-findings.md)). On Linux with the NVIDIA container runtime the container should have GPU access and the choice costs little, though that was not measured. The sidebar reports which endpoint resolved and whether the model is GPU-resident. |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API URL. The default targets a natively installed Ollama. The containerized Ollama (`make services-start PROFILE=ollama` or `PROFILE=full`) publishes on host port `11435` instead, to avoid shadowing a native install; point this at `http://127.0.0.1:11435` to use it from the host, or use `host.docker.internal` per the note below when connecting from inside another container. **The two are not interchangeable on macOS.** Containers run inside a Linux VM with no Metal passthrough, so `11435` is CPU-only there: roughly 73 tok/s generation against 380 for the native endpoint ([measurements and caveats](docker-model-runner-findings.md)). On Linux with the NVIDIA container runtime the container should have GPU access and the choice costs little, though that was not measured. The sidebar reports which endpoint resolved and whether the model is GPU-resident. |
 
 ## OpenAI-compatible backend
 
@@ -45,7 +45,7 @@ The endpoint is disabled by default and connections are refused until you run `d
 
 One rough edge to expect. Placement reporting does not work against this backend: its `/api/ps` omits the VRAM field the sidebar reads, so the sidebar names the endpoint but states no placement.
 
-[The Model Runner investigation](../docker-model-runner-findings.md) records the measurements behind this section.
+[The Model Runner investigation](docker-model-runner-findings.md) records the measurements behind this section.
 
 ## Storage settings
 
