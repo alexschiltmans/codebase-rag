@@ -7,8 +7,8 @@
   "dtype": null,
   "query_prompt": null,
   "document_prompt": null,
-  "chunk_size": 614,
-  "chunk_overlap": 122,
+  "chunk_size": 1000,
+  "chunk_overlap": 200,
   "chunk_max_seq_length": null,
   "retriever_type": "bm25",
   "candidate_depth": 10,
@@ -19,78 +19,78 @@
   "index_build_time_s": 0.0,
   "batch_size": 100,
   "hit_rate": 0.8571428571428571,
-  "mrr": 0.6111111111111112,
+  "mrr": 0.5830026455026455,
   "recall_at_depth": 0.8571428571428571,
   "category_breakdown": {
     "factual_lookup": {
       "hit_rate": 0.6153846153846154,
-      "mrr": 0.43076923076923074,
+      "mrr": 0.39572649572649576,
       "recall_at_depth": 0.6153846153846154,
       "n": 13
     },
     "cross_file_reasoning": {
       "hit_rate": 0.8333333333333334,
-      "mrr": 0.513888888888889,
+      "mrr": 0.4583333333333333,
       "recall_at_depth": 0.8333333333333334,
       "n": 6
     },
     "how_does_it_work": {
       "hit_rate": 1.0,
-      "mrr": 0.8333333333333334,
+      "mrr": 1.0,
       "recall_at_depth": 1.0,
       "n": 3
     },
     "conceptual": {
       "hit_rate": 1.0,
-      "mrr": 0.7241666666666666,
+      "mrr": 0.6795833333333333,
       "recall_at_depth": 1.0,
       "n": 20
     }
   },
-  "avg_query_latency_s": 0.020576845122767345,
+  "avg_query_latency_s": 0.013897166789753274,
   "per_query_latency_s": [
-    0.015039957943372428,
-    0.009938958915881813,
-    0.015186082920990884,
-    0.01576354098506272,
-    0.014478124910965562,
-    0.015281292027793825,
-    0.014965209062211215,
-    0.01829604199156165,
-    0.009907332947477698,
-    0.01331041706725955,
-    0.017839167034253478,
-    0.01215579197742045,
-    0.011139209032990038,
-    0.013555874931626022,
-    0.01946408301591873,
-    0.02622404193971306,
-    0.0257618750911206,
-    0.02323599997907877,
-    0.021459292038343847,
-    0.025215832982212305,
-    0.01787087507545948,
-    0.019104499951936305,
-    0.022819083067588508,
-    0.032644040999002755,
-    0.021082749939523637,
-    0.027178541058674455,
-    0.020373082952573895,
-    0.02247866604011506,
-    0.025781207950785756,
-    0.01224245794583112,
-    0.015622665989212692,
-    0.025014041922986507,
-    0.026221165899187326,
-    0.04119962500408292,
-    0.017483457922935486,
-    0.021426291903480887,
-    0.028855957905761898,
-    0.022641874966211617,
-    0.023720040917396545,
-    0.026830957969650626,
-    0.023608541931025684,
-    0.03180954104755074
+    0.010655249934643507,
+    0.006423084065318108,
+    0.009588457993231714,
+    0.009521584026515484,
+    0.009817957994528115,
+    0.010245124925859272,
+    0.00923741701990366,
+    0.011330542038194835,
+    0.006052291952073574,
+    0.008507916005328298,
+    0.01320254197344184,
+    0.00835362495854497,
+    0.00840879196766764,
+    0.01070524996612221,
+    0.014063958078622818,
+    0.017678667092695832,
+    0.01757895795162767,
+    0.016989416908472776,
+    0.015889792004600167,
+    0.01868437509983778,
+    0.013198125059716403,
+    0.013341084006242454,
+    0.0140842089895159,
+    0.02037570800166577,
+    0.013153832987882197,
+    0.018626249977387488,
+    0.014263999997638166,
+    0.014362999936565757,
+    0.016845499980263412,
+    0.008351875003427267,
+    0.011281957966275513,
+    0.016859458992257714,
+    0.018319625058211386,
+    0.02693091705441475,
+    0.012036042055115104,
+    0.015257709077559412,
+    0.01970654202159494,
+    0.016755874967202544,
+    0.015650000073947012,
+    0.01665662508457899,
+    0.014734291937202215,
+    0.019953374983742833
   ],
   "per_question": [
     {
@@ -103,19 +103,19 @@
         "calculations.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/quickstart.md",
+        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/docs/quickstart.md",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md"
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/index.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.3333333333333333,
       "recall_at_depth": 1
     },
     {
@@ -126,15 +126,15 @@
         "build-guide.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
-        "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/safe_memory_handling.hpp",
+        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "data/repos/power-grid-model/docs/quickstart.md",
         "data/repos/power-grid-model/README.md"
       ],
       "hit": 0,
@@ -151,18 +151,18 @@
       "actual_sources": [
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md",
         "data/repos/power-grid-model/src/power_grid_model/utils.py",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/model-validation.md",
-        "data/repos/power-grid-model/docs/user_manual/model-validation.md",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/docs/user_manual/components.md"
+        "data/repos/power-grid-model/LICENSES/MPL-2.0.txt",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md"
       ],
-      "hit": 0,
-      "reciprocal_rank": 0.0,
-      "recall_at_depth": 0
+      "hit": 1,
+      "reciprocal_rank": 0.1111111111111111,
+      "recall_at_depth": 1
     },
     {
       "question": "What is the component type hierarchy in power-grid-model?",
@@ -175,14 +175,14 @@
       "actual_sources": [
         "data/repos/power-grid-model/docs/user_manual/data-model.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/code_generation/templates/src/power_grid_model/_core/dataset_class_maps.py.jinja",
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/docs/user_manual/model-validation.md",
+        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/src/power_grid_model/validation/_validation.py",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/cmake/README.md.in"
+        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -201,11 +201,11 @@
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md"
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp"
       ],
       "hit": 0,
       "reciprocal_rank": 0.0,
@@ -220,13 +220,13 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/quickstart.md",
-        "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
-        "data/repos/power-grid-model/src/power_grid_model/validation/assertions.py",
-        "data/repos/power-grid-model/src/power_grid_model/validation/assertions.py",
-        "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/model.h",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/docs/index.md"
       ],
@@ -246,14 +246,14 @@
       "actual_sources": [
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/common/exception.hpp",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/common/exception.hpp",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/common/exception.hpp",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/unit/utils.py"
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp"
       ],
       "hit": 1,
       "reciprocal_rank": 0.25,
@@ -267,15 +267,15 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
-        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
-        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/sym_load/README.md",
-        "data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/sym_gen/README.md"
+        "data/repos/power-grid-model/tests/data/power_flow/pandapower/components/asymmetric/sym_gen/README.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/quickstart.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb"
       ],
       "hit": 0,
       "reciprocal_rank": 0.0,
@@ -289,20 +289,20 @@
         "_core/enum.py"
       ],
       "actual_sources": [
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
-        "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/data/power_flow/pandapower/components/symmetric/three_winding_transformer/README.md",
-        "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
-        "data/repos/power-grid-model/src/power_grid_model/_core/enum.py"
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb"
       ],
-      "hit": 1,
-      "reciprocal_rank": 0.1,
-      "recall_at_depth": 1
+      "hit": 0,
+      "reciprocal_rank": 0.0,
+      "recall_at_depth": 0
     },
     {
       "question": "What fault types can be modeled for short circuit analysis?",
@@ -314,16 +314,16 @@
         "sc-algorithms.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/docs/user_manual/components.md"
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md"
       ],
       "hit": 0,
       "reciprocal_rank": 0.0,
@@ -336,19 +336,19 @@
         "core-design.md"
       ],
       "actual_sources": [
+        "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
         "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
+        "data/repos/power-grid-model/docs/examples/Serialization Example.ipynb",
+        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
+        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
+        "data/repos/power-grid-model/docs/index.md",
         "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
         "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/docs/examples/Serialization Example.ipynb",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_meta.py",
-        "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
-        "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
-        "data/repos/power-grid-model/docs/index.md"
+        "data/repos/power-grid-model/src/power_grid_model/enum.py",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.5,
+      "reciprocal_rank": 1.0,
       "recall_at_depth": 1
     },
     {
@@ -361,13 +361,13 @@
         "data/repos/power-grid-model/docs/user_manual/data-validator.md",
         "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
+        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
+        "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
         "data/repos/power-grid-model/docs/quickstart.md",
-        "data/repos/power-grid-model/src/power_grid_model/validation/__init__.py"
+        "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
+        "data/repos/power-grid-model/src/power_grid_model/validation/utils.py"
       ],
       "hit": 1,
       "reciprocal_rank": 0.5,
@@ -382,15 +382,15 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/src/power_grid_model/typing.py",
         "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/cmake/README.md.in",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/src/power_grid_model/__init__.py",
-        "data/repos/power-grid-model/README.md",
+        "data/repos/power-grid-model/cmake/README.md.in",
         "data/repos/power-grid-model/LICENSES/MPL-2.0.txt",
-        "data/repos/power-grid-model/src/power_grid_model/errors.py",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+        "data/repos/power-grid-model/LICENSES/MPL-2.0.txt",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/safe_memory_handling.hpp",
+        "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
+        "data/repos/power-grid-model/docs/quickstart.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -404,19 +404,19 @@
         "_core/enum.py"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/src/power_grid_model/_core/enum.py",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/user_manual/model-validation.md",
+        "data/repos/power-grid-model/src/power_grid_model/_core/enum.py",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.2,
       "recall_at_depth": 1
     },
     {
@@ -429,13 +429,13 @@
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/tests/cpp_validation_tests/test_validation.cpp",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/tests/cpp_validation_tests/test_validation.cpp",
+        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md"
+        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb"
       ],
       "hit": 0,
       "reciprocal_rank": 0.0,
@@ -449,18 +449,18 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/README.md",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/src/power_grid_model/validation/assertions.py",
         "data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/index.md",
+        "data/repos/power-grid-model/README.md",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/dataset.hpp",
+        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/power_grid_model_c_example/serialization.c"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
+      "reciprocal_rank": 0.125,
       "recall_at_depth": 1
     },
     {
@@ -471,15 +471,15 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
+        "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
         "data/repos/power-grid-model/src/power_grid_model/_core/enum.py",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
-        "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
-        "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
-        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb"
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/components.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -495,14 +495,14 @@
       "actual_sources": [
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/src/power_grid_model/validation/_validation.py",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/index.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+        "data/repos/power-grid-model/docs/algorithms/tap-changing-algorithms.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -516,19 +516,19 @@
         "validation/errors.py"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
-        "data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/data-validator.md",
-        "data/repos/power-grid-model/docs/user_manual/data-validator.md",
-        "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
-        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
-        "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/user_manual/data-validator.md"
+        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/data-validator.md",
+        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
+        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
+        "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
+        "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
+        "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
+        "data/repos/power-grid-model/docs/examples/State Estimation Example.ipynb"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
+      "reciprocal_rank": 1.0,
       "recall_at_depth": 1
     },
     {
@@ -539,15 +539,15 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
-        "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
-        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb"
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -560,19 +560,19 @@
         "non-pgm-components.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/quickstart.md",
+        "data/repos/power-grid-model/docs/user_manual/data-model.md",
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/docs/quickstart.md",
-        "data/repos/power-grid-model/README.md"
+        "data/repos/power-grid-model/docs/user_manual/calculations.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.5,
+      "reciprocal_rank": 1.0,
       "recall_at_depth": 1
     },
     {
@@ -584,17 +584,17 @@
       "actual_sources": [
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/basics.h",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
         "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md"
+        "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.2,
+      "reciprocal_rank": 0.3333333333333333,
       "recall_at_depth": 1
     },
     {
@@ -604,19 +604,19 @@
         "sc-algorithms.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
         "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
-        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp"
+        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "data/repos/power-grid-model/docs/algorithms/sc-algorithms.md",
+        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -627,15 +627,15 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
-        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
-        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/math_solver/observability.hpp",
         "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
-        "data/repos/power-grid-model/docs/user_manual/data-model.md"
+        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "data/repos/power-grid-model/docs/user_manual/data-model.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/math_solver/measured_values.hpp"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -649,19 +649,19 @@
         "calculations.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
         "data/repos/power-grid-model/docs/examples/Asymmetric Line.ipynb",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
-        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
         "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
         "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
-        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "data/repos/power-grid-model/docs/algorithms/pf-algorithms.md",
+        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb"
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.25,
+      "reciprocal_rank": 0.2,
       "recall_at_depth": 1
     },
     {
@@ -672,19 +672,19 @@
         "native-data-interface.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
-        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
-        "data/repos/power-grid-model/docs/user_manual/data-validator.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
+        "data/repos/power-grid-model/docs/user_manual/data-validator.md",
+        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
         "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py"
+        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -695,19 +695,19 @@
         "native-data-interface.md"
       ],
       "actual_sources": [
+        "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
+        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
+        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
-        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
-        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
-        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
-        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/LICENSES/MPL-2.0.txt"
+        "data/repos/power-grid-model/src/power_grid_model/validation/_rules.py",
+        "data/repos/power-grid-model/src/power_grid_model/validation/_rules.py"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -717,19 +717,19 @@
         "dataset-terminology.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
-        "data/repos/power-grid-model/src/power_grid_model/utils.py",
-        "data/repos/power-grid-model/docs/quickstart.md",
-        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
-        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/docs/quickstart.md",
+        "data/repos/power-grid-model/docs/examples/Asymmetric Calculation Example.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/main_core/update.hpp"
+        "data/repos/power-grid-model/src/power_grid_model/utils.py"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -741,18 +741,18 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/examples/Validation Examples.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
         "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
-        "data/repos/power-grid-model/docs/user_manual/performance-guide.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/dataset.h",
-        "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb"
+        "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
+        "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
+        "data/repos/power-grid-model/docs/examples/Multi-dimensional batch calculation example.ipynb",
+        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -765,14 +765,14 @@
       "actual_sources": [
         "data/repos/power-grid-model/src/power_grid_model/_core/serialization.py",
         "data/repos/power-grid-model/docs/user_manual/serialization.md",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/include/power_grid_model_c/serialization.h",
         "data/repos/power-grid-model/power_grid_model_c/power_grid_model_c/src/serialization.cpp",
         "data/repos/power-grid-model/docs/user_manual/serialization.md",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/serialization/serializer.hpp",
         "data/repos/power-grid-model/README.md",
         "data/repos/power-grid-model/src/power_grid_model/utils.py",
-        "data/repos/power-grid-model/docs/api_reference/power-grid-model-c-api-reference.rst",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/serialization/serializer.hpp",
-        "data/repos/power-grid-model/src/power_grid_model/_core/serialization.py",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/serialization/serializer.hpp"
+        "data/repos/power-grid-model/tests/cpp_unit_tests/common/test_exceptions.cpp",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -786,19 +786,19 @@
         "power-grid-model/CMakeLists.txt"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/pyproject.toml",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
-        "data/repos/power-grid-model/pyproject.toml",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md",
         "data/repos/power-grid-model/docs/advanced_documentation/build-guide.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -808,19 +808,19 @@
         "high-level-design.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/index.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp",
+        "data/repos/power-grid-model/docs/examples/Short Circuit Example.ipynb",
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.25,
+      "reciprocal_rank": 1.0,
       "recall_at_depth": 1
     },
     {
@@ -830,19 +830,19 @@
         "folder-structure.md"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
+        "data/repos/power-grid-model/docs/contribution/folder-structure.md",
         "data/repos/power-grid-model/tests/data/state_estimation/current-sensor/power-from-global-current-sensor/README.md",
         "data/repos/power-grid-model/tests/data/state_estimation/current-sensor/power-from-local-current-sensor/README.md",
         "data/repos/power-grid-model/docs/contribution/folder-structure.md",
-        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
+        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
         "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
         "data/repos/power-grid-model/src/power_grid_model/validation/_validation.py",
-        "data/repos/power-grid-model/docs/examples/Generic Branch Example.ipynb",
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
-        "data/repos/power-grid-model/README.md"
+        "data/repos/power-grid-model/docs/index.md",
+        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.25,
+      "reciprocal_rank": 1.0,
       "recall_at_depth": 1
     },
     {
@@ -860,8 +860,8 @@
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
         "data/repos/power-grid-model/pyproject.toml",
-        "data/repos/power-grid-model/docs/advanced_documentation/high-level-design.md",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model_cpp/include/power_grid_model_cpp.hpp"
+        "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/core-design.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -882,8 +882,8 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
+        "data/repos/power-grid-model/docs/examples/Make Test Dataset.ipynb",
+        "data/repos/power-grid-model/docs/user_manual/components.md"
       ],
       "hit": 1,
       "reciprocal_rank": 0.3333333333333333,
@@ -897,15 +897,15 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
-        "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
         "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md"
+        "data/repos/power-grid-model/docs/user_manual/components.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -919,14 +919,14 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
-        "data/repos/power-grid-model/docs/doxygen/Doxyfile",
-        "data/repos/power-grid-model/src/power_grid_model/_core/power_grid_model.py",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/core-design.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/user_manual/serialization.md",
+        "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
+        "data/repos/power-grid-model/code_generation/templates/src/power_grid_model/_core/dataset_class_maps.py.jinja",
+        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
+        "data/repos/power-grid-model/docs/examples/Power Flow Example.ipynb",
         "data/repos/power-grid-model/docs/user_manual/data-validator.md"
       ],
       "hit": 1,
@@ -944,12 +944,12 @@
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/user_manual/model-validation.md",
         "data/repos/power-grid-model/src/power_grid_model/_core/dataset_definitions.py",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/src/power_grid_model/_core/serialization.py",
-        "data/repos/power-grid-model/src/power_grid_model/_core/serialization.py",
-        "data/repos/power-grid-model/src/power_grid_model/_core/serialization.py"
+        "data/repos/power-grid-model/power_grid_model_c_example/serialization.c",
+        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,
@@ -963,18 +963,18 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/docs/algorithms/dense-and-selective-inverse.md",
-        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/dataset.hpp",
         "data/repos/power-grid-model/docs/user_manual/dataset-terminology.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/native-data-interface.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
-        "data/repos/power-grid-model/src/power_grid_model/validation/assertions.py",
-        "data/repos/power-grid-model/src/power_grid_model/validation/_validation.py",
-        "data/repos/power-grid-model/docs/algorithms/dense-and-selective-inverse.md",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/auxiliary/dataset.hpp",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
-        "data/repos/power-grid-model/docs/user_manual/components.md"
+        "data/repos/power-grid-model/docs/examples/Transformer Examples.ipynb",
+        "data/repos/power-grid-model/src/power_grid_model/validation/assertions.py",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/src/power_grid_model/validation/_validation.py",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/c-api.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.2,
+      "reciprocal_rank": 0.1,
       "recall_at_depth": 1
     },
     {
@@ -986,18 +986,18 @@
       ],
       "actual_sources": [
         "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
-        "data/repos/power-grid-model/src/power_grid_model/validation/errors.py",
-        "data/repos/power-grid-model/docs/user_manual/components.md",
         "data/repos/power-grid-model/docs/algorithms/se-algorithms.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/user_manual/components.md",
-        "data/repos/power-grid-model/tests/data/state_estimation/dummy-test-line-into-itself/README.md",
-        "data/repos/power-grid-model/tests/data/state_estimation/dummy-test-line-into-itself-minimal/README.md",
-        "data/repos/power-grid-model/docs/algorithms/se-algorithms.md"
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/docs/user_manual/components.md",
+        "data/repos/power-grid-model/src/power_grid_model/validation/_rules.py",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
+        "data/repos/power-grid-model/power_grid_model_c/power_grid_model/include/power_grid_model/main_core/calculation_input_preparation.hpp",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 0.3333333333333333,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -1009,19 +1009,19 @@
         "_core/errors.py"
       ],
       "actual_sources": [
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/c-api.md",
+        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/user_manual/serialization.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
         "data/repos/power-grid-model/tests/data/power_flow/automatic-tap-regulator/achievable-voltage-above-band-fast-any/params.json",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
-        "data/repos/power-grid-model/docs/advanced_documentation/terminology.md",
+        "data/repos/power-grid-model/docs/user_manual/calculations.md",
         "data/repos/power-grid-model/docs/advanced_documentation/terminology.md"
       ],
       "hit": 1,
-      "reciprocal_rank": 1.0,
+      "reciprocal_rank": 0.5,
       "recall_at_depth": 1
     },
     {
@@ -1040,7 +1040,7 @@
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
         "data/repos/power-grid-model/docs/algorithms/lu-solver.md",
-        "data/repos/power-grid-model/docs/algorithms/lu-solver.md"
+        "data/repos/power-grid-model/docs/user_manual/non-pgm-components.md"
       ],
       "hit": 1,
       "reciprocal_rank": 1.0,

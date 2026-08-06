@@ -1,7 +1,8 @@
 # Retrieval Stack Findings
 
 **Date:** 2026-08-05, updated same day after the test set was strengthened, again after chunking
-changed, and again after the modern embedders were re-measured under that chunking
+changed, again after the modern embedders were re-measured under that chunking, and on 2026-08-06
+after chunk size was swept per embedder
 **Corpus:** power-grid-model only, 19637 chunks under the current chunking. Every table below the
 chunking update was measured at 12346, before it.
 **Test set:** `evals/testset.json`, 42 scored questions as of the update below (originally 29; one
@@ -14,6 +15,109 @@ of this work.
 
 The retrieval sections are retrieval-only, produced without an LLM and without a judge, so they say
 nothing directly about answer quality. The generation and judge section is separate and says so.
+
+## Update: chunk size swept per embedder
+
+The section below this one showed that both modern embedders lose ground when chunks shrink while the
+shipped model gains it, which means chunk size and embedder were confounded in every comparison in
+this document. Each candidate had only ever been scored at a chunk size derived from the incumbent's
+own token window. This sweep separates them: four chunk sizes, three embedders and a BM25 control,
+one corpus rebuilt per size, everything else held fixed. All figures N=42, depth 10, unthresholded,
+the two modern models at `--dtype float16 --max-seq-length 768` as their published arms used.
+
+| model | arm | @614 | @1000 | @1228 | @1800 |
+|---|---|---|---|---|---|
+| all-mpnet-base-v2 | vector | 0.8571 / **0.7345** | 0.8571 / 0.7133 | 0.8333 / 0.6854 | 0.8333 / 0.6431 |
+| all-mpnet-base-v2 | hybrid | **0.9048** / **0.7560** | 0.8810 / 0.7508 | 0.8571 / 0.6952 | 0.8571 / 0.6894 |
+| bge-m3 | vector | 0.8571 / 0.6693 | **0.8810** / **0.7002** | 0.8571 / 0.6953 | 0.8571 / 0.6963 |
+| bge-m3 | hybrid | **0.8810** / **0.7448** | 0.8571 / 0.7361 | 0.8571 / 0.7143 | 0.8571 / 0.7176 |
+| Qwen3-0.6B | vector | 0.7381 / 0.5088 | **0.8095** / **0.6271** | **0.8095** / 0.6209 | 0.7619 / 0.5658 |
+| Qwen3-0.6B | hybrid | 0.7619 / 0.5415 | **0.8333** / 0.6755 | **0.8333** / **0.6903** | 0.7857 / 0.6244 |
+| BM25 | keyword | 0.8571 / 0.6111 | 0.8571 / 0.5830 | 0.8333 / **0.6334** | **0.8810** / 0.5874 |
+
+Chunks per corpus and the share each model would silently truncate:
+
+| chunk size | chunks | mpnet @384 | bge-m3 @768 | 0.6B @768 |
+|---|---|---|---|---|
+| 614 | 19637 | 0.59% | 0.00% | 0.00% |
+| 1000 | 12346 | 31.34% | 0.00% | 2.38% |
+| 1228 | 10276 | 44.19% | 0.02% | 17.50% |
+| 1800 | 7518 | 64.63% | 12.28% | 27.76% |
+
+**Every arm at 1000 reproduces its previously published figure exactly**, to four decimals: mpnet
+vector 0.8571/0.7133, bge-m3 vector 0.8810/0.7002, 0.6B vector 0.8095/0.6271, 0.6B hybrid
+0.8333/0.6755. The corpora were rebuilt from the checkout by a different code path than the one that
+originally produced them, and the chunk counts (19637 at 614, 12346 at 1000) and truncation shares
+(0.59% and 31.34% for the incumbent) came out identical too. The sweep is measuring the same
+instrument the older tables were measured on.
+
+### No embedder beats the incumbent when each is given its own best size
+
+This is the question the sweep was run to answer, and the answer is no.
+
+| model | best arm | hit | MRR |
+|---|---|---|---|
+| all-mpnet-base-v2 | hybrid @614 | **0.9048** | **0.7560** |
+| bge-m3 | hybrid @614 | 0.8810 | 0.7448 |
+| Qwen3-0.6B | hybrid @1228 | 0.8333 | 0.6903 |
+| BM25 | keyword @1800 | 0.8810 | 0.5874 |
+
+The incumbent leads on both metrics at every model's own best. bge-m3 is 1 question behind on hit and
+0.0112 behind on MRR, which is inside the resolution floor and should be read as a tie rather than a
+loss. 0.6B is 3 questions behind, which is exactly the width this document calls a ranking.
+
+**Both embedders' best size is 614, the size that already ships.** Only 0.6B prefers something else,
+and it is the arm that loses. Giving each model its own chunk size changes no ordering, so the
+recommendation not to migrate is unchanged and now rests on the axis that was previously confounded.
+
+### The window under-fill explanation is half right, which means it is not the explanation
+
+The prediction was that each model's best size tracks its sequence window: the incumbent peaking at or
+below 614, the two 768-token models near 1228.
+
+It fits 0.6B well. 614 is its worst size by a wide margin, it gains 3 questions moving to 1000, and its
+best MRR is at 1228. It does not fit bge-m3 at all, whose hybrid best is at 614 and which moves less
+across the whole sweep (0.031 MRR) than 0.6B moves between two adjacent sizes. **Two models with the
+same 768-token cap behave oppositely**, so the window is not what is driving it, and the mechanism
+remains unexplained.
+
+Truncation explains a different part of the picture and explains it cleanly. The incumbent's MRR falls
+monotonically as chunks grow (0.7345 to 0.6431 on vector) and its truncation rises monotonically over
+the same range (0.59% to 64.63%). Nothing else in the grid moves monotonically with anything. Note
+what this means for 614: it is not a size that flatters small windows, it is the only size where no
+model truncates materially, and the incumbent wins there on the merits.
+
+**1228 was chosen badly and should not be read as a neutral point.** It was picked as 1.6 characters
+per token against a 768-token window, the point where the modern models' windows would be nominally
+full and not yet over. Measured, 0.6B truncates 17.50% of chunks there while bge-m3 truncates 0.02%.
+The 1.6 ratio in `chunking.py` is one tokenizer's number applied to every model, and for 0.6B on this
+corpus it is optimistic by enough to matter.
+
+### fp16 arms do not reproduce across runs, and that bounds every modern-embedder number here
+
+Four arms were run twice, once for the re-measurement below and once inside this sweep, over corpora
+that are provably identical:
+
+| arm | precision | first run | second run |
+|---|---|---|---|
+| BM25 @614 | n/a | 0.8571 / 0.6111 | 0.8571 / 0.6111 |
+| mpnet vector @614 | float32 | 0.8571 / 0.7345 | 0.8571 / 0.7345 |
+| bge-m3 vector @614 | float16 | 0.8571 / 0.6739 | 0.8571 / 0.6693 |
+| 0.6B vector @614 | float16 | 0.7143 / 0.5378 | 0.7381 / 0.5088 |
+
+BM25 is deterministic given a corpus, and it came out identical, which is what rules out the corpus
+and the scorer as the source. The float32 arm is identical too. Both float16 arms moved, one of them
+by a full question of hit rate and 0.029 of MRR.
+
+The clean reading is that fp16 embedding on this hardware is not bit-reproducible, and cosine
+neighbours close enough to swap places do swap. Precision is the only variable separating the arms
+that reproduced from the arms that did not, though two paired runs cannot fully separate precision
+itself from anything else that differs between fp16 and fp32 execution.
+
+**Every modern-embedder figure in this document is fp16**, so all of them carry this on top of the
+2.38-point test-set resolution. A one-question difference between two fp16 arms is not evidence of
+anything. This is a further reason the bge-m3 result above is a tie: its margin is smaller than the
+movement its own arm showed between two runs of the same configuration.
 
 ## Update: the modern embedders re-measured under current chunking
 
@@ -129,7 +233,10 @@ measurement, a difference is only called a ranking here when it spans at least 3
 | Qwen3-Embedding-4B | 2560 | 0.8333 | 0.5998 |
 | Qwen3-Embedding-0.6B | 1024 | 0.8095 | 0.6271 |
 
-Same arms as the original embedder table: vector retrieval, depth 10, unthresholded, fp16.
+Same arms as the original embedder table: vector retrieval, depth 10, unthresholded, fp16, **chunk
+size 1000**. Every row here was scored over a corpus cut at 1000 characters, which is not the size
+that ships; see the per-embedder sweep at the top of this document for what these models do at 614
+and elsewhere.
 
 **"Both sub-1B modern embedders beat the shipped one by 13.8 points" is withdrawn; at the corrected
 ground truth neither beats it at all.** The shipped model is second on hit rate, 1 question behind
@@ -330,8 +437,8 @@ full re-ingestion of every existing collection, and a 1-question margin inside t
 not a reason to ask users for that. If a migration is wanted for other reasons, bge-m3 is the one to
 take: it is the only modern embedder within a question of the shipped model on both metrics, and it
 builds its index roughly three times faster than 0.6B. Do not go above 1B regardless. Both claims in
-this paragraph were measured at the old chunking; see the re-measurement at the top of this document,
-which weakens the bge-m3 fallback further.
+this paragraph were measured at chunk size 1000; the sweep at the top of this document re-tested them
+at four sizes and the conclusion held, with bge-m3 a tie at best and 0.6B 3 questions behind.
 
 The honest next step before any embedder decision is a larger test set. Every pairwise difference in
 that table except bge-m3 over 0.6B is 2 questions or fewer, and this set has now reversed its own
@@ -363,7 +470,8 @@ still.
 
 ## Embedder (original measurement, N=29 — historical, see the update above)
 
-All arms: vector retrieval, depth 10, unthresholded, fp16, one corpus, one metric.
+All arms: vector retrieval, depth 10, unthresholded, fp16, one corpus, one metric, **chunk size
+1000**.
 
 | embedder | dim | hit | MRR | index build | query |
 |---|---|---|---|---|---|
