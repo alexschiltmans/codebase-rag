@@ -19,6 +19,7 @@ from evals import fusion_bound as fusion_bound_module
 from evals.fusion_bound import (
     IncomparableArmsError,
     MalformedArmRecordError,
+    format_report,
     fusion_bound,
     main,
 )
@@ -213,6 +214,15 @@ class TestComparabilityGates:
         )
         assert result["union_hits"] == 2
         assert result["chunk_size"] == 614
+        assert result["chunking_unverified"] is False
+
+    def test_two_arms_recording_nothing_are_flagged_rather_than_called_matched(self) -> None:
+        """Both absent passes the gate because absence equals absence, but two arms scored either
+        side of a re-ingest look exactly like this. The gate cannot tell; the report says so."""
+        result = fusion_bound([_arm("a", ROWS_A), _arm("b", ROWS_B)])
+
+        assert result["chunking_unverified"] is True
+        assert "no arm records a chunking" in format_report(result)
 
     def test_same_size_cut_with_a_different_overlap_is_refused(self) -> None:
         with pytest.raises(IncomparableArmsError, match="chunk_overlap"):

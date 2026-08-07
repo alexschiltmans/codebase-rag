@@ -474,6 +474,7 @@ class TestIngestPipeline:
         mock_config.repo_local_path = Path("/tmp/repos")
         mock_config_cls.get_instance.return_value = mock_config
         mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+        mock_qdrant_cls.return_value.embedding_manager.max_seq_length = 384
 
         with tempfile.TemporaryDirectory() as tmpdir:
             pipeline = IngestPipeline()
@@ -488,6 +489,33 @@ class TestIngestPipeline:
 
             bm25_path = Path(tmpdir) / "bm25_retriever.json"
             assert bm25_path.exists()
+
+    @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
+    @patch("codebase_rag.data_ingestion.pipeline.setup_logging")
+    @patch("codebase_rag.data_ingestion.pipeline.Config")
+    def test_save_bm25_index_records_the_chunking_it_wrote(
+        self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
+    ) -> None:
+        """The application's own corpus is the one every default benchmark invocation scores
+        against. Left unrecorded it is the one corpus nothing can name a chunk size for, and two
+        runs either side of a re-ingest collide on the same collection name."""
+        mock_config = MagicMock()
+        mock_config.qdrant_host = "localhost"
+        mock_config.qdrant_port = 6333
+        mock_config.collection_name = "docs"
+        mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config_cls.get_instance.return_value = mock_config
+        mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
+        mock_qdrant_cls.return_value.embedding_manager.max_seq_length = 384
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipeline = IngestPipeline()
+            pipeline.cache_dir = Path(tmpdir)
+
+            pipeline.save_bm25_index([Document(page_content="hello world", metadata={"source": "a.py"})])
+
+            sidecar = json.loads((Path(tmpdir) / "bm25_corpus" / "_meta" / "chunking.json").read_text())
+            assert sidecar == {"chunk_size": 614, "chunk_overlap": 122, "chunk_max_seq_length": 384}
 
     @patch("codebase_rag.data_ingestion.pipeline.QdrantStore")
     @patch("codebase_rag.data_ingestion.pipeline.setup_logging")

@@ -21,6 +21,10 @@ rather than producing a union that averages over two different instruments. Chun
 same way, including its absence: arms written before the chunk configuration was recorded carry no
 value for it, and an arm that records one is not comparable against an arm that does not.
 
+Two arms that both record nothing pass that gate and cannot be checked further, so the report says
+so rather than implying the chunking was verified. It is only reachable for arms predating the field;
+every corpus written since, the application's included, carries a sidecar.
+
 Usage:
     uv run python evals/fusion_bound.py baai-bge-m3_vector_d10_float16_seq768 \\
         qwen-qwen3-embedding-0-6b_vector_d10_float16_seq768
@@ -243,6 +247,7 @@ def fusion_bound(arms: list[dict[str, Any]]) -> dict[str, Any]:
         "candidate_depth": arms[0]["candidate_depth"],
         "ingested_repositories": arms[0].get("ingested_repositories"),
         "chunk_size": arms[0].get("chunk_size"),
+        "chunking_unverified": all(arm.get("chunk_size") is None for arm in arms),
         "components": components,
         "best_components": best_components,
         "best_component_hits": best_hits,
@@ -265,6 +270,11 @@ def format_report(result: dict[str, Any]) -> str:
         f"corpus {', '.join(repositories) if repositories else 'none recorded'}, "
         f"chunk size {result['chunk_size'] or 'none recorded'}",
     ]
+    if result.get("chunking_unverified"):
+        lines.append(
+            "  warning: no arm records a chunking, so the gate passed on absence alone. "
+            "Two arms scored either side of a re-ingest look identical here and are not."
+        )
     tied = len(result["best_components"]) > 1
     for name, stats in result["components"].items():
         marker = (" (tied best)" if tied else " (best)") if name in result["best_components"] else ""

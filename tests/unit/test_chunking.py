@@ -7,6 +7,7 @@ import pytest
 
 from codebase_rag.data_ingestion.chunking import (
     FALLBACK_MAX_SEQ_LENGTH,
+    MAX_DERIVED_CHUNK_SIZE,
     ChunkingStrategy,
     DocumentChunker,
     chunking_fingerprint,
@@ -48,6 +49,20 @@ class TestDeriveChunkSize:
     def test_non_positive_window_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="must be positive"):
             derive_chunk_size(0)
+
+    def test_a_long_context_window_is_capped(self) -> None:
+        """Qwen3-Embedding-0.6B declares 32768 tokens, which derives 52428 characters. Left uncapped,
+        configuring it re-cuts the corpus into chunks 85x what ships and retrieval stops locating."""
+        assert derive_chunk_size(32768) == MAX_DERIVED_CHUNK_SIZE
+
+    def test_the_cap_does_not_touch_windows_below_it(self) -> None:
+        assert derive_chunk_size(384) == 614
+
+    def test_the_chunker_inherits_the_cap(self) -> None:
+        chunker = DocumentChunker(max_seq_length=32768)
+
+        assert chunker.chunk_size == MAX_DERIVED_CHUNK_SIZE
+        assert chunker.chunk_overlap == 400
 
 
 class TestDetermineStrategy:

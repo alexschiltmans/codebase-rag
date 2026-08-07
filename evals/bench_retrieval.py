@@ -272,7 +272,10 @@ def main() -> None:
         "--dtype",
         choices=["float32", "float16", "bfloat16"],
         default=None,
-        help="Load precision. Omitted means the sentence-transformers default, float32.",
+        help=(
+            "Load precision. Omitted means whatever the checkpoint itself stores, which for some "
+            "candidates is bfloat16 rather than float32; the arm records what actually loaded."
+        ),
     )
     parser.add_argument(
         "--max-seq-length",
@@ -360,7 +363,8 @@ def main() -> None:
             "embedding_model": args.embedding_model,
             "dimension": dimension,
             "max_seq_length": manager.max_seq_length if manager else None,
-            "dtype": (manager.dtype or "float32") if manager else None,
+            "dtype": manager.loaded_dtype if manager else None,
+            "requested_dtype": manager.dtype if manager else None,
             "query_prompt": manager.query_prompt if manager else None,
             "document_prompt": manager.document_prompt if manager else None,
             **chunking,

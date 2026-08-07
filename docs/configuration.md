@@ -11,7 +11,11 @@ All settings are configured via environment variables or a `.env` file in the pr
 | `COLLECTION_NAME` | `documents` | Qdrant collection name |
 | `LLM_PROVIDER` | `ollama` | LLM backend: `ollama` or `openai-compat` (LM Studio, llama.cpp, vLLM, Jan) |
 | `LLM_MODEL_NAME` | `sam860/LFM2:350m` | Model name for generation |
-| `EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | HuggingFace embedding model |
+| `EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | HuggingFace embedding model. Changing it re-cuts the corpus as well as re-embedding it: chunk size is derived from the model's token window, so an existing index is stale in both respects and has to be rebuilt. |
+| `EMBEDDING_QUERY_PROMPT` | model's own | Prefix applied to queries. Unset uses the prompts the model declares. |
+| `EMBEDDING_DOCUMENT_PROMPT` | model's own | Prefix applied to documents. Unset uses the prompts the model declares. |
+| `EMBEDDING_MAX_SEQ_LENGTH` | model's own | Token window override. Chunk size follows it at 1.6 characters per token, capped at 2000 characters: long-context embedders declare windows in the tens of thousands, and a chunk that size matches everything and locates nothing. |
+| `EMBEDDING_DTYPE` | checkpoint's own | Load precision: `float32`, `float16`, or `bfloat16`. Unset does not mean float32; the checkpoint decides, and some are stored at bfloat16. Vectors built at one precision should not be queried at another. |
 | `RETRIEVER` | `bm25` | Retriever the HTTP API serves search and answer requests from: `bm25` or `hybrid`. `bm25` matches the Streamlit app's default, on ablation evidence in `evals/deprecated/ablation.md` (hit rate 0.6552 vs 0.5862 for hybrid; those figures are deprecated but the decision stands). `HybridRetriever` is still built and used by the eval ablation and by the ingestion pipeline's duplicate-detection search regardless of this setting. |
 
 ## Generation settings (all backends)

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from codebase_rag.config import Config
 from codebase_rag.data_ingestion.chunking import DocumentChunker, chunking_fingerprint
+from codebase_rag.data_ingestion.corpus_chunking import write_chunking_sidecar
 from codebase_rag.data_ingestion.document_processor import DocumentProcessor
 from codebase_rag.data_ingestion.git_loader import GitLoader
 from codebase_rag.data_ingestion.truncation import format_truncation_report, measure_truncation
@@ -647,6 +648,17 @@ class IngestPipeline:
 
         corpus_path.parent.mkdir(parents=True, exist_ok=True)
         BM25Retriever(kept_docs).save_json(corpus_path)
+
+        # The incremental path refuses to run when the chunking has moved, so this records the
+        # chunking rather than changing it. It is here so a corpus that has only ever been updated
+        # incrementally still ends up describing itself.
+        chunker = self._build_chunker()
+        write_chunking_sidecar(
+            corpus_path.parent,
+            chunk_size=chunker.chunk_size,
+            chunk_overlap=chunker.chunk_overlap,
+            max_seq_length=chunker.max_seq_length,
+        )
         rebuild_bm25_index(self.cache_dir)
 
     def process_documents(self) -> list:
@@ -738,6 +750,18 @@ class IngestPipeline:
         for repo_name in repos:
             repo_docs = [doc for doc in documents if doc.metadata.get("repo") == repo_name]
             BM25Retriever(repo_docs).save_json(corpus_dir / f"{repo_name}.json")
+
+        # Written every run rather than once, because a re-ingest under a different embedding model
+        # re-cuts the corpus and the sidecar has to follow it. Without this the application's own
+        # corpus is the one corpus nothing can name a chunk size for, which is also the one every
+        # default benchmark invocation scores against.
+        chunker = self._build_chunker()
+        write_chunking_sidecar(
+            corpus_dir,
+            chunk_size=chunker.chunk_size,
+            chunk_overlap=chunker.chunk_overlap,
+            max_seq_length=chunker.max_seq_length,
+        )
 
         bm25_retriever = rebuild_bm25_index(self.cache_dir)
 

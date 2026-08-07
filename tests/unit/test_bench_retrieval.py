@@ -146,6 +146,7 @@ class TestMainTeardown:
         mock_store.embedding_manager.query_prompt = ""
         mock_store.embedding_manager.document_prompt = ""
         mock_store.embedding_manager.dtype = None
+        mock_store.embedding_manager.loaded_dtype = "float32"
         mock_store_cls.return_value = mock_store
 
         with (
@@ -184,6 +185,7 @@ class TestMainTeardown:
         mock_store.embedding_manager.query_prompt = ""
         mock_store.embedding_manager.document_prompt = ""
         mock_store.embedding_manager.dtype = None
+        mock_store.embedding_manager.loaded_dtype = "float32"
         mock_store_cls.return_value = mock_store
 
         with (

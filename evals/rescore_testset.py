@@ -126,16 +126,25 @@ def rescore_rerank_result(
     # one the arm actually ran against; bench_candidates/ is regenerable and gets overwritten by any
     # later sweep, so a question the record scored but the file no longer carries means the two halves
     # have drifted apart and the arm needs a real rerun rather than a rescore.
+    #
+    # Depth is checked against the file as a whole, never per question. `input_depth` is the deepest
+    # list the arm saw, not a length every list has: a thresholded arm returns fewer candidates for
+    # some questions by construction, and reading one short list as drift condemns an untouched file.
+    deepest_on_disk = max((len(c) for c in candidates_by_question.values()), default=0)
+    if deepest_on_disk > input_depth:
+        stale_candidates.append(f"file holds {deepest_on_disk} candidates where the arm ran at {input_depth}")
+    elif candidates_by_question and deepest_on_disk < input_depth:
+        stale_candidates.append(f"file is only {deepest_on_disk} deep where the arm ran at {input_depth}")
+
+    skipped = []
     for row in record["per_question"]:
         question = row["question"]
         expected = expected_by_question.get(question)
         if expected is None:
+            skipped.append(question)
             continue
         candidates = candidates_by_question.get(question)
         if candidates is None:
-            stale_candidates.append(question)
-            continue
-        if len(candidates) < input_depth:
             stale_candidates.append(question)
             continue
 
@@ -160,7 +169,7 @@ def rescore_rerank_result(
     if stale_candidates:
         return {
             "error": "candidates file no longer matches this arm's saved run; rerun rerank_bench.py",
-            "questions_without_usable_candidates": stale_candidates,
+            "candidate_file_mismatches": stale_candidates,
         }
     n = len(per_question)
     if n == 0:
@@ -178,6 +187,7 @@ def rescore_rerank_result(
         "mrr": sum(q["reciprocal_rank"] for q in per_question) / n,
         "per_question": per_question,
         "unscored_questions": unscored,
+        "skipped_questions": skipped,
         "covers_testset": not unscored,
     }
 
@@ -247,8 +257,14 @@ def main() -> None:
         if args.write and after.get("covers_testset"):
             rescored_rows = {r["question"]: r for r in after["per_question"]}
             # Merge rather than replace: the saved rows also carry `latency_s` and `top_sources`, which
-            # are measurements of the original run and are not ours to regenerate.
-            record["per_question"] = [row | rescored_rows.get(row["question"], {}) for row in record["per_question"]]
+            # are measurements of the original run and are not ours to regenerate. Rows the rescore did
+            # not reach are dropped rather than merged, because their scores were computed against
+            # ground truth the test set no longer holds and the aggregates no longer include them.
+            record["per_question"] = [
+                row | rescored_rows[row["question"]]
+                for row in record["per_question"]
+                if row["question"] in rescored_rows
+            ]
             record |= provenance | {
                 k: after[k]
                 for k in ("questions_scored", "input_recall", "baseline_hit_rate", "baseline_mrr", "hit_rate", "mrr")

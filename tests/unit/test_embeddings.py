@@ -22,12 +22,36 @@ def _reset_state() -> Iterator[None]:
     Config._instance = None
 
 
-def _mock_transformer(prompts: dict[str, str], max_seq_length: int = 384) -> MagicMock:
+def _mock_transformer(
+    prompts: dict[str, str], max_seq_length: int = 384, dtype: torch.dtype = torch.float32
+) -> MagicMock:
     model = MagicMock()
     model.prompts = prompts
     model.max_seq_length = max_seq_length
     model.encode.return_value = np.array([[0.1, 0.2]])
+    model.parameters.return_value = iter([torch.zeros(1, dtype=dtype)])
     return model
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_the_precision_that_actually_loaded_is_reported_separately(mock_st: MagicMock) -> None:
+    """Requesting nothing does not mean float32: the checkpoint decides, and Qwen3-Embedding-0.6B
+    comes up bfloat16. A benchmark arm labelled with what it asked for is a wrong label."""
+    mock_st.return_value = _mock_transformer({}, dtype=torch.bfloat16)
+
+    manager = EmbeddingManager(model_name="some/model")
+
+    assert manager.dtype is None
+    assert manager.loaded_dtype == "bfloat16"
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_a_requested_precision_is_reported_as_loaded_too(mock_st: MagicMock) -> None:
+    mock_st.return_value = _mock_transformer({}, dtype=torch.float16)
+
+    manager = EmbeddingManager(model_name="some/model", dtype="float16")
+
+    assert (manager.dtype, manager.loaded_dtype) == ("float16", "float16")
 
 
 @patch("codebase_rag.database.embeddings.SentenceTransformer")

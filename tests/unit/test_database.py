@@ -475,6 +475,86 @@ class TestQdrantStore:
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_a_recorded_null_dtype_is_a_value_not_an_absence(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """Every collection built without EMBEDDING_DTYPE records dtype as null, meaning default
+        precision. Reading that as 'predates the check' waves through a precision swap, which is
+        the exact case this guard exists for and the common one."""
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+
+        meta_point = MagicMock()
+        meta_point.payload = {"embedding_model": "same/model", "dtype": None, "dimension": 768}
+        mock_client.retrieve.return_value = [meta_point]
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "same/model"
+        mock_emb.dtype = "float16"
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        with pytest.raises(ValueError, match="dtype"):
+            store.similarity_search_with_score("query")
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_a_field_absent_from_the_payload_still_predates_the_check(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """The other half of the same distinction: sidecars written before a field existed carry no
+        key for it, and that genuinely is no evidence either way."""
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+
+        meta_point = MagicMock()
+        meta_point.payload = {"embedding_model": "same/model", "dimension": 768}
+        mock_client.retrieve.return_value = [meta_point]
+        mock_client.query_points.return_value = MagicMock(points=[])
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "same/model"
+        mock_emb.dtype = "float16"
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        assert store.similarity_search_with_score("query") == []
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_a_collection_with_no_sidecar_is_still_checked_for_width(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
+    ) -> None:
+        """Without a sidecar there is no binding to compare, and `_ensure_collection` never
+        back-fills one. Width is the only signal left, and it catches a model swap across
+        dimensions rather than letting two models' vectors accumulate under one index."""
+        mock_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "documents"
+        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+        mock_client.collection_exists.return_value = False
+        mock_client.get_collection.return_value = MagicMock(
+            config=MagicMock(params=MagicMock(vectors=MagicMock(size=768)))
+        )
+        mock_client_cls.return_value = mock_client
+
+        mock_emb = MagicMock()
+        mock_emb.model_name = "some/1024-dim-model"
+        mock_emb.model.get_sentence_embedding_dimension.return_value = 1024
+        mock_emb_cls.return_value = mock_emb
+
+        store = QdrantStore()
+        with pytest.raises(ValueError, match="768-dimension vectors.*produces 1024"):
+            store.similarity_search_with_score("query")
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_similarity_search_raises_on_model_mismatch(
         self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock
     ) -> None:

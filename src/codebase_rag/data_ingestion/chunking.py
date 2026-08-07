@@ -34,12 +34,31 @@ OVERLAP_RATIO = 0.2
 # against, so guessing it low keeps chunks readable by any model.
 FALLBACK_MAX_SEQ_LENGTH = 384
 
+# Ceiling on the derived size, independent of how wide a window the model offers.
+# Long-context embedders declare enormous ones (Qwen3-Embedding-0.6B says 32768,
+# which derives 52428 characters, 85x what ships), and a chunk that large stops
+# being a retrievable unit long before the model stops being able to read it: it
+# matches on anything and returns a file where an answer was wanted. Sweeping this
+# corpus from 614 to 1800 characters found retrieval got worse the whole way up,
+# so the ceiling sits just above the widest size that was actually measured.
+MAX_DERIVED_CHUNK_SIZE = 2000
+
 
 def derive_chunk_size(max_seq_length: int) -> int:
-    """Return the character chunk size that fits a model's token window."""
+    """Return the character chunk size that fits a model's token window, capped."""
     if max_seq_length <= 0:
         raise ValueError(f"max_seq_length must be positive, got {max_seq_length}")
-    return int(max_seq_length * CHARS_PER_TOKEN)
+    derived = int(max_seq_length * CHARS_PER_TOKEN)
+    if derived <= MAX_DERIVED_CHUNK_SIZE:
+        return derived
+
+    logger.info(
+        "Model window of %d tokens derives %d characters; capping chunk size at %d",
+        max_seq_length,
+        derived,
+        MAX_DERIVED_CHUNK_SIZE,
+    )
+    return MAX_DERIVED_CHUNK_SIZE
 
 
 def chunking_fingerprint(chunker: "DocumentChunker", embedding_model: str) -> str:

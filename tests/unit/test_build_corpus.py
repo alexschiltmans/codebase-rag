@@ -79,3 +79,12 @@ class TestRefusals:
         )
         with pytest.raises(SystemExit, match="that is the corpus the application serves from"):
             build_corpus.main()
+
+    def test_a_repo_file_from_a_wider_build_is_refused(self, tmp_path: Path) -> None:
+        """`load_bm25_corpus` merges every JSON in the directory, so a leftover from an earlier,
+        wider build gets scored alongside this one while the sidecar names a single chunking."""
+        with open(tmp_path / "left-behind.json", "w") as f:
+            json.dump([], f)
+
+        with pytest.raises(SystemExit, match="left-behind.json"):
+            build_corpus.build_corpus(["demo"], chunk_size=614, out_dir=tmp_path)

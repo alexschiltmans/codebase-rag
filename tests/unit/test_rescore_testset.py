@@ -117,10 +117,36 @@ class TestRescoreRerankResult:
         after = rescore_rerank_result(self._record(), {"q1": ["hit.py"]}, {"other": [{"source": "x.py"}]})
 
         assert "error" in after
-        assert after["questions_without_usable_candidates"] == ["q1"]
+        assert "q1" in after["candidate_file_mismatches"]
 
     def test_a_candidates_file_shallower_than_the_arm_is_refused(self) -> None:
         after = rescore_rerank_result(self._record(), {"q1": ["hit.py"]}, {"q1": [{"source": "miss.py"}]})
+
+        assert "error" in after
+
+    def test_a_ragged_candidate_list_is_not_mistaken_for_drift(self) -> None:
+        """`input_depth` is the deepest list the arm saw, not a length every list has: a thresholded
+        arm returns fewer candidates for some questions, and that is the file working as intended."""
+        record = {
+            "input_depth": 2,
+            "output_depth": 1,
+            "per_question": [
+                {"question": "q1", "top_sources": ["hit.py"]},
+                {"question": "q2", "top_sources": ["b.py"]},
+            ],
+        }
+        candidates = {"q1": [{"source": "miss.py"}, {"source": "hit.py"}], "q2": [{"source": "b.py"}]}
+
+        after = rescore_rerank_result(record, {"q1": ["hit.py"], "q2": ["b.py"]}, candidates)
+
+        assert "error" not in after
+        assert after["questions_scored"] == 2
+
+    def test_a_candidates_file_deeper_than_the_arm_is_refused(self) -> None:
+        """The other direction of drift: the file was regenerated at a depth the arm never ran at."""
+        candidates = {"q1": [{"source": "a.py"}, {"source": "hit.py"}, {"source": "c.py"}]}
+
+        after = rescore_rerank_result(self._record(), {"q1": ["hit.py"]}, candidates)
 
         assert "error" in after
 

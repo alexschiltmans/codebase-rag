@@ -10,10 +10,24 @@ from ..config import Config
 
 logger = logging.getLogger(__name__)
 
-# Load precisions worth offering. `SentenceTransformer` loads float32 unless told
-# otherwise, so a 4B model stored at bf16 (7.5GB on disk) occupies ~16GB in memory —
-# enough, with a large encode batch, to push this machine into swap.
+# Load precisions worth offering. Left unset, `SentenceTransformer` follows the
+# checkpoint's own precision rather than defaulting to float32: Qwen3-Embedding-0.6B
+# comes up bfloat16 on the pinned sentence-transformers 5.x stack. Asking for float32
+# on a model stored at bf16 doubles its memory, which for a 4B model (7.5GB on disk)
+# is ~16GB resident and, with a large encode batch, enough to push this machine into swap.
 _SUPPORTED_DTYPES = ("float32", "float16", "bfloat16")
+
+
+def _loaded_dtype(model: SentenceTransformer) -> str:
+    """Return the precision a model actually loaded at, as a bare dtype name.
+
+    Reported separately from the requested `dtype` because the two differ whenever nothing was
+    requested: the checkpoint decides, and a published measurement labelled with the precision it
+    asked for rather than the one it ran at is a wrong label on a number.
+    """
+    for parameter in model.parameters():
+        return str(parameter.dtype).removeprefix("torch.")
+    return "unknown"
 
 
 class EmbeddingManager:
@@ -80,6 +94,7 @@ class EmbeddingManager:
         logger.info("Initializing embedding model: %s", self.model_name)
         model_kwargs: dict[str, Any] | None = {"torch_dtype": getattr(torch, dtype)} if dtype else None
         self.model = SentenceTransformer(self.model_name, model_kwargs=model_kwargs)
+        self.loaded_dtype = _loaded_dtype(self.model)
 
         # Resolution order: explicit config wins, then the model's own declared prompts,
         # then no prefix at all.
@@ -96,7 +111,7 @@ class EmbeddingManager:
             self.query_prompt,
             self.document_prompt,
             self.max_seq_length,
-            self.dtype or "default (float32)",
+            self.dtype or f"unset, loaded {self.loaded_dtype}",
         )
 
     def count_tokens(self, texts: list[str]) -> list[int]:

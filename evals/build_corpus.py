@@ -61,6 +61,17 @@ def build_corpus(repo_names: list[str], chunk_size: int, out_dir: Path) -> dict[
     config = Config.get_instance()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # A repo file left behind by an earlier, wider build is not inert: `load_bm25_corpus` merges
+    # every JSON in the directory, so the arm would score a corpus mixing two builds while its
+    # sidecar names one chunking. Only files this build is about to replace may survive.
+    stale = [path for path in out_dir.glob("*.json") if path.stem not in repo_names]
+    if stale:
+        raise SystemExit(
+            f"{out_dir} already holds {', '.join(sorted(path.name for path in stale))} from a build "
+            "that covered other repositories. Loading merges every file in the directory, so delete "
+            "them or build into a fresh directory."
+        )
+
     chunker = DocumentChunker(chunk_size=chunk_size)
     logger.info(
         "Chunking at %d characters with %d overlap",

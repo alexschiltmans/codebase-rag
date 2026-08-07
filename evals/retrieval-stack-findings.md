@@ -172,10 +172,17 @@ depth and costs MRR at both. That sentence also overstated its case when written
 the only modern embedder not behind the shipped model on either metric while the table it sat above
 showed 0.7002 against 0.7133 on MRR. It was behind on MRR then too, by less than a question's worth.
 
-Method note: arm records encode the model, retriever, depth, precision and sequence length in their
-filenames, but not the chunking, so a re-run at a new chunk size overwrites the old arm in place. The
-runs above are saved under `_chunk614` names for that reason. This is the same gap `fusion_bound.py`
-reports as unmatchable, and it now bites `bench_results/` directly rather than only the fusion report.
+Method note: when these runs were made, arm records encoded the model, retriever, depth, precision and
+sequence length in their filenames but not the chunking, so a re-run at a new chunk size overwrote the
+old arm in place. Chunking is in the filename now, as `_chunk<size>`.
+
+**The @614 figures above are not backed by the arm files that carry those names.** Naming by chunk
+size arrived after these runs and generates exactly the `_chunk614` suffix they had been given by
+hand, so the sweep in the section below collided with them and overwrote them. The files now hold the
+sweep's values: 0.7381 / 0.5088 for `0.6B vector d10` against the 0.7143 / 0.5378 published here, and
+0.6693 for `bge-m3 vector d10` against 0.6739. Both runs of both arms are preserved in the fp16
+reproducibility table above, which is what the difference between them is evidence about. The table
+here is left at its original values because the conclusions in this section were drawn from them.
 
 ## Update: re-measured under model-derived chunking (19637 chunks, was 12346)
 

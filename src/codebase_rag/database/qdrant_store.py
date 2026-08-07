@@ -112,6 +112,35 @@ class QdrantStore:
             ],
         )
 
+    def _verify_dimension(self) -> None:
+        """Check the collection's vector width against the configured model's, for collections with no sidecar.
+
+        The only thing recoverable about a collection built before bindings were recorded, or one
+        whose sidecar was lost. It catches a model swap across dimensions and nothing else: two
+        768-dimension models still slot into each other silently, so this narrows the hole rather
+        than closing it.
+
+        Raises:
+            ValueError: If the collection's vectors are a different width than the configured
+                model produces.
+        """
+        configured = self.embedding_manager.model.get_sentence_embedding_dimension()
+        params = self.client.get_collection(self.collection_name).config.params.vectors
+        stored = getattr(params, "size", None)
+
+        # Both widths have to be plain integers to be worth comparing. A collection configured with
+        # named vectors reports a mapping rather than a size, and this project does not create those;
+        # inventing a mismatch from a shape that was never a width would block a working collection.
+        if not isinstance(configured, int) or not isinstance(stored, int) or stored == configured:
+            return
+
+        raise ValueError(
+            f"Collection '{self.collection_name}' holds {stored}-dimension vectors but the "
+            f"configured model '{self.embedding_manager.model_name}' produces {configured}. "
+            "The collection records no embedding configuration, so it predates that check or lost "
+            "its sidecar; it has to be rebuilt with the model now in use."
+        )
+
     def _verify_model_binding(self) -> None:
         """Verify the collection's recorded embedding model matches the configured one.
 
@@ -128,6 +157,7 @@ class QdrantStore:
         # the guard off for the rest of the process, which is the opposite of what it is for.
         # A transport failure propagates instead; the query it guards would have failed anyway.
         if not self.client.collection_exists(meta_name):
+            self._verify_dimension()
             self._model_binding_verified = True
             return
 
@@ -139,9 +169,14 @@ class QdrantStore:
 
         mismatches = []
         for field, configured in self._encoding_identity().items():
-            recorded = payload.get(field)
-            # A field absent from the payload predates this check and is not evidence of a match.
-            if recorded is not None and recorded != configured:
+            # Absence and a recorded null are different answers. A field missing from the payload
+            # predates this check; a field recorded as null is a value, and `dtype` is null for
+            # every collection built without an explicit precision, which is the common case.
+            # Reading the second as the first waves through exactly the mismatch this guards.
+            if field not in payload:
+                continue
+            recorded = payload[field]
+            if recorded != configured:
                 mismatches.append(f"{field}: recorded '{recorded}', configured '{configured}'")
 
         if mismatches:
