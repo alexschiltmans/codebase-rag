@@ -74,19 +74,25 @@ class VectorRetriever:
         self,
         vector_store: VectorStoreProtocol,
         score_threshold: float | None = None,
+        repos: list[str] | None = None,
     ) -> None:
         """Initialize the vector retriever.
 
         Args:
             vector_store: The vector store to search (any VectorStoreProtocol implementation).
             score_threshold: Optional minimum similarity score threshold.
+            repos: Optional repository names to restrict every search to. None searches
+                everything in the store, which is what the app and the API do.
         """
         self.vector_store = vector_store
         self.score_threshold = score_threshold
+        self.repos = repos
 
         logger.info("Initialized VectorRetriever with %s", vector_store.__class__.__name__)
         if score_threshold is not None:
             logger.info("Using score threshold: %s", score_threshold)
+        if repos is not None:
+            logger.info("Restricted to repositories: %s", ", ".join(repos))
 
     def search(self, query: str, k: int | None = None) -> list[tuple[Document, float]]:
         """Search for documents similar to the query.
@@ -96,6 +102,10 @@ class VectorRetriever:
         happens here, on a real similarity signal, rather than after fusion.
         No filtering is applied when ``score_threshold`` is ``None``.
 
+        A repository restriction, unlike the score threshold, goes to the store
+        as a filter rather than being applied to what comes back, so ``k`` stays
+        ``k`` in-scope results instead of however many survive discarding.
+
         Args:
             query: The search query.
             k: Number of documents to retrieve. ``None`` uses ``DEFAULT_TOP_K``.
@@ -104,7 +114,8 @@ class VectorRetriever:
             List of (document, score) tuples.
         """
         k_value = k if k is not None else DEFAULT_TOP_K
-        results = self.vector_store.similarity_search_with_score(query, k_value)
+        filter_query = {"repo": self.repos} if self.repos is not None else None
+        results = self.vector_store.similarity_search_with_score(query, k_value, filter_query)
         if not results:
             logger.debug("Empty results from similarity_search_with_score")
             return results

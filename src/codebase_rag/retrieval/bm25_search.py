@@ -131,19 +131,34 @@ class BM25Retriever:
         return cls([_dict_to_doc(d) for d in data])
 
 
-def load_bm25_corpus(corpus_dir: Path) -> list[Document]:
-    """Load and merge all per-repo BM25 corpora from a directory.
+def load_bm25_corpus(corpus_dir: Path, repos: list[str] | None = None) -> list[Document]:
+    """Load and merge per-repo BM25 corpora from a directory.
+
+    `repos` selects which files are read rather than filtering the merged result: BM25 scores
+    depend on corpus-wide document frequencies and average document length, so two repos loaded
+    out of three score differently from the same two loaded on their own. A named repo with no
+    corpus file is skipped rather than raised on; callers that need a missing repo to stop the
+    run check the directory themselves, so that rule lives in one place.
 
     Args:
         corpus_dir: Directory containing one JSON file per repo.
+        repos: Optional repository names to load, order-insensitive and de-duplicated. None
+            loads every file present.
 
     Returns:
-        The combined list of documents across all repos.
+        The combined list of documents across the selected repos.
     """
     if not corpus_dir.exists():
         return []
+    if repos is None:
+        corpus_paths = sorted(corpus_dir.glob("*.json"))
+    else:
+        # Sorted and de-duplicated: BM25 ties break on insertion order, and a repeated name would
+        # otherwise load one repo twice and double every document frequency it contributes.
+        named = {corpus_dir / f"{repo}.json" for repo in repos}
+        corpus_paths = sorted(path for path in named if path.exists())
     documents: list[Document] = []
-    for corpus_path in sorted(corpus_dir.glob("*.json")):
+    for corpus_path in corpus_paths:
         with open(corpus_path) as f:
             data = json.load(f)
         documents.extend(_dict_to_doc(d) for d in data)

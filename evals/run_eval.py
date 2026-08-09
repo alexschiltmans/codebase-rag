@@ -7,6 +7,16 @@ Usage:
     uv run python evals/run_eval.py
     uv run python evals/run_eval.py --langfuse  # also log to Langfuse
 
+    # Both retrieval arms are restricted to a declared set of repositories, so a
+    # run's figures depend on the corpus it names rather than on whatever else
+    # shares the Qdrant collection and the BM25 corpus directory. The scope
+    # defaults to the repositories the shipped test set is written against
+    # (`DEFAULT_EVAL_REPOS`); override it with a comma-separated --repos or
+    # EVAL_REPOS. A scope naming a repository missing from either store fails
+    # before the first question rather than quietly measuring a smaller corpus,
+    # and every report records the scope it ran under:
+    uv run python evals/run_eval.py --repos power-grid-model
+
     # By default RAGAS judges answers with the same model that generated them
     # (self-judged, caveated in the reports). Pass a fixed, larger judge model
     # via --judge-model or RAGAS_JUDGE_MODEL to avoid that. Local models are
@@ -103,6 +113,16 @@ logger = logging.getLogger(__name__)
 
 EVALS_DIR = Path(__file__).parent
 TESTSET_PATH = EVALS_DIR / "testset.json"
+
+# The repositories the shipped test set is written against, and therefore the only ones a default
+# run retrieves from. This sits next to the test-set path because it is a property of that file:
+# change the questions to cover another repository and this has to change with them. A stale value
+# fails at startup rather than quietly measuring the wrong corpus.
+DEFAULT_EVAL_REPOS = ["power-grid-model"]
+
+# Anchored to this file, like TESTSET_PATH, so a run from another working directory reads the real
+# corpus instead of failing validation with "nothing is ingested" about a directory that is not there.
+BM25_CORPUS_DIR = EVALS_DIR.parent / "data" / "cache" / "bm25_corpus"
 
 RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
 
@@ -230,6 +250,77 @@ def resolve_judge_model_name(generation_model_name: str) -> str:
     return _resolve_config_value("--judge-model", "RAGAS_JUDGE_MODEL", generation_model_name, str)
 
 
+def resolve_eval_repos() -> list[str]:
+    """Determine which repositories this run retrieves from.
+
+    Both arms are restricted to the result, so a run's figures depend on the corpus it declares
+    rather than on whatever else shares the index at the time. Configurable via `--repos <a,b>`
+    or `EVAL_REPOS`, defaulting to `DEFAULT_EVAL_REPOS`.
+
+    Returns a copy: on the default path the resolver would otherwise hand out the module constant
+    itself, and a caller sorting or appending to what looks like its own list would silently
+    redefine the default for the rest of the process.
+    """
+    return list(
+        _resolve_config_value(
+            "--repos",
+            "EVAL_REPOS",
+            DEFAULT_EVAL_REPOS,
+            lambda raw: [name.strip() for name in raw.split(",") if name.strip()],
+        )
+    )
+
+
+def validate_eval_repos(repos: list[str], qdrant_store: QdrantStore, corpus_dir: Path) -> None:
+    """Fail before the first question if the declared scope cannot be retrieved from.
+
+    A run that cannot measure what it says it measures should not produce a report at all. Without
+    this, a scope naming a repository nobody ingested reads as a corpus where every question misses,
+    which is indistinguishable from a genuinely bad retriever until someone goes looking.
+
+    Both stores are checked whichever arm is being built, because a run exercises every arm and a
+    scope satisfiable by one of them is not a scope this harness can report on.
+
+    Args:
+        repos: The resolved repository scope.
+        qdrant_store: The store backing the vector arm, queried for its repo list.
+        corpus_dir: Directory holding one BM25 corpus JSON per repo.
+
+    Raises:
+        RuntimeError: If the scope is empty, or names a repository absent from either side.
+    """
+    if not repos:
+        raise RuntimeError(
+            "The resolved repository scope is empty, so there is nothing to retrieve from. "
+            f"Pass --repos <a,b>, set EVAL_REPOS, or leave both unset for the default "
+            f"({', '.join(DEFAULT_EVAL_REPOS)})."
+        )
+
+    indexed = set(qdrant_store.list_repos())
+    with_corpus = {path.stem for path in corpus_dir.glob("*.json")} if corpus_dir.exists() else set()
+
+    missing_from_index = [repo for repo in repos if repo not in indexed]
+    missing_from_corpus = [repo for repo in repos if repo not in with_corpus]
+    if not missing_from_index and not missing_from_corpus:
+        return
+
+    problems = []
+    if missing_from_index:
+        # `list_repos` swallows its own errors and returns [], so an empty answer is reported as
+        # unanswered rather than as proof that the collection is empty. The two need different fixes.
+        held = ", ".join(sorted(indexed)) if indexed else "no repositories, which is also what a failed lookup returns"
+        problems.append(
+            f"not in the Qdrant collection '{qdrant_store.collection_name}' "
+            f"({', '.join(missing_from_index)}; it reports {held})"
+        )
+    if missing_from_corpus:
+        problems.append(
+            f"no BM25 corpus file in {corpus_dir} "
+            f"({', '.join(missing_from_corpus)}; it holds {', '.join(sorted(with_corpus)) or 'nothing'})"
+        )
+    raise RuntimeError(f"Repository scope cannot be satisfied: {'; '.join(problems)}. Ingest them, or narrow --repos.")
+
+
 def resolve_max_workers() -> int:
     """Determine how many concurrent judge calls RAGAS may issue.
 
@@ -289,7 +380,7 @@ def load_testset() -> list[dict[Any, Any]]:
         return testset
 
 
-def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
+def build_retriever(retriever_type: str, qdrant_store: QdrantStore, repos: list[str] | None = None) -> Any:
     """Build the requested retriever (vector-only, BM25-only, or hybrid).
 
     The hybrid arm resolves its cutoff the same way `AppRuntime` and `ApiState`
@@ -301,36 +392,44 @@ def build_retriever(retriever_type: str, qdrant_store: QdrantStore) -> Any:
     it isolates the embedding model's raw ranking quality, independent of the
     production relevance cutoff.
 
+    The BM25 arm is scoped by loading only the named repos' corpus files rather than by filtering
+    the merged corpus, because BM25 scores depend on corpus-wide document frequencies and average
+    document length. The scoped index is built in memory; nothing is written back to `data/cache`,
+    so the combined index the app queries is untouched.
+
     Args:
         retriever_type: One of "vector", "bm25", "hybrid".
         qdrant_store: The Qdrant store backing vector search.
+        repos: Optional repository names to restrict retrieval to. None retrieves from
+            everything ingested, which is what the app does.
 
     Returns:
         A retriever exposing a `search(query, k)` method.
     """
     if retriever_type == "vector":
-        return VectorRetriever(qdrant_store)
+        return VectorRetriever(qdrant_store, repos=repos)
 
-    cache_dir = Path("data/cache")
-    corpus = load_bm25_corpus(cache_dir / "bm25_corpus")
+    corpus = load_bm25_corpus(BM25_CORPUS_DIR, repos=repos)
     if not corpus:
-        raise RuntimeError("No BM25 corpus found in data/cache/bm25_corpus. Run ingestion first.")
+        raise RuntimeError(f"No BM25 corpus found in {BM25_CORPUS_DIR}. Run ingestion first.")
     bm25_retriever = Bm25Index(corpus)
     if retriever_type == "bm25":
         return bm25_retriever
     if retriever_type == "hybrid":
         threshold = resolve_score_threshold(Config.get_instance().embedding_model)
-        vector_retriever = VectorRetriever(qdrant_store, score_threshold=threshold)
+        vector_retriever = VectorRetriever(qdrant_store, score_threshold=threshold, repos=repos)
         return HybridRetriever(vector_retriever, bm25_retriever)
     raise ValueError(f"Unknown retriever type: {retriever_type}")
 
 
-def build_rag_chain(retriever_type: str = "bm25") -> RAGChain:
+def build_rag_chain(retriever_type: str = "bm25", repos: list[str] | None = None) -> RAGChain:
     """Initialize the RAG chain with live services.
 
     Args:
         retriever_type: One of "vector", "bm25", "hybrid" — which retriever
             backs the chain. Defaults to "bm25", matching the shipped app.
+        repos: Repository scope both arms retrieve from. None resolves the
+            scope the same way a command-line run does.
     """
     config = Config.get_instance()
 
@@ -342,7 +441,13 @@ def build_rag_chain(retriever_type: str = "bm25") -> RAGChain:
     if not qdrant_store.collection_exists():
         raise RuntimeError("Qdrant collection does not exist. Run ingestion first.")
 
-    retriever = build_retriever(retriever_type, qdrant_store)
+    if repos is None:
+        repos = resolve_eval_repos()
+    # Validated here rather than in main() so every entry point gets it, not just a command-line run.
+    validate_eval_repos(repos, qdrant_store, BM25_CORPUS_DIR)
+    logger.info("Retrieving from repositories: %s", ", ".join(repos))
+
+    retriever = build_retriever(retriever_type, qdrant_store, repos=repos)
 
     logger.info("Generation client LLM provider: %s", config.provider)
     if config.provider == "ollama":
@@ -685,11 +790,16 @@ def generate_results_markdown(
     judge_model_name: str,
     is_self_judged: bool,
     latency_probe_s: float,
+    repos: list[str],
 ) -> str:
     """Generate a markdown report from the evaluation results."""
     lines = ["# Evaluation Results\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(f"**Test set:** {len(results)} questions\n")
+    lines.append(
+        f"**Repositories retrieved from:** {', '.join(f'`{repo}`' for repo in repos)} (retrieval was "
+        "restricted to these; anything else in the index or the corpus directory was not searched)\n"
+    )
     lines.append(
         f"**Latency probe:** {latency_probe_s:.2f}s (single generation timed before the test set ran; "
         "compare `avg_latency_s` only against runs with a similar probe — a high probe means the "
@@ -768,7 +878,7 @@ def generate_results_markdown(
     return "\n".join(lines)
 
 
-def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]) -> str:
+def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict], repos: list[str]) -> str:
     """Generate a markdown ablation report comparing retriever configurations.
 
     Args:
@@ -776,6 +886,7 @@ def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]
             its custom_metrics dict from `compute_custom_metrics`.
         testset: The loaded test set, used to report its composition by
             question category.
+        repos: The repository scope every arm retrieved from.
     """
     conceptual_count = sum(1 for item in testset if item.get("category") == "conceptual")
     exact_term_count = sum(1 for item in testset if item.get("category") == "factual_lookup")
@@ -787,6 +898,12 @@ def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]
         "Same test set (`evals/testset.json`), same LLM, same top_k — only the retriever "
         "feeding the RAG chain changes. Full per-question detail for each configuration is "
         "in `results_<retriever>.md`.\n"
+    )
+    lines.append(
+        f"**Repositories retrieved from:** {', '.join(f'`{repo}`' for repo in repos)}. Every arm was "
+        "restricted to these, so these figures are a measurement of this corpus rather than of "
+        "whatever else shared the index when the run happened. Compare them only against runs "
+        "reporting the same scope.\n"
     )
     lines.append(
         f"Test set composition ({len(testset)} questions): {exact_term_count} exact-term lookups "
@@ -838,6 +955,7 @@ def publish_retriever_results(
     judge_model_name: str,
     is_self_judged: bool,
     min_coverage: float,
+    repos: list[str],
 ) -> None:
     """Gate on judge coverage, then write the JSON and markdown reports for one retriever.
 
@@ -878,6 +996,7 @@ def publish_retriever_results(
         json.dump(
             {
                 "retriever": retriever_type,
+                "repos": repos,
                 "results": results,
                 "custom_metrics": custom_metrics,
                 "latency_probe_s": round(latency_probe_s, 4),
@@ -894,7 +1013,7 @@ def publish_retriever_results(
     logger.info("Raw results saved to %s", results_path)
 
     md = generate_results_markdown(
-        results, custom_metrics, ragas_scores, ragas_coverage, judge_model_name, is_self_judged, latency_probe_s
+        results, custom_metrics, ragas_scores, ragas_coverage, judge_model_name, is_self_judged, latency_probe_s, repos
     )
     md_path = evals_dir / f"results_{retriever_type}.md"
     with open(md_path, "w") as f:
@@ -922,8 +1041,11 @@ def main() -> None:
     min_coverage = resolve_min_coverage()
     skip_metrics = resolve_skip_metrics()
     judge_timeout_s = resolve_judge_timeout_s()
+    # Resolved once and handed to every arm, so a long run cannot measure three different corpora.
+    repos = resolve_eval_repos()
     logger.info(
-        "Resolved eval config: max_workers=%d, min_coverage=%.2f, skip_metrics=%s, judge_timeout_s=%d",
+        "Resolved eval config: repos=%s, max_workers=%d, min_coverage=%.2f, skip_metrics=%s, judge_timeout_s=%d",
+        ",".join(repos),
         max_workers,
         min_coverage,
         sorted(skip_metrics),
@@ -950,7 +1072,7 @@ def main() -> None:
 
     for retriever_type in RETRIEVER_TYPES:
         logger.info("=== Retriever: %s ===", retriever_type)
-        rag_chain = build_rag_chain(retriever_type)
+        rag_chain = build_rag_chain(retriever_type, repos=repos)
 
         logger.info("Timing latency probe...")
         probe_start = time.time()
@@ -984,6 +1106,7 @@ def main() -> None:
             judge_model_name,
             is_self_judged,
             min_coverage,
+            repos,
         )
 
         if use_langfuse:
@@ -1011,7 +1134,7 @@ def main() -> None:
                 print(f"  {k}: {v:.4f}{cov_str}" if isinstance(v, float) else f"  {k}: {v}{cov_str}")
         print("=" * 60)
 
-    ablation_md = generate_ablation_markdown(all_custom_metrics, testset)
+    ablation_md = generate_ablation_markdown(all_custom_metrics, testset, repos)
     ablation_path = EVALS_DIR / "ablation.md"
     with open(ablation_path, "w") as f:
         f.write(ablation_md.rstrip("\n") + "\n")

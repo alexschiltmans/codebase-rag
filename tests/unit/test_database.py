@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.documents import Document
+from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
 import codebase_rag.database.chat_storage as mod
 from codebase_rag.database.chat_storage import ChatHistoryManager
@@ -591,32 +592,16 @@ class TestQdrantStore:
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_similarity_search_error(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
-
-        mock_client = MagicMock()
-        # No `__meta` sidecar, which is the state of any collection created before
-        # model binding existed. Verification is a no-op there rather than a failure.
-        mock_client.collection_exists.return_value = False
-        coll = MagicMock()
-        coll.name = "documents"
-        mock_client.get_collections.return_value = MagicMock(collections=[coll])
+        store, mock_client = self._searching_store(mock_client_cls, mock_emb_cls)
         mock_client.query_points.side_effect = RuntimeError("search error")
-        mock_client_cls.return_value = mock_client
 
-        mock_emb = MagicMock()
-        mock_emb.get_query_embedding.return_value = [0.1]
-        mock_emb_cls.return_value = mock_emb
-
-        store = QdrantStore()
         with pytest.raises(RuntimeError, match="Vector search failed"):
             store.similarity_search_with_score("query")
 
-    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
-    @patch("codebase_rag.database.qdrant_store.QdrantClient")
-    def test_similarity_search_with_filter(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
-
+    @staticmethod
+    def _searching_store(mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> tuple[QdrantStore, MagicMock]:
+        """A store whose collection exists but has no sidecar, wired to return no points."""
         mock_client = MagicMock()
-        # No `__meta` sidecar, which is the state of any collection created before
-        # model binding existed. Verification is a no-op there rather than a failure.
         mock_client.collection_exists.return_value = False
         coll = MagicMock()
         coll.name = "documents"
@@ -628,9 +613,56 @@ class TestQdrantStore:
         mock_emb.get_query_embedding.return_value = [0.1]
         mock_emb_cls.return_value = mock_emb
 
-        store = QdrantStore()
-        results = store.similarity_search_with_score("query", filter_query={"repo": "test"})
-        assert results == []
+        return QdrantStore(), mock_client
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_scalar_filter_value_matches_exactly(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
+        store, mock_client = self._searching_store(mock_client_cls, mock_emb_cls)
+
+        store.similarity_search_with_score("query", filter_query={"repo": "one-repo"})
+
+        query_filter = mock_client.query_points.call_args.kwargs["query_filter"]
+        assert query_filter == Filter(must=[FieldCondition(key="repo", match=MatchValue(value="one-repo"))])
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_list_filter_value_matches_any(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
+        """A list has to become one MatchAny. Split into a MatchValue per entry it would be ANDed
+        with itself by the enclosing `must` and match nothing, which reads as an empty index."""
+        store, mock_client = self._searching_store(mock_client_cls, mock_emb_cls)
+
+        store.similarity_search_with_score("query", filter_query={"repo": ["repo-a", "repo-b"]})
+
+        query_filter = mock_client.query_points.call_args.kwargs["query_filter"]
+        assert query_filter == Filter(must=[FieldCondition(key="repo", match=MatchAny(any=["repo-a", "repo-b"]))])
+
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_scalar_and_list_filter_keys_mix(self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock) -> None:
+        store, mock_client = self._searching_store(mock_client_cls, mock_emb_cls)
+
+        store.similarity_search_with_score("query", filter_query={"repo": ["repo-a"], "source": "a.py"})
+
+        query_filter = mock_client.query_points.call_args.kwargs["query_filter"]
+        assert query_filter == Filter(
+            must=[
+                FieldCondition(key="repo", match=MatchAny(any=["repo-a"])),
+                FieldCondition(key="source", match=MatchValue(value="a.py")),
+            ]
+        )
+
+    @pytest.mark.parametrize("filter_query", [None, {}])
+    @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
+    @patch("codebase_rag.database.qdrant_store.QdrantClient")
+    def test_absent_filter_sends_no_filter(
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock, filter_query: dict | None
+    ) -> None:
+        store, mock_client = self._searching_store(mock_client_cls, mock_emb_cls)
+
+        store.similarity_search_with_score("query", filter_query=filter_query)
+
+        assert mock_client.query_points.call_args.kwargs["query_filter"] is None
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")

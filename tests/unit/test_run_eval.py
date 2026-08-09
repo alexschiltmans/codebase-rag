@@ -5,31 +5,40 @@ root to `sys.path` so it's importable as `evals.run_eval` (implicit
 namespace package), matching the pattern in `tests/e2e/test_ingest_script.py`.
 """
 
+import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from langchain_core.documents import Document
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from evals.run_eval import (
     _JUDGE_RESPONSE_SCHEMA,
+    DEFAULT_EVAL_REPOS,
     RAGAS_METRIC_NAMES,
     _install_schema_constrained_judging,
     _SchemaConstrainedChatOllama,
+    build_rag_chain,
     build_ragas_metrics,
+    build_retriever,
     check_coverage_gate,
     compute_custom_metrics,
     compute_ragas_scores_and_coverage,
     compute_retrieval_hit_and_reciprocal_rank,
     publish_retriever_results,
+    resolve_eval_repos,
     resolve_judge_timeout_s,
     resolve_max_workers,
     resolve_min_coverage,
     resolve_skip_metrics,
+    validate_eval_repos,
 )
 
 
@@ -224,6 +233,7 @@ def _publish_args(
         "judge_model_name": "judge-model",
         "is_self_judged": False,
         "min_coverage": 0.9,
+        "repos": ["repo-a", "repo-b"],
     }
 
 
@@ -261,6 +271,17 @@ class TestPublishRetrieverResults:
         assert results_path.exists()
         assert md_path.exists()
         assert '"ragas_coverage"' in results_path.read_text()
+
+    def test_reports_record_the_scope_they_were_measured_over(self, tmp_path: Path) -> None:
+        """A figure that does not say which corpus produced it can only be compared to another run
+        by reconstructing the index's state at the time, which is what this change exists to end."""
+        ragas_coverage = {"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}}
+
+        publish_retriever_results(tmp_path, "vector", **_publish_args(ragas_coverage, {"faithfulness": 0.95}))
+
+        assert json.loads((tmp_path / "results_vector.json").read_text())["repos"] == ["repo-a", "repo-b"]
+        markdown = (tmp_path / "results_vector.md").read_text()
+        assert "`repo-a`, `repo-b`" in markdown
 
 
 class TestWholesaleJudgeFailureGate:
@@ -336,6 +357,158 @@ class TestResolveSkipMetrics:
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert scores["context_recall"] is None
         assert check_coverage_gate(coverage, min_coverage=0.9) == "context_recall"
+
+
+class TestResolveEvalRepos:
+    """The repository scope resolves flag, then environment, then default."""
+
+    def test_no_flag_or_env_returns_the_test_set_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "argv", ["run_eval.py"])
+        monkeypatch.delenv("EVAL_REPOS", raising=False)
+        assert resolve_eval_repos() == DEFAULT_EVAL_REPOS
+
+    def test_flag_wins_over_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "argv", ["run_eval.py", "--repos", "from-flag"])
+        monkeypatch.setenv("EVAL_REPOS", "from-env")
+        assert resolve_eval_repos() == ["from-flag"]
+
+    def test_env_is_used_when_no_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "argv", ["run_eval.py"])
+        monkeypatch.setenv("EVAL_REPOS", "from-env")
+        assert resolve_eval_repos() == ["from-env"]
+
+    @pytest.mark.parametrize("raw", ["repo-a,repo-b", " repo-a , repo-b ", "repo-a,repo-b,", "repo-a,,repo-b"])
+    def test_comma_separated_names_are_split_and_stripped(self, raw: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A trailing or doubled comma must not resolve to a repository named "", which would fail
+        validation with a blank name and read as a bug in the store rather than in the argument."""
+        monkeypatch.setattr(sys, "argv", ["run_eval.py", "--repos", raw])
+        assert resolve_eval_repos() == ["repo-a", "repo-b"]
+
+    def test_equals_form_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "argv", ["run_eval.py", "--repos=repo-a,repo-b"])
+        assert resolve_eval_repos() == ["repo-a", "repo-b"]
+
+
+class TestBuildRetrieverScoping:
+    """The scope reaching both arms is the wiring everything else in this feature rests on.
+
+    Worth its own tests because a dropped `repos=` here fails silently in the loudest possible way:
+    validation still passes, the run still logs the scope, and the report still records it, while
+    retrieval ran against the whole shared index. The published figure would carry a false claim
+    about the corpus it measured, which is the failure the scope exists to prevent."""
+
+    def test_vector_arm_is_scoped(self) -> None:
+        retriever = build_retriever("vector", cast(Any, MagicMock()), repos=["repo-a", "repo-b"])
+        assert retriever.repos == ["repo-a", "repo-b"]
+
+    def test_vector_arm_is_unscoped_by_default(self) -> None:
+        assert build_retriever("vector", cast(Any, MagicMock())).repos is None
+
+    @patch("evals.run_eval.load_bm25_corpus")
+    def test_bm25_arm_loads_only_the_scope(self, mock_load: MagicMock) -> None:
+        mock_load.return_value = [Document(page_content="body", metadata={"source": "a.py"})]
+
+        build_retriever("bm25", cast(Any, MagicMock()), repos=["repo-a"])
+
+        assert mock_load.call_args.kwargs["repos"] == ["repo-a"]
+
+    @patch("evals.run_eval.load_bm25_corpus")
+    def test_bm25_arm_loads_everything_by_default(self, mock_load: MagicMock) -> None:
+        mock_load.return_value = [Document(page_content="body", metadata={"source": "a.py"})]
+
+        build_retriever("bm25", cast(Any, MagicMock()))
+
+        assert mock_load.call_args.kwargs["repos"] is None
+
+    @patch("evals.run_eval.load_bm25_corpus")
+    def test_hybrid_arm_scopes_both_of_its_components(self, mock_load: MagicMock) -> None:
+        """Hybrid fuses two rankers, so a scope applied to one of them and not the other produces a
+        result set that is half in scope, which no single assertion on the fused output would show."""
+        mock_load.return_value = [Document(page_content="body", metadata={"source": "a.py"})]
+
+        retriever = build_retriever("hybrid", cast(Any, MagicMock()), repos=["repo-a"])
+
+        assert mock_load.call_args.kwargs["repos"] == ["repo-a"]
+        assert retriever.vector_retriever.repos == ["repo-a"]
+
+
+class TestBuildRagChainScoping:
+    """`build_rag_chain` is where the resolved scope meets the retriever it has to reach."""
+
+    @patch("evals.run_eval.RAGChain")
+    @patch("evals.run_eval.create_llm_client")
+    @patch("evals.run_eval.build_retriever")
+    @patch("evals.run_eval.validate_eval_repos")
+    @patch("evals.run_eval.QdrantStore")
+    def _build(
+        self,
+        mock_store_cls: MagicMock,
+        mock_validate: MagicMock,
+        mock_build_retriever: MagicMock,
+        mock_llm: MagicMock,
+        mock_chain: MagicMock,
+        repos: list[str] | None,
+    ) -> tuple[MagicMock, MagicMock]:
+        mock_store_cls.return_value.collection_exists.return_value = True
+        mock_llm.return_value.check_connection.return_value = {"status": "connected"}
+
+        build_rag_chain("vector", repos=repos)
+
+        return mock_build_retriever, mock_validate
+
+    def test_the_resolved_scope_reaches_the_retriever(self) -> None:
+        mock_build_retriever, _ = self._build(repos=["repo-a"])
+        assert mock_build_retriever.call_args.kwargs["repos"] == ["repo-a"]
+
+    def test_a_caller_passing_no_scope_gets_the_resolved_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`None` means "resolve it", not "search everything": the harness has no unscoped mode, and
+        letting one appear by omission is how an unscoped run gets published as a scoped one."""
+        monkeypatch.setattr(sys, "argv", ["run_eval.py"])
+        monkeypatch.delenv("EVAL_REPOS", raising=False)
+
+        mock_build_retriever, mock_validate = self._build(repos=None)
+
+        assert mock_build_retriever.call_args.kwargs["repos"] == DEFAULT_EVAL_REPOS
+        assert mock_validate.call_args.args[0] == DEFAULT_EVAL_REPOS
+
+
+class TestValidateEvalRepos:
+    """A scope that cannot be satisfied stops the run before the first question."""
+
+    def _store(self, repos: list[str]) -> Any:
+        return cast(Any, SimpleNamespace(collection_name="documents", list_repos=lambda: repos))
+
+    def _corpus_dir(self, tmp_path: Path, repos: list[str]) -> Path:
+        corpus_dir = tmp_path / "bm25_corpus"
+        corpus_dir.mkdir()
+        for repo in repos:
+            (corpus_dir / f"{repo}.json").write_text("[]")
+        return corpus_dir
+
+    def test_a_scope_present_on_both_sides_passes(self, tmp_path: Path) -> None:
+        validate_eval_repos(["repo-a"], self._store(["repo-a", "repo-b"]), self._corpus_dir(tmp_path, ["repo-a"]))
+
+    def test_missing_from_the_index_names_the_repo_and_the_collection(self, tmp_path: Path) -> None:
+        with pytest.raises(RuntimeError, match="never-ingested") as exc_info:
+            validate_eval_repos(["never-ingested"], self._store([]), self._corpus_dir(tmp_path, ["never-ingested"]))
+        assert "documents" in str(exc_info.value)
+
+    def test_missing_bm25_corpus_is_reported_separately(self, tmp_path: Path) -> None:
+        """Which side a repository is missing from decides what to do about it: re-ingest, or
+        rebuild the corpus. An error that only said "missing" would leave that to be guessed."""
+        with pytest.raises(RuntimeError, match="BM25 corpus") as exc_info:
+            validate_eval_repos(["repo-a"], self._store(["repo-a"]), self._corpus_dir(tmp_path, []))
+        assert "repo-a" in str(exc_info.value)
+
+    def test_an_absent_corpus_directory_fails_rather_than_passing_vacuously(self, tmp_path: Path) -> None:
+        with pytest.raises(RuntimeError, match="BM25 corpus"):
+            validate_eval_repos(["repo-a"], self._store(["repo-a"]), tmp_path / "nothing-here")
+
+    def test_an_empty_scope_fails(self, tmp_path: Path) -> None:
+        """Resolving to nothing is not a request to measure nothing: every question would score
+        zero and the report would look like a broken retriever rather than a misconfigured run."""
+        with pytest.raises(RuntimeError, match="empty"):
+            validate_eval_repos([], self._store(["repo-a"]), self._corpus_dir(tmp_path, ["repo-a"]))
 
 
 class TestRagasMetricNames:

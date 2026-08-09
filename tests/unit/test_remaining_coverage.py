@@ -437,7 +437,40 @@ class TestVectorRetrieverExtra:
 
         VectorRetriever(mock_store).search("query")
 
-        mock_store.similarity_search_with_score.assert_called_once_with("query", vector_search.DEFAULT_TOP_K)
+        mock_store.similarity_search_with_score.assert_called_once_with("query", vector_search.DEFAULT_TOP_K, None)
+
+    def test_scoped_retriever_filters_at_the_store(self) -> None:
+        """The scope has to reach the store, not trim what the store returned: `k` results must be
+        `k` in-scope results rather than whatever is left after out-of-scope hits are discarded."""
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.return_value = []
+
+        VectorRetriever(mock_store, repos=["repo-a", "repo-b"]).search("query", k=5)
+
+        mock_store.similarity_search_with_score.assert_called_once_with("query", 5, {"repo": ["repo-a", "repo-b"]})
+
+    def test_scope_and_threshold_are_independent(self) -> None:
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.return_value = [
+            (Document(page_content="high", metadata={"repo": "repo-a"}), 0.8),
+            (Document(page_content="low", metadata={"repo": "repo-a"}), 0.1),
+        ]
+
+        retriever = VectorRetriever(mock_store, score_threshold=0.25, repos=["repo-a"])
+        results = retriever.search("query")
+
+        assert mock_store.similarity_search_with_score.call_args.args[2] == {"repo": ["repo-a"]}
+        assert [doc.page_content for doc, _ in results] == ["high"]
+
+    def test_an_empty_scope_is_still_a_scope(self) -> None:
+        """`[]` means no repository is in scope, which is not the same as no restriction. Treating
+        it as unscoped would turn a resolved-to-nothing scope into a search of the whole index."""
+        mock_store = MagicMock()
+        mock_store.similarity_search_with_score.return_value = []
+
+        VectorRetriever(mock_store, repos=[]).search("query", k=5)
+
+        assert mock_store.similarity_search_with_score.call_args.args[2] == {"repo": []}
 
     def test_no_threshold_returns_everything(self) -> None:
         mock_store = MagicMock()

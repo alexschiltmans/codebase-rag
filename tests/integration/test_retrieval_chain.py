@@ -105,7 +105,9 @@ def test_hybrid_retrieval(mock_similarity_search: MagicMock, test_documents: lis
     # The document about loading a network should be ranked highly
     assert any("load_network" in content for content in contents)
 
-    mock_similarity_search.assert_called_once_with("load mypackage network", 6)
+    # The trailing None is the repository filter: this retriever is unscoped, and an unscoped
+    # retriever must keep searching everything in the store.
+    mock_similarity_search.assert_called_once_with("load mypackage network", 6, None)
 
 
 @pytest.mark.integration

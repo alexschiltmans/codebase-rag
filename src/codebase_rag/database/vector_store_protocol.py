@@ -22,7 +22,8 @@ class VectorStoreProtocol(Protocol):
         Args:
             query: Query text.
             k: Number of documents to return.
-            filter_query: Optional filter criteria.
+            filter_query: Optional filter criteria, ANDed across keys. A list value matches any of
+                its entries; any other value must match exactly.
 
         Returns:
             List of retrieved documents.
@@ -37,7 +38,8 @@ class VectorStoreProtocol(Protocol):
         Args:
             query: Query text.
             k: Number of documents to return.
-            filter_query: Optional filter criteria.
+            filter_query: Optional filter criteria, ANDed across keys. A list value matches any of
+                its entries; any other value must match exactly.
 
         Returns:
             List of (document, score) tuples.

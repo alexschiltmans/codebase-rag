@@ -11,6 +11,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     MatchValue,
     PayloadSchemaType,
     PointStruct,
@@ -292,7 +293,8 @@ class QdrantStore:
         Args:
             query: Query text.
             k: Number of documents to return.
-            filter_query: Optional filter criteria.
+            filter_query: Optional filter criteria, ANDed across keys. A list value matches any of
+                its entries; any other value must match exactly.
 
         Returns:
             List of retrieved documents.
@@ -308,7 +310,8 @@ class QdrantStore:
         Args:
             query: Query text.
             k: Number of documents to return.
-            filter_query: Optional filter criteria.
+            filter_query: Optional filter criteria, ANDed across keys. A list value matches any of
+                its entries; any other value must match exactly.
 
         Returns:
             List of (document, score) tuples.
@@ -324,8 +327,13 @@ class QdrantStore:
 
             query_filter = None
             if filter_query:
+                # A list is any-of: the enclosing `must` would AND several MatchValue conditions into nothing.
                 conditions = [
-                    FieldCondition(key=key, match=MatchValue(value=value)) for key, value in filter_query.items()
+                    FieldCondition(
+                        key=key,
+                        match=MatchAny(any=value) if isinstance(value, list) else MatchValue(value=value),
+                    )
+                    for key, value in filter_query.items()
                 ]
                 query_filter = Filter(must=conditions)  # type: ignore[arg-type]
 

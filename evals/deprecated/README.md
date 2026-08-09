@@ -5,7 +5,9 @@ reproduction lineage is what makes later claims checkable: several of these runs
 each other across dates and explained their own deltas, and that record is worth more than the
 disk it costs.
 
-**Current results live one directory up, in `../retrieval-stack-findings.md`.**
+**Current results live one directory up:** `../retrieval-stack-findings.md` for the retrieval-stack
+measurements, and `../ablation.md` with `../results_<retriever>.md` for the current `run_eval.py`
+baseline, which unlike anything here records the repository scope it was measured over.
 
 | file | why it is here |
 |---|---|

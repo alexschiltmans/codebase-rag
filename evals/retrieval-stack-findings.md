@@ -796,3 +796,21 @@ so the N=29 arms kept as historical record are left as the runs they were:
 ```
 python evals/rescore_testset.py --write
 ```
+
+**`run_eval.py` declares the repositories it retrieves from.** That is the other harness in this
+directory, the one that scores answers rather than retrieval alone. Both its arms are restricted to a
+declared repository scope, defaulting to whatever the shipped test set is written against, currently
+`power-grid-model` alone, and overridden with `--repos a,b` or `EVAL_REPOS`. The vector arm applies it
+as a Qdrant payload filter on `repo`, so asking for `k` documents gets `k` in-scope ones rather than
+whatever survives discarding. The BM25 arm loads only the named repositories' corpus files: BM25 scores
+depend on corpus-wide document frequencies and average document length, so filtering a merged corpus
+scores differently from never merging it. A scope naming a repository missing from either the
+collection or the corpus directory stops the run before the first question, and every report records
+the scope it ran under.
+
+Read anything that harness published earlier with that in mind. Those figures were measured against
+whatever happened to sit in the shared collection and corpus directory at the time, and that state is
+not recoverable now. One run collapsed toward zero Hit Rate on every arm because an unrelated
+repository had been ingested alongside the corpus; working out why took an investigation instead of a
+startup error. `bench_retrieval.py` was never exposed to this. It reads a corpus directory built for
+the arm and records `ingested_repositories` in the arm record, so its scope is fixed by construction.
