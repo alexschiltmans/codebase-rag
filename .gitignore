@@ -188,6 +188,7 @@ coverage.xml
 # SonarQube scanner output
 .scannerwork/
 .sonar-token
+.sonar-pass
 sonar-report.md
 
 # Local review notes (not part of the project)
