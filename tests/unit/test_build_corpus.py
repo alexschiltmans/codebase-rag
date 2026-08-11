@@ -86,5 +86,5 @@ class TestRefusals:
         with open(tmp_path / "left-behind.json", "w") as f:
             json.dump([], f)
 
-        with pytest.raises(SystemExit, match="left-behind.json"):
+        with pytest.raises(SystemExit, match=r"left-behind\.json"):
             build_corpus.build_corpus(["demo"], chunk_size=614, out_dir=tmp_path)

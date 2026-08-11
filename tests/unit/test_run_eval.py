@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from evals.retrieval_metrics import compute_retrieval_hit_and_reciprocal_rank
 from evals.run_eval import (
     _JUDGE_RESPONSE_SCHEMA,
     DEFAULT_EVAL_REPOS,
@@ -31,7 +32,6 @@ from evals.run_eval import (
     check_coverage_gate,
     compute_custom_metrics,
     compute_ragas_scores_and_coverage,
-    compute_retrieval_hit_and_reciprocal_rank,
     publish_retriever_results,
     resolve_eval_repos,
     resolve_judge_timeout_s,

@@ -1,7 +1,7 @@
 """Embedding models for converting text to vector representations."""
 
 import logging
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 import torch
 from sentence_transformers import SentenceTransformer
@@ -39,15 +39,19 @@ class EmbeddingManager:
     instead of silently reusing the wrong one.
     """
 
-    _instances: dict[tuple[str, str, str, int | None, str | None], "EmbeddingManager"] = {}
+    _instances: ClassVar[dict[tuple[str, str, str, int | None, str | None, str | None], "EmbeddingManager"]] = {}
 
-    def __new__(
+    # Not `Self`: the instance cache is one dict shared by the class and any subclass, so a
+    # subclass constructed with settings already cached gets the base instance back. Declaring
+    # `Self` would promise a narrowing this deliberately does not do.
+    def __new__(  # noqa: PYI034
         cls,
         model_name: str | None = None,
         query_prompt: str | None = None,
         document_prompt: str | None = None,
         max_seq_length: int | None = None,
         dtype: str | None = None,
+        revision: str | None = None,
     ) -> "EmbeddingManager":
         config = Config.get_instance()
         resolved_model_name = model_name or config.embedding_model
@@ -55,16 +59,21 @@ class EmbeddingManager:
         resolved_document_prompt = document_prompt if document_prompt is not None else config.embedding_document_prompt
         resolved_max_seq_length = max_seq_length if max_seq_length is not None else config.embedding_max_seq_length
         resolved_dtype = dtype if dtype is not None else config.embedding_dtype
+        resolved_revision = revision if revision is not None else config.embedding_model_revision
 
         if resolved_dtype and resolved_dtype not in _SUPPORTED_DTYPES:
             raise ValueError(f"embedding dtype must be one of {_SUPPORTED_DTYPES}, got '{resolved_dtype}'")
 
+        # The revision is part of the key for the same reason the model name is: two revisions of
+        # one name are two different sets of weights, and handing back the instance loaded from the
+        # other one would embed with weights the caller did not ask for.
         cache_key = (
             resolved_model_name,
             resolved_query_prompt,
             resolved_document_prompt,
             resolved_max_seq_length,
             resolved_dtype or None,
+            resolved_revision or None,
         )
 
         if cache_key not in cls._instances:
@@ -75,6 +84,7 @@ class EmbeddingManager:
                 resolved_document_prompt,
                 resolved_max_seq_length,
                 resolved_dtype or None,
+                resolved_revision or None,
             )
             cls._instances[cache_key] = instance
 
@@ -87,13 +97,22 @@ class EmbeddingManager:
         document_prompt: str,
         max_seq_length: int | None,
         dtype: str | None,
+        revision: str | None,
     ) -> None:
         self.model_name = model_name
         self.dtype = dtype
+        self.revision = revision
 
-        logger.info("Initializing embedding model: %s", self.model_name)
+        logger.info("Initializing embedding model: %s (revision=%s)", self.model_name, revision or "unpinned")
+        if revision is None:
+            logger.warning(
+                "Embedding model '%s' is loading from the hub's default branch. Set "
+                "EMBEDDING_MODEL_REVISION to a commit sha before publishing any retrieval "
+                "measurement, or the weights behind this name can change between runs.",
+                self.model_name,
+            )
         model_kwargs: dict[str, Any] | None = {"torch_dtype": getattr(torch, dtype)} if dtype else None
-        self.model = SentenceTransformer(self.model_name, model_kwargs=model_kwargs)
+        self.model = SentenceTransformer(self.model_name, model_kwargs=model_kwargs, revision=revision)
         self.loaded_dtype = _loaded_dtype(self.model)
 
         # Resolution order: explicit config wins, then the model's own declared prompts,

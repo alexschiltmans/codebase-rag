@@ -7,7 +7,7 @@ SQLite for persistent local storage of chat sessions.
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +70,7 @@ class SqliteChatStorage:
             chat_id: Unique identifier for the chat session.
             messages: List of message dictionaries.
         """
-        now = datetime.now().isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Determine title from first user message
         title = "Untitled Chat"

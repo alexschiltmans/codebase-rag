@@ -31,7 +31,7 @@ logger = logging.getLogger("test_chat_storage")
 def test_chat_history_persistence() -> None:
     """Test chat history persistence functionality."""
     test_chat_id = str(uuid.uuid4())
-    logger.info(f"Testing chat history persistence with chat_id: {test_chat_id}")
+    logger.info("Testing chat history persistence with chat_id: %s", test_chat_id)
 
     test_messages = [
         {"role": "user", "content": "Hello, this is a test message 1"},
@@ -65,7 +65,7 @@ def test_chat_history_persistence() -> None:
 
     logger.info("Listing all chat histories...")
     chat_list = chat_manager.list_chat_histories()
-    logger.info(f"Found {len(chat_list)} chat histories")
+    logger.info("Found %d chat histories", len(chat_list))
 
 
 if __name__ == "__main__":
@@ -73,5 +73,5 @@ if __name__ == "__main__":
         test_chat_history_persistence()
         sys.exit(0)
     except Exception as e:
-        logger.error(f"Test failed: {e}")
+        logger.error("Test failed: %s", e)
         sys.exit(1)

@@ -82,7 +82,7 @@ def resolve_arm_path(name: str) -> Path:
             raise MalformedArmRecordError(f"no arm record at {path}")
         return path
 
-    stem = path.name[: -len(".json")] if path.name.endswith(".json") else path.name
+    stem = path.name.removesuffix(".json")
     candidate = BENCH_RESULTS_DIR / f"{stem}.json"
     if not candidate.exists():
         raise MalformedArmRecordError(f"no arm record at {candidate}")
@@ -265,10 +265,12 @@ def format_report(result: dict[str, Any]) -> str:
     width = max(len(name) for name in result["components"])
     repositories = result["ingested_repositories"]
     lines = [
-        f"test set: {n} questions (hash {result['testset_hash'] or 'none recorded'}), "
-        f"candidate depth {result['candidate_depth']}, "
-        f"corpus {', '.join(repositories) if repositories else 'none recorded'}, "
-        f"chunk size {result['chunk_size'] or 'none recorded'}",
+        (
+            f"test set: {n} questions (hash {result['testset_hash'] or 'none recorded'}), "
+            f"candidate depth {result['candidate_depth']}, "
+            f"corpus {', '.join(repositories) if repositories else 'none recorded'}, "
+            f"chunk size {result['chunk_size'] or 'none recorded'}"
+        ),
     ]
     if result.get("chunking_unverified"):
         lines.append(
@@ -282,8 +284,7 @@ def format_report(result: dict[str, Any]) -> str:
     lines.append(f"  {'union (upper bound)':<{width}}  {result['union_hits']:>3}/{n}  {result['union_recall']:.4f}")
     lines.append(f"  headroom over best component: {result['headroom_questions']} question(s)")
     for name, gained in result["questions_gained_by_union"].items():
-        for question in gained:
-            lines.append(f"    gained over {name}: {question}")
+        lines.extend(f"    gained over {name}: {question}" for question in gained)
     return "\n".join(lines)
 
 

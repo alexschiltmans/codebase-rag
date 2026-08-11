@@ -18,7 +18,7 @@ class GitLoader:
     and provides methods to access specific files or directories.
     """
 
-    def __init__(self, repo_url: str | None = None, local_path: Path | None = None) -> None:  # noqa: FBT001
+    def __init__(self, repo_url: str | None = None, local_path: Path | None = None) -> None:
         """Initialize the GitLoader.
 
         Args:
@@ -132,9 +132,11 @@ class GitLoader:
             dir_path = self.local_path / dir_name
             if not (dir_path.exists() and dir_path.is_dir()):
                 continue
-            for file_path in dir_path.glob("**/*"):
-                if self._should_include_file(file_path, excluded_extensions):
-                    paths.append(file_path)
+            paths.extend(
+                file_path
+                for file_path in dir_path.glob("**/*")
+                if self._should_include_file(file_path, excluded_extensions)
+            )
         return paths
 
     @staticmethod

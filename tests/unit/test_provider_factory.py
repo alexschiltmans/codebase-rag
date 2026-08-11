@@ -3,6 +3,7 @@
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -356,9 +357,9 @@ class TestOpenAICompatClientBehavior:
 class _CapturingChatCompletionHandler(BaseHTTPRequestHandler):
     """Stub OpenAI-compatible /chat/completions endpoint that records the request body it received."""
 
-    captured_body: dict | None = None
+    captured_body: dict[str, Any] | None = None
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's naming convention
+    def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", 0))
         type(self).captured_body = json.loads(self.rfile.read(length))
         response = {
@@ -376,7 +377,7 @@ class _CapturingChatCompletionHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, *args: object) -> None:  # noqa: ANN401 - silence request logging
+    def log_message(self, *args: object) -> None:
         pass
 
 

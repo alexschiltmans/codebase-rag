@@ -18,9 +18,14 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from codebase_rag.database.embedding_contract import metric_requires_unit_vectors, verify_vectors
 from codebase_rag.database.embeddings import EmbeddingManager
 
 logger = logging.getLogger(__name__)
+
+# The metric new collections are created with. Named here so the contract can be applied to the
+# first batch of a collection that does not exist yet, where there is no stored metric to read.
+DEFAULT_DISTANCE = Distance.COSINE
 
 
 class QdrantStore:
@@ -85,11 +90,39 @@ class QdrantStore:
         manager = self.embedding_manager
         return {
             "embedding_model": manager.model_name,
+            # A revision is as much a part of the identity as the name: two revisions of one name
+            # are two sets of weights. Collections written before this was recorded have no such
+            # key, and the comparison in `_verify_model_binding` skips absent fields, so adding it
+            # does not start refusing them.
+            "revision": getattr(manager, "revision", None),
             "query_prompt": getattr(manager, "query_prompt", ""),
             "document_prompt": getattr(manager, "document_prompt", ""),
             "max_seq_length": getattr(manager, "max_seq_length", None),
             "dtype": getattr(manager, "dtype", None),
         }
+
+    def _requires_unit_vectors(self) -> bool:
+        """Whether the target collection's metric assumes unit-length vectors.
+
+        Reads the metric from the collection when it exists, and otherwise reports what the store
+        would create it with, so the first batch into a new collection is checked rather than
+        waved through on the grounds that there is nothing to read yet.
+        """
+        if not self.collection_exists():
+            return metric_requires_unit_vectors(DEFAULT_DISTANCE)
+
+        params = self.client.get_collection(self.collection_name).config.params.vectors
+        return metric_requires_unit_vectors(getattr(params, "distance", None))
+
+    def _verify_vector_contract(self, vectors: list[list[float]], boundary: str) -> None:
+        """Apply the embedding contract at one boundary."""
+        verify_vectors(
+            vectors,
+            boundary=boundary,
+            expected_dimension=self.embedding_manager.model.get_sentence_embedding_dimension(),
+            model_name=self.embedding_manager.model_name,
+            require_unit_norm=self._requires_unit_vectors(),
+        )
 
     def _record_model_binding(self, vector_size: int) -> None:
         """Record the encoding configuration a newly created collection was built with."""
@@ -227,6 +260,10 @@ class QdrantStore:
             texts = [doc.page_content for doc in documents]
             embeddings = self.embedding_manager.get_embeddings(texts)
 
+            # Before `_ensure_collection`, so a malformed batch cannot leave a new collection
+            # behind that nothing ever writes to.
+            self._verify_vector_contract(embeddings, boundary="index")
+
             self._ensure_collection(vector_size=len(embeddings[0]))
             # Verify before writing, not just before reading. Re-ingesting into an existing
             # collection with a different model of the same dimension is accepted by Qdrant and
@@ -324,6 +361,9 @@ class QdrantStore:
 
         try:
             query_embedding = self.embedding_manager.get_query_embedding(query)
+            # The query path encodes through a different method and a different prompt than the
+            # document path, so the two can diverge and only this catches it on the query side.
+            self._verify_vector_contract([query_embedding], boundary="query")
 
             query_filter = None
             if filter_query:

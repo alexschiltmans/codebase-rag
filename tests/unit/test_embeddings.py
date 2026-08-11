@@ -203,3 +203,49 @@ def test_count_tokens_includes_the_document_prompt(mock_st: MagicMock) -> None:
 
     counted = model.tokenizer.call_args.args[0]
     assert counted == ["passage: chunk text"]
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_revision_is_threaded_to_the_model_loader(mock_st: MagicMock) -> None:
+    """An unpinned model name resolves to whatever the hub's default branch points at that day."""
+    mock_st.return_value = _mock_transformer({})
+
+    manager = EmbeddingManager(model_name="some/model", revision="abc123")
+
+    assert manager.revision == "abc123"
+    assert mock_st.call_args.kwargs["revision"] == "abc123"
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_unset_revision_loads_unpinned_and_says_so(mock_st: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+    mock_st.return_value = _mock_transformer({})
+
+    with caplog.at_level("WARNING", logger="codebase_rag.database.embeddings"):
+        manager = EmbeddingManager(model_name="some/model")
+
+    assert manager.revision is None
+    assert mock_st.call_args.kwargs["revision"] is None
+    assert "EMBEDDING_MODEL_REVISION" in caplog.text
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_two_revisions_of_one_name_are_two_instances(mock_st: MagicMock) -> None:
+    """Two revisions are two sets of weights, so the cache must not hand one back for the other."""
+    mock_st.side_effect = [_mock_transformer({}), _mock_transformer({})]
+
+    first = EmbeddingManager(model_name="some/model", revision="sha-one")
+    second = EmbeddingManager(model_name="some/model", revision="sha-two")
+
+    assert first is not second
+    assert mock_st.call_count == 2
+
+
+@patch("codebase_rag.database.embeddings.SentenceTransformer")
+def test_the_same_revision_reuses_the_loaded_model(mock_st: MagicMock) -> None:
+    mock_st.return_value = _mock_transformer({})
+
+    first = EmbeddingManager(model_name="some/model", revision="sha-one")
+    second = EmbeddingManager(model_name="some/model", revision="sha-one")
+
+    assert first is second
+    assert mock_st.call_count == 1

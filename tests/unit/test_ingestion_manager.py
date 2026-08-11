@@ -118,7 +118,7 @@ class TestCancel:
         pipeline_cls = MagicMock(side_effect=lambda **kwargs: _FakePipeline(kwargs))
 
         class _FakePipeline:
-            def __init__(self, kwargs: dict) -> None:
+            def __init__(self, kwargs: dict[str, Any]) -> None:
                 _init(self, **kwargs)
 
             def run(self) -> None:

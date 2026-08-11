@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from codebase_rag.config import Config
 from codebase_rag.llm.provider_factory import create_llm_client
@@ -54,7 +55,7 @@ def _load_bm25_retriever() -> BM25Retriever:
     raise FileNotFoundError(f"BM25 index not found at {bm25_file}")
 
 
-def _format_compact(results: list[tuple]) -> str:
+def _format_compact(results: list[tuple[Any, ...]]) -> str:
     """Format search results in compact text form: path (score)\\nsnippet."""
     lines = []
     for path, score, snippet, *_ in results:
@@ -64,7 +65,7 @@ def _format_compact(results: list[tuple]) -> str:
     return "\n".join(lines)
 
 
-def _format_json(results: list[tuple]) -> str:
+def _format_json(results: list[tuple[Any, ...]]) -> str:
     """Format search results as JSON array."""
     json_results = []
     for path, score, snippet, *_ in results:
@@ -78,7 +79,7 @@ def _format_json(results: list[tuple]) -> str:
     return json.dumps(json_results, indent=2)
 
 
-def _trim_results_by_budget(results: list[tuple], budget: int, output_format: str) -> list[tuple]:
+def _trim_results_by_budget(results: list[tuple[Any, ...]], budget: int, output_format: str) -> list[tuple[Any, ...]]:
     """Trim results to fit within the character budget of the requested output format.
 
     Rendered length grows monotonically with the number of results, so the largest
@@ -149,13 +150,13 @@ def query_command(args: argparse.Namespace) -> int:
 
         # Format and output results
         output = _format_json(formatted_results) if args.format == "json" else _format_compact(formatted_results)
-        print(output)  # noqa: T201
+        print(output)
         return 0
 
     except FileNotFoundError as e:
         logger.error(str(e))
         return 1
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("Query failed: %s", e)
         return 1
 
@@ -188,38 +189,38 @@ def ask_command(args: argparse.Namespace) -> int:
             # Interactive: stream live so the user isn't staring at nothing.
             try:
                 for chunk in rag_chain.stream(args.question):
-                    print(chunk, end="", flush=True)  # noqa: T201
-            except Exception as e:  # noqa: BLE001
+                    print(chunk, end="", flush=True)
+            except Exception as e:
                 logger.error("Answer generation failed: %s", e)
                 return 1
-            print()  # noqa: T201
+            print()
         else:
             # Piped: buffer so a failure mid-generation leaves stdout empty.
             answer_text = ""
             try:
                 for chunk in rag_chain.stream(args.question):
                     answer_text += chunk
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error("Answer generation failed: %s", e)
                 return 1
-            print(answer_text)  # noqa: T201
+            print(answer_text)
 
         # Print sources from last result to stderr. RAGChain._format_sources yields plain
         # dicts, not Documents, so these are subscripts rather than .metadata lookups.
         if rag_chain.last_result:
             sources = rag_chain.last_result.get("sources", [])
             if sources:
-                print("\nSources:", file=sys.stderr)  # noqa: T201
+                print("\nSources:", file=sys.stderr)
                 for source in sources:
                     path = source.get("file_path", "unknown")
-                    print(f"  {path}", file=sys.stderr)  # noqa: T201
+                    print(f"  {path}", file=sys.stderr)
 
         return 0
 
     except FileNotFoundError as e:
         logger.error(str(e))
         return 1
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("Answer generation failed: %s", e)
         return 1
 

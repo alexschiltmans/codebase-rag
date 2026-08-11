@@ -2,8 +2,13 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # Both of these rewrite files in place. tests/fixtures/ holds the retrieval gate's frozen
+      # corpus, where a trimmed trailing space moves a chunk boundary and silently shifts the
+      # measured numbers, so they are kept out of it for the same reason ruff format is.
       - id: trailing-whitespace
+        exclude: ^tests/fixtures/
       - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
@@ -18,13 +23,30 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+  # Runs the project's own mypy rather than the mirrors-mypy hook. That hook builds an isolated
+  # environment holding only what `additional_dependencies` lists, so pydantic, fastapi, and
+  # streamlit resolve to Any there. Under strict mode that produces two dozen errors about
+  # subclassing Any and untyped decorators which `make typecheck` does not see, because it runs
+  # against the installed dependencies. Two mypy configurations disagreeing about the same tree is
+  # worse than either, so there is now one.
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies:
-          - types-requests
+        name: mypy (project venv, same invocation as make typecheck)
+        entry: .venv/bin/python -m mypy src/
+        language: system
+        types: [python]
         files: ^src/
+        pass_filenames: false
+
+  # Staged-content secret scan. Runs at commit rather than push because the cost of catching a
+  # key late is a rewritten history: once a secret is in a commit, deleting it in a later one
+  # leaves it reachable. .env is gitignored, but .env.example sits next to it and a copy-paste
+  # into the wrong file is exactly the mistake this catches.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0

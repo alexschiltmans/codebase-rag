@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class IngestJob:
     started_at: float = field(default_factory=time.time)
     finished_at: float | None = None
     error: str | None = None
-    result: dict | None = None
+    result: dict[str, Any] | None = None
 
 
 class ApiIngestionManager:
@@ -63,7 +63,7 @@ class ApiIngestionManager:
                     }
                     job.finished_at = time.time()
                     job.state = "succeeded"
-            except Exception as exc:  # noqa: BLE001 - surfaced via IngestJob.error, not swallowed
+            except Exception as exc:
                 logger.error("Ingestion error for %s: %s", source, exc)
                 with self._lock:
                     job.error = str(exc)
@@ -74,7 +74,7 @@ class ApiIngestionManager:
             if self._on_success:
                 try:
                     self._on_success(job)
-                except Exception as exc:  # noqa: BLE001 - a hook failure must not undo a real success
+                except Exception as exc:
                     logger.error("Post-ingest hook failed for %s: %s", source, exc)
 
         threading.Thread(target=_run, daemon=True).start()

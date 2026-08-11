@@ -10,6 +10,7 @@ place the numbers mean anything.
 
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ from tests.evaluation.test_dataset import get_test_dataset
 QUESTION_COUNT = 5
 
 
-def evaluate_response(response: str, expected_keywords: list[str], question: str) -> dict:
+def evaluate_response(response: str, expected_keywords: list[str], question: str) -> dict[str, Any]:
     """Evaluate the quality of an LLM response.
 
     Args:

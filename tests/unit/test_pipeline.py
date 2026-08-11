@@ -315,6 +315,7 @@ class TestIngestPipeline:
         mock_config.qdrant_port = 6333
         mock_config.collection_name = "docs"
         mock_config.repo_local_path = Path("/tmp/repos")
+        mock_config.cache_dir = Path("/tmp/cache")
         mock_config_cls.get_instance.return_value = mock_config
         mock_logging.return_value = (MagicMock(), Path("/tmp/ingest.log"))
 

@@ -6,8 +6,6 @@ Streamlit dependency since this runs as its own uvicorn process.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from codebase_rag.api.ingest_manager import ApiIngestionManager
 from codebase_rag.config import Config
 from codebase_rag.database.qdrant_store import QdrantStore
@@ -53,16 +51,14 @@ class ApiState:
             num_ctx=self.config.ollama_num_ctx,
         )
         self.tokenizer = get_tokenizer(self.qdrant_store.embedding_manager)
-        self.cache_dir = Path("data/cache")
+        self.cache_dir = self.config.cache_dir
         self.ingestion = ApiIngestionManager(on_success=lambda _job: self.refresh_bm25())
 
     def _select_retriever(self) -> RetrieverProtocol:
         return self.hybrid_retriever if self.config.retriever == "hybrid" else self.bm25_retriever
 
-    @staticmethod
-    def _load_bm25_retriever() -> BM25Retriever:
-        cache_dir = Path("data/cache")
-        bm25_file = cache_dir / "bm25_retriever.json"
+    def _load_bm25_retriever(self) -> BM25Retriever:
+        bm25_file = self.config.cache_dir / "bm25_retriever.json"
         if bm25_file.exists():
             return BM25Retriever.load_json(bm25_file)
         return BM25Retriever([])

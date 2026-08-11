@@ -27,7 +27,7 @@ def _new_state() -> SessionState:
     return state
 
 
-class _AttrDict(dict):
+class _AttrDict(dict[str, Any]):
     """A dict that also supports attribute access, like st.session_state."""
 
     def __getattr__(self, name: str) -> object:

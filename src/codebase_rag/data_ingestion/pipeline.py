@@ -18,6 +18,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from langchain_core.documents import Document
+
 from codebase_rag.config import Config
 from codebase_rag.data_ingestion.chunking import DocumentChunker, chunking_fingerprint
 from codebase_rag.data_ingestion.corpus_chunking import write_chunking_sidecar
@@ -154,7 +156,7 @@ def setup_logging(log_level: str = "INFO", add_console: bool | None = None) -> t
         stream_handler.name = "codebase_rag.ingest_console"
         logger.addHandler(stream_handler)
 
-    logger.info(f"Logging initialized at level {log_level}, writing to {log_file}")
+    logger.info("Logging initialized at level %s, writing to %s", log_level, log_file)
     return logger, log_file
 
 
@@ -178,7 +180,7 @@ def _teardown_logging(logger: logging.Logger) -> None:
     _prior_level = None
 
 
-def save_documents_cache(documents: list, cache_path: Path) -> None:
+def save_documents_cache(documents: list[Document], cache_path: Path) -> None:
     """Save processed documents to disk cache.
 
     Args:
@@ -190,7 +192,7 @@ def save_documents_cache(documents: list, cache_path: Path) -> None:
         pickle.dump(documents, f)
 
 
-def load_documents_cache(cache_path: Path) -> list | None:
+def load_documents_cache(cache_path: Path) -> list[Document] | None:
     """Load processed documents from disk cache.
 
     Args:
@@ -297,7 +299,7 @@ class IngestPipeline:
             elif repo_url:
                 self._repo_urls = [repo_url]
 
-            self.cache_dir = Path("data/cache")
+            self.cache_dir = self.config.cache_dir
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
             self.vector_store = QdrantStore(
@@ -336,7 +338,7 @@ class IngestPipeline:
         """
         return DocumentChunker(max_seq_length=self.vector_store.embedding_manager.max_seq_length)
 
-    def _report_truncation(self, documents: list) -> None:
+    def _report_truncation(self, documents: list[Document]) -> None:
         """Log how much of what is about to be indexed the model cannot read.
 
         Diagnostic only, so a failure here is reported and stepped over. An
@@ -429,7 +431,7 @@ class IngestPipeline:
             return False
         return True
 
-    def _process_single_repo(self, repo_url: str) -> list:
+    def _process_single_repo(self, repo_url: str) -> list[Document]:
         """Process documents from a single repository.
 
         Args:
@@ -509,7 +511,7 @@ class IngestPipeline:
         local_path = self.config.repo_local_path / repo_name
         return repo_name, local_path, GitLoader(repo_url=repo_url, local_path=local_path), False
 
-    def _try_load_cache(self, repo_name: str, cache_path: Path, head_sha: str | None) -> list | None:
+    def _try_load_cache(self, repo_name: str, cache_path: Path, head_sha: str | None) -> list[Document] | None:
         """Return cached documents if the cache is fresh, otherwise None."""
         if not (self.use_cache and self._is_cache_fresh(repo_name, head_sha)):
             return None
@@ -632,7 +634,9 @@ class IngestPipeline:
             head_sha=head_sha,
         )
 
-    def _update_bm25_corpus_incremental(self, repo_name: str, stale_sources: list[str], new_documents: list) -> None:
+    def _update_bm25_corpus_incremental(
+        self, repo_name: str, stale_sources: list[str], new_documents: list[Document]
+    ) -> None:
         """Update this repo's BM25 corpus in place: drop chunks belonging to
         `stale_sources`, add `new_documents`, then rebuild the combined index.
         """
@@ -661,7 +665,7 @@ class IngestPipeline:
         )
         rebuild_bm25_index(self.cache_dir)
 
-    def process_documents(self) -> list:
+    def process_documents(self) -> list[Document]:
         """Process documents from all configured repositories.
 
         Returns:
@@ -672,7 +676,7 @@ class IngestPipeline:
                 "No repository URLs provided. Use --repo or --all-repos to specify repositories to ingest."
             )
 
-        all_documents: list = []
+        all_documents: list[Document] = []
         for url in self._repo_urls:
             docs = self._process_single_repo(url)
             all_documents.extend(docs)
@@ -681,7 +685,7 @@ class IngestPipeline:
         self.stats["chunks_created"] = len(all_documents)
         return all_documents
 
-    def index_documents(self, documents: list) -> None:
+    def index_documents(self, documents: list[Document]) -> None:
         """Index documents in the vector database.
 
         Args:
@@ -699,7 +703,7 @@ class IngestPipeline:
 
         # Remove ALL existing chunks for repos being re-ingested so that
         # deleted or shrunk files don't leave orphaned points.
-        repos = {doc.metadata.get("repo") for doc in documents if doc.metadata.get("repo")}
+        repos = {str(doc.metadata["repo"]) for doc in documents if doc.metadata.get("repo")}
         for repo_name in repos:
             deleted = self.vector_store.delete_by_repo(repo_name)
             if deleted:
@@ -727,9 +731,9 @@ class IngestPipeline:
         self.stats["chunks_indexed"] = len(documents)
         self.stats["elapsed_time"] += indexing_time
 
-        self.logger.info(f"Indexed {len(documents)} chunks in {indexing_time:.2f} seconds")
+        self.logger.info("Indexed %d chunks in %.2f seconds", len(documents), indexing_time)
 
-    def save_bm25_index(self, documents: list) -> None:
+    def save_bm25_index(self, documents: list[Document]) -> None:
         """Update this run's repo(s) in the BM25 corpus and rebuild the combined index.
 
         Each repo's documents are persisted as their own JSON corpus file under
@@ -746,7 +750,7 @@ class IngestPipeline:
         corpus_dir = self.cache_dir / "bm25_corpus"
         corpus_dir.mkdir(parents=True, exist_ok=True)
 
-        repos = {doc.metadata.get("repo") for doc in documents if doc.metadata.get("repo")}
+        repos = {str(doc.metadata["repo"]) for doc in documents if doc.metadata.get("repo")}
         for repo_name in repos:
             repo_docs = [doc for doc in documents if doc.metadata.get("repo") == repo_name]
             BM25Retriever(repo_docs).save_json(corpus_dir / f"{repo_name}.json")
@@ -797,15 +801,15 @@ class IngestPipeline:
             results = hybrid_retriever.search(query, k=3)
 
             if results:
-                self.logger.info(f"Hybrid search successful! Found {len(results)} results for query: '{query}'")
+                self.logger.info("Hybrid search successful! Found %d results for query: '%s'", len(results), query)
                 for i, (doc, score) in enumerate(results, 1):
                     source = doc.metadata.get("source", "Unknown")
-                    self.logger.info(f"Result {i}: {source} (score: {score:.4f})")
+                    self.logger.info("Result %d: %s (score: %.4f)", i, source, score)
             else:
-                self.logger.warning(f"Hybrid search returned no results for query: '{query}'")
+                self.logger.warning("Hybrid search returned no results for query: '%s'", query)
 
         except Exception as e:
-            self.logger.error(f"Error verifying hybrid search: {e}")
+            self.logger.error("Error verifying hybrid search: %s", e)
 
     def save_stats(self) -> None:
         """Save ingestion statistics to file."""
@@ -813,8 +817,8 @@ class IngestPipeline:
         with open(stats_path, "w") as f:
             json.dump(self.stats, f, indent=2)
 
-        self.logger.info(f"Statistics saved to {stats_path}")
-        self.logger.info(f"Summary: {self.stats}")
+        self.logger.info("Statistics saved to %s", stats_path)
+        self.logger.info("Summary: %s", self.stats)
 
     def run(self) -> None:
         """Run the complete ingestion pipeline."""
@@ -831,10 +835,10 @@ class IngestPipeline:
             self.stats["elapsed_time"] = time.time() - total_start_time
             self.save_stats()
 
-            self.logger.info(f"Ingestion pipeline completed successfully in {self.stats['elapsed_time']:.2f} seconds")
+            self.logger.info("Ingestion pipeline completed successfully in %.2f seconds", self.stats["elapsed_time"])
 
         except Exception as e:
-            self.logger.error(f"Error in ingestion pipeline: {e}", exc_info=True)
+            self.logger.exception("Error in ingestion pipeline: %s", e)
             raise
         finally:
             _teardown_logging(self.logger)

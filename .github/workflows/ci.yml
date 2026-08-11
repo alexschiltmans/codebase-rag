@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  # Same pins the local tooling uses, so a scan here and a scan on a laptop run the same engines.
+  OPENGREP_VERSION: v1.26.0
+  GITLEAKS_VERSION: 8.30.1
+
 jobs:
   check:
     name: Lint, typecheck & unit tests
@@ -43,3 +48,74 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+  scan:
+    name: Static analysis (SARIF)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --no-config --extra dev
+
+      - name: Install Opengrep
+        run: bash scripts/install_opengrep.sh
+
+      # Both analysers are allowed to report without failing the step: the merge below is what
+      # decides. Splitting it that way means the SARIF artifact exists even on a red run, which is
+      # the run where somebody actually wants to read it.
+      - name: Run analysers
+        run: |
+          mkdir -p .review
+          uv run ruff check --output-format sarif --output-file .review/ruff.sarif \
+            src/ tests/ scripts/ evals/ || true
+          .tools/opengrep scan --config semgrep-rules/ --sarif --output .review/opengrep.sarif . || true
+
+      - name: Merge SARIF
+        run: uv run python scripts/merge_sarif.py --review-dir .review --fail-on-findings
+
+      - name: Upload SARIF
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-sarif
+          path: .review/*.sarif
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Whole history: a secret committed and then removed in a later commit is still
+          # reachable, and a shallow clone would report the repository clean.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan history
+        run: |
+          mkdir -p .review
+          gitleaks git . --redact --exit-code 1 \
+            --report-format sarif --report-path .review/gitleaks.sarif
+
+      - name: Upload SARIF
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitleaks-sarif
+          path: .review/gitleaks.sarif

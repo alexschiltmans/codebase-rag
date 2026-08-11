@@ -2,6 +2,7 @@
 
 import sqlite3
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -257,7 +258,7 @@ class TestQdrantStore:
         mock_client_cls.return_value = mock_client
 
         mock_emb = MagicMock()
-        mock_emb.get_embeddings.return_value = [[0.1, 0.2, 0.3]]
+        mock_emb.get_embeddings.return_value = [[0.6, 0.8, 0.0]]
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
@@ -280,7 +281,7 @@ class TestQdrantStore:
         mock_client_cls.return_value = mock_client
 
         mock_emb = MagicMock()
-        mock_emb.get_embeddings.return_value = [[0.1, 0.2, 0.3]]
+        mock_emb.get_embeddings.return_value = [[0.6, 0.8, 0.0]]
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
@@ -353,7 +354,7 @@ class TestQdrantStore:
         mock_client_cls.return_value = mock_client
 
         mock_emb = MagicMock()
-        mock_emb.get_query_embedding.return_value = [0.1, 0.2, 0.3]
+        mock_emb.get_query_embedding.return_value = [0.6, 0.8, 0.0]
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
@@ -381,7 +382,7 @@ class TestQdrantStore:
         mock_client_cls.return_value = mock_client
 
         mock_emb = MagicMock()
-        mock_emb.get_query_embedding.return_value = [0.1, 0.2]
+        mock_emb.get_query_embedding.return_value = [0.6, 0.8]
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
@@ -411,11 +412,11 @@ class TestQdrantStore:
 
         mock_emb = MagicMock()
         mock_emb.model_name = "sentence-transformers/all-mpnet-base-v2"
-        mock_emb.get_embeddings.return_value = [[0.1, 0.2, 0.3]]
+        mock_emb.get_embeddings.return_value = [[0.6, 0.8, 0.0]]
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
-        with pytest.raises(ValueError, match="other/model.*all-mpnet-base-v2"):
+        with pytest.raises(ValueError, match=r"other/model.*all-mpnet-base-v2"):
             store.add_documents([Document(page_content="hello", metadata={"source": "a.py"})])
 
         mock_client.upsert.assert_not_called()
@@ -551,7 +552,7 @@ class TestQdrantStore:
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
-        with pytest.raises(ValueError, match="768-dimension vectors.*produces 1024"):
+        with pytest.raises(ValueError, match=r"768-dimension vectors.*produces 1024"):
             store.similarity_search_with_score("query")
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
@@ -574,7 +575,7 @@ class TestQdrantStore:
         mock_emb_cls.return_value = mock_emb
 
         store = QdrantStore()
-        with pytest.raises(ValueError, match="other/model.*all-mpnet-base-v2"):
+        with pytest.raises(ValueError, match=r"other/model.*all-mpnet-base-v2"):
             store.similarity_search_with_score("query")
 
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
@@ -656,7 +657,7 @@ class TestQdrantStore:
     @patch("codebase_rag.database.qdrant_store.EmbeddingManager")
     @patch("codebase_rag.database.qdrant_store.QdrantClient")
     def test_absent_filter_sends_no_filter(
-        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock, filter_query: dict | None
+        self, mock_client_cls: MagicMock, mock_emb_cls: MagicMock, filter_query: dict[str, Any] | None
     ) -> None:
         store, mock_client = self._searching_store(mock_client_cls, mock_emb_cls)
 

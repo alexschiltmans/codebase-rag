@@ -13,7 +13,6 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Literal
 
 import streamlit as st
@@ -97,7 +96,7 @@ class IngestionManager:
                     job.state = "cancelled"
                     job.finished_at = time.time()
                 return
-            except Exception as exc:  # noqa: BLE001 - surfaced via IngestJob.error, not swallowed
+            except Exception as exc:
                 logger.error("Ingestion error for %s: %s", source, exc)
                 with self._lock:
                     job.state = "failed"
@@ -112,7 +111,7 @@ class IngestionManager:
             if self._on_success:
                 try:
                     self._on_success(job)
-                except Exception as exc:  # noqa: BLE001 - a hook failure must not undo a real success
+                except Exception as exc:
                     logger.error("Post-ingest hook failed for %s: %s", source, exc)
 
         threading.Thread(target=_run, daemon=True).start()
@@ -169,7 +168,7 @@ class IngestionManager:
 
 def _load_or_create_bm25_retriever() -> BM25Retriever:
     """Load BM25 retriever from cache or create a new (empty) one."""
-    cache_dir = Path("data/cache")
+    cache_dir = Config.get_instance().cache_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
     bm25_file = cache_dir / "bm25_retriever.json"
 
@@ -198,7 +197,7 @@ def _check_placement(runtime: AppRuntime) -> dict[str, Any]:
     """
     try:
         return runtime.llm.check_runtime_placement()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning("Could not determine runtime placement: %s", e)
         # Same shape as the clients return, so a caller never has to special-case the failure.
         return {"placement": "unknown", "url": getattr(runtime.llm, "base_url", None)}
@@ -229,13 +228,13 @@ def _run_health_checks(runtime: AppRuntime) -> None:
             runtime.config.llm_model_name,
             placement_status.get("placement", "unknown"),
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         # Deliberately not `return`-ing here: the LLM check and the vector-store
         # warm-up are independent, so a failure in one must not skip the other.
         logger.warning("Health checks failed: %s", e)
     try:
         _warm_up_vector_store(runtime.vector_retriever)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning("Vector store warm-up failed: %s", e)
 
 
@@ -311,10 +310,10 @@ class AppRuntime:
         self.bm25_retriever = index
 
     def _on_ingest_success(self, _job: IngestJob) -> None:
-        get_repo_list.clear()  # type: ignore[attr-defined]
+        get_repo_list.clear()
         from codebase_rag.retrieval.bm25_search import rebuild_bm25_index
 
-        cache_dir = Path("data/cache")
+        cache_dir = self.config.cache_dir
         self.swap_bm25(rebuild_bm25_index(cache_dir))
 
     def _check_auto_ingest(self) -> None:
@@ -330,7 +329,7 @@ class AppRuntime:
             try:
                 if self.qdrant_store.list_repos():
                     return
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Could not list repos for auto-ingestion check", exc_info=True)
 
         logger.info("No data found. Auto-ingesting default repo: %s", default_repo)
@@ -342,10 +341,10 @@ class AppRuntime:
         from codebase_rag.retrieval.bm25_search import delete_bm25_corpus, rebuild_bm25_index
 
         deleted = self.qdrant_store.delete_by_repo(repo_name)
-        cache_dir = Path("data/cache")
+        cache_dir = self.config.cache_dir
         delete_bm25_corpus(cache_dir / "bm25_corpus", repo_name)
         self.swap_bm25(rebuild_bm25_index(cache_dir))
-        get_repo_list.clear()  # type: ignore[attr-defined]
+        get_repo_list.clear()
         return deleted
 
 
@@ -364,7 +363,7 @@ def get_repo_list(_qdrant_store: QdrantStore) -> list[str]:
     """
     try:
         return _qdrant_store.list_repos()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning("Could not connect to Qdrant: %s", e)
         return []
 

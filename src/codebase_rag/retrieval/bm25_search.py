@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 from langchain_core.documents import Document
 from rank_bm25 import BM25Okapi
@@ -16,11 +17,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_TOP_K = 4
 
 
-def _doc_to_dict(doc: Document) -> dict:
+def _doc_to_dict(doc: Document) -> dict[str, Any]:
     return {"page_content": doc.page_content, "metadata": doc.metadata}
 
 
-def _dict_to_doc(data: dict) -> Document:
+def _dict_to_doc(data: dict[str, Any]) -> Document:
     return Document(page_content=data["page_content"], metadata=data.get("metadata", {}))
 
 

@@ -99,14 +99,18 @@ def format_truncation_report(report: TruncationReport) -> list[str]:
 
     if not report.over_limit:
         return [
-            f"Truncation check: 0 of {report.chunks} chunks exceed the "
-            f"{report.limit}-token embedding limit, nothing was truncated"
+            (
+                f"Truncation check: 0 of {report.chunks} chunks exceed the "
+                f"{report.limit}-token embedding limit, nothing was truncated"
+            )
         ]
 
     lines = [
-        f"Truncation check: {report.over_limit} of {report.chunks} chunks "
-        f"({report.share:.2f}%) exceed the {report.limit}-token embedding limit "
-        f"and lose their tail when embedded"
+        (
+            f"Truncation check: {report.over_limit} of {report.chunks} chunks "
+            f"({report.share:.2f}%) exceed the {report.limit}-token embedding limit "
+            f"and lose their tail when embedded"
+        )
     ]
     lines.extend(
         f"  {entry.file_type}: {entry.over_limit}/{entry.chunks} ({entry.share:.2f}%)"

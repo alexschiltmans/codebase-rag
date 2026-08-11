@@ -24,7 +24,7 @@ def estimate_tokens(text: str, tokenizer: Any = None) -> int:
     if tokenizer is not None:
         try:
             return len(tokenizer.encode(text))
-        except Exception as exc:  # noqa: BLE001 - any tokenizer failure falls back to the heuristic
+        except Exception as exc:
             logger.debug("Tokenizer failed, falling back to chars/4 estimate: %s", exc)
     return max(1, len(text) // CHARS_PER_TOKEN)
 

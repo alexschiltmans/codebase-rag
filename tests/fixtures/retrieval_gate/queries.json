@@ -1,0 +1,92 @@
+[
+  {
+    "id": "bearer-token-signing",
+    "query": "how is a bearer token signed and its signature verified",
+    "expected_sources": ["auth_tokens.py"]
+  },
+  {
+    "id": "constant-time-compare",
+    "query": "constant time comparison so a mismatch does not leak through timing",
+    "expected_sources": ["auth_tokens.py", "password_hashing.py"]
+  },
+  {
+    "id": "token-bucket-refill",
+    "query": "token bucket burst size and continuous refill rate per second",
+    "expected_sources": ["rate_limiter.py"]
+  },
+  {
+    "id": "lru-eviction",
+    "query": "evict the least recently used entry once the cache is full",
+    "expected_sources": ["cache_eviction.py"]
+  },
+  {
+    "id": "csv-formula-injection",
+    "query": "stop a spreadsheet executing an exported cell beginning with an equals sign",
+    "expected_sources": ["csv_export.py"]
+  },
+  {
+    "id": "csv-byte-order-mark",
+    "query": "why does the export need a byte order mark for non-ASCII names",
+    "expected_sources": ["csv_export.py"]
+  },
+  {
+    "id": "dead-letter-store",
+    "query": "messages that exhausted their delivery attempts go to a dead letter store",
+    "expected_sources": ["email_queue.py"]
+  },
+  {
+    "id": "haversine-distance",
+    "query": "great circle distance in kilometres between two latitude longitude points",
+    "expected_sources": ["geo_distance.py"]
+  },
+  {
+    "id": "exif-orientation",
+    "query": "apply the EXIF orientation tag before resizing so thumbnails are upright",
+    "expected_sources": ["image_thumbnails.py"]
+  },
+  {
+    "id": "pbkdf2-salt",
+    "query": "per password salt and pbkdf2 iteration count stored with the digest",
+    "expected_sources": ["password_hashing.py"]
+  },
+  {
+    "id": "rehash-on-login",
+    "query": "upgrade a stored password hash to current policy when the user logs in",
+    "expected_sources": ["password_hashing.py"]
+  },
+  {
+    "id": "cursor-tiebreak",
+    "query": "cursor carries a tiebreak identifier so duplicate sort values are not skipped",
+    "expected_sources": ["pagination.py"]
+  },
+  {
+    "id": "full-jitter",
+    "query": "full jitter spreads retries instead of clustering them at the same moment",
+    "expected_sources": ["retry_backoff.py"]
+  },
+  {
+    "id": "migration-out-of-order",
+    "query": "refuse a pending migration whose version sorts below one already applied",
+    "expected_sources": ["schema_migrations.py"]
+  },
+  {
+    "id": "stale-subscribers",
+    "query": "drop stale websocket subscribers discovered during a broadcast",
+    "expected_sources": ["websocket_hub.py"]
+  },
+  {
+    "id": "blue-green-rollout",
+    "query": "blue green rollout shifting traffic in steps and holding at each one",
+    "expected_sources": ["deployment.md"]
+  },
+  {
+    "id": "no-message-broker",
+    "query": "why is there no message broker or service mesh in this design",
+    "expected_sources": ["architecture.md"]
+  },
+  {
+    "id": "release-2-3-1",
+    "query": "what shipped in release 2.3.1",
+    "expected_sources": ["changelog.md"]
+  }
+]

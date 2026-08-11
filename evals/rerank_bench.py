@@ -87,14 +87,25 @@ def truncate(text: str, max_chars: int) -> str:
 class CrossEncoderReranker:
     """Pairwise cross-encoder: one (question, passage) forward pass per candidate."""
 
-    def __init__(self, model_name: str, batch_size: int, max_chars: int, device: str | None = None) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        batch_size: int,
+        max_chars: int,
+        device: str | None = None,
+        revision: str | None = None,
+    ) -> None:
         from sentence_transformers import CrossEncoder
 
         self.model_name = model_name
         self.batch_size = batch_size
         self.max_chars = max_chars
         self.device = device
-        self.model = CrossEncoder(model_name, device=device)
+        self.revision = revision
+        # Unpinned by default resolves to the hub's default branch, so a rerank figure published
+        # from one run is not comparable with one from another day. Pass a commit sha when the
+        # numbers are going into a report.
+        self.model = CrossEncoder(model_name, device=device, revision=revision)
 
     def rank(self, question: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         pairs = [(question, truncate(c["page_content"], self.max_chars)) for c in candidates]
@@ -244,7 +255,7 @@ def build_reranker(args: argparse.Namespace) -> CrossEncoderReranker | ListwiseL
     if args.reranker is None:
         return None
     if args.kind == "cross-encoder":
-        return CrossEncoderReranker(args.reranker, args.batch_size, args.max_chars, args.device)
+        return CrossEncoderReranker(args.reranker, args.batch_size, args.max_chars, args.device, args.revision)
     return ListwiseLLMReranker(args.reranker, args.window, args.stride, args.max_chars, args.think)
 
 
@@ -280,6 +291,11 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--revision",
+        default=None,
+        help="Model revision for a cross-encoder arm. Use a commit sha for reportable benchmark numbers.",
+    )
+    parser.add_argument(
         "--think",
         action="store_true",
         help="Let a reasoning model think before ranking. Roughly 20x the latency per window.",
@@ -303,14 +319,18 @@ def main() -> None:
     saved_depth = max(len(entry["candidates"]) for entry in candidate_lists)
     input_depth = args.input_depth or saved_depth
 
+    revision_suffix = f"_rev-{slugify(args.revision)}" if args.revision else ""
     arm = (
         f"{slugify(args.reranker) if args.reranker else 'no-reranker'}"
+        f"{revision_suffix}"
         f"_on-{args.candidates.stem}_in{input_depth}_out{args.output_depth}"
     )
     logger.info("Reranking %s with %s (input depth %d)", args.candidates.name, args.reranker or "nothing", input_depth)
 
     if args.reranker and args.kind == "llm" and args.stride < 1:
         parser.error("--stride must be at least 1; a smaller value never advances the window.")
+    if args.revision and args.kind != "cross-encoder":
+        parser.error("--revision is only valid for cross-encoder rerankers.")
     if args.window < 1:
         parser.error("--window must be at least 1.")
 
@@ -321,6 +341,7 @@ def main() -> None:
         "arm": arm,
         "candidates_file": str(args.candidates),
         "reranker": args.reranker,
+        "reranker_revision": args.revision,
         "kind": args.kind if args.reranker else None,
         "input_depth": input_depth,
         "output_depth": args.output_depth,

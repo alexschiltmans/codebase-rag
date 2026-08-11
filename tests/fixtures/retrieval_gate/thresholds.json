@@ -1,0 +1,16 @@
+{
+  "k": 5,
+  "tolerance": 0.005,
+  "recorded_from": "18 queries over 92 chunks from tests/fixtures/retrieval_gate/corpus",
+  "note": "Both arms are exactly deterministic, so this band is not absorbing run-to-run noise; there is none. It is safe to make it this tight because the metrics are exact rationals once rank order is fixed, and rank order is not marginal: the smallest relative score gap between adjacent ranks in any query's top 6 is 1.5e-3, twelve orders of magnitude above float64 noise, so no platform reorders these results. The width is set just under the smallest behavioural move actually observed while mutation-testing the arms (0.0093 of MRR, from a BM25 minimum-token-length change that shifts one query from rank 2 to rank 3). Anything that changes retrieval behaviour at all should land outside this band and be re-recorded deliberately.",
+  "arms": {
+    "bm25": {
+      "recall_at_k": { "floor": 0.9394, "ceiling": 0.9494 },
+      "mrr": { "floor": 0.8191, "ceiling": 0.8291 }
+    },
+    "fusion": {
+      "recall_at_k": { "floor": 0.995, "ceiling": 1.0 },
+      "mrr": { "floor": 0.7839, "ceiling": 0.7939 }
+    }
+  }
+}

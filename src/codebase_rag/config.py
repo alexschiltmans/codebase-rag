@@ -59,6 +59,12 @@ class Config:
     repo_urls: list[str] = field(default_factory=list)
     repo_local_path: Path = Path("./data/repos")
 
+    # Local index directory: the BM25 corpus, the combined BM25 index, the document cache, and
+    # the freshness sidecars all live under here. Every reader and writer resolves it from this
+    # one field so that pointing the app at another directory moves all of them together, and so
+    # that the set of paths the process may deserialise from stays enumerable.
+    cache_dir: Path = Path("./data/cache")
+
     # Vector database settings (Qdrant)
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
@@ -77,6 +83,11 @@ class Config:
     llm_api_key: str = ""
     llm_model_name: str = "sam860/LFM2:350m"
     embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
+    # Hub revision (commit sha or tag) the embedding model resolves to. Empty means the hub's
+    # default branch, which is whatever it points at on the day of the run: two runs weeks apart
+    # then embed with different weights under the same model name, moving retrieval scores with
+    # nothing in the diff to explain it. Set this before publishing any measurement.
+    embedding_model_revision: str = ""
     embedding_query_prompt: str = ""
     embedding_document_prompt: str = ""
     embedding_max_seq_length: int | None = None
@@ -130,6 +141,7 @@ class Config:
             cls._instance = cls(
                 repo_urls=repo_urls,
                 repo_local_path=Path(_env("REPO_LOCAL_PATH", str(cls.repo_local_path))),
+                cache_dir=Path(_env("CACHE_DIR", str(cls.cache_dir))),
                 qdrant_host=_env("QDRANT_HOST", cls.qdrant_host),
                 qdrant_port=_env_int("QDRANT_PORT", cls.qdrant_port),
                 collection_name=_env("COLLECTION_NAME", cls.collection_name),
@@ -141,6 +153,7 @@ class Config:
                 llm_api_key=_env("LLM_API_KEY", cls.llm_api_key),
                 llm_model_name=_env("LLM_MODEL_NAME", cls.llm_model_name),
                 embedding_model=_env("EMBEDDING_MODEL", cls.embedding_model),
+                embedding_model_revision=_env("EMBEDDING_MODEL_REVISION", cls.embedding_model_revision),
                 embedding_query_prompt=_env("EMBEDDING_QUERY_PROMPT", cls.embedding_query_prompt),
                 embedding_document_prompt=_env("EMBEDDING_DOCUMENT_PROMPT", cls.embedding_document_prompt),
                 embedding_max_seq_length=_env_optional_int("EMBEDDING_MAX_SEQ_LENGTH", cls.embedding_max_seq_length),

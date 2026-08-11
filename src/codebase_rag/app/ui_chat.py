@@ -65,7 +65,7 @@ def append_message(
     try:
         chat_manager = get_chat_history_manager()
         chat_manager.save_chat_history(chat_id, state.chat_history_for(chat_id))
-        list_chat_metadata.clear()  # type: ignore[attr-defined]
+        list_chat_metadata.clear()
     except (OSError, RuntimeError, ValueError) as e:
         logger.error("Failed to save chat history: %s", e)
 
@@ -109,7 +109,7 @@ def process_pending_query(runtime: AppRuntime, state: SessionState) -> None:
         truncated_chars = last_result.get("metrics", {}).get("question_truncated_chars", 0)
         append_message(state, "assistant", answer, sources, question_truncated=bool(truncated_chars))
         state.query_succeeded()
-    except Exception as e:  # noqa: BLE001 - state-machine boundary, see docstring
+    except Exception as e:
         logger.error("Error generating response: %s", e)
         state.query_failed(str(e))
 

@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,7 +47,7 @@ class TestFormatCompact:
 
     def test_format_compact_empty(self) -> None:
         """Compact format with no results."""
-        results: list[tuple] = []
+        results: list[tuple[Any, ...]] = []
         output = _format_compact(results)
         assert output == ""
 
@@ -78,7 +79,7 @@ class TestFormatJson:
 
     def test_format_json_empty(self) -> None:
         """JSON format with no results."""
-        results: list[tuple] = []
+        results: list[tuple[Any, ...]] = []
         output = _format_json(results)
         data = json.loads(output)
         assert data == []
@@ -327,7 +328,7 @@ class TestBudgetTrimming:
 
     def test_trim_results_empty(self) -> None:
         """Empty results remain empty."""
-        results: list[tuple] = []
+        results: list[tuple[Any, ...]] = []
         trimmed = _trim_results_by_budget(results, 1000, "compact")
         assert trimmed == []
 

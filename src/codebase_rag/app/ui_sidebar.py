@@ -499,6 +499,6 @@ def _delete_chat(state: SessionState, chat_id: str) -> None:
 
     try:
         get_chat_history_manager().delete_chat_history(chat_id)
-        list_chat_metadata.clear()  # type: ignore[attr-defined]
+        list_chat_metadata.clear()
     except (OSError, RuntimeError, ValueError) as e:
         logger.error("Failed to delete chat from persistent storage: %s", e)

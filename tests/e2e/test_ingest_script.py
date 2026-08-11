@@ -93,7 +93,7 @@ def test_ingest_pipeline(
 @pytest.mark.e2e
 @patch("argparse.ArgumentParser.parse_args")
 @patch("scripts.ingest.IngestPipeline")
-def test_main_script(mock_pipeline_class: MagicMock, mock_parse_args: MagicMock, temp_data_dir: Path) -> None:  # noqa: ARG001
+def test_main_script(mock_pipeline_class: MagicMock, mock_parse_args: MagicMock, temp_data_dir: Path) -> None:
     """Test the main function of the ingest script."""
     args = mock_parse_args.return_value
     args.dirs = ["docs"]

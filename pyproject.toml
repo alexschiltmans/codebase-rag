@@ -37,6 +37,7 @@ dev = [
     "pytest>=9.1,<10",
     "pytest-cov>=7.1,<8",
     "pytest-randomly>=4.1,<5",
+    "pytest-asyncio>=1.0,<2",
     "types-requests>=2.33",
     "pre-commit>=4.6",
     "pip-audit>=2.10,<3",
@@ -49,15 +50,43 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = ["data/"]
+# tests/fixtures/ holds frozen measurement inputs, not source. Formatting them would re-cut their
+# chunk boundaries and move the retrieval gate's recorded numbers, so the formatter must not touch
+# them and the linter has no business judging them.
+extend-exclude = ["data/", "tests/fixtures/"]
 
 [tool.ruff.lint]
-select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "BLE", "FBT", "A", "C4", "ICN", "PIE", "T20", "PT", "RET", "SIM"]
+select = [
+    "E", "F", "W", "B", "I", "N", "UP", "ANN", "S", "BLE", "FBT", "A", "C4", "ICN", "PIE",
+    "T20", "PT", "RET", "SIM",
+    # Added once the families above were clean. Each of these was measured against the tree
+    # before being switched on, so none of them is carrying a suppression list.
+    "ASYNC",  # blocking calls inside async defs, which is why the HTTP surface matters here
+    "LOG",    # logging misuse the G rules do not cover
+    "G",      # %s-style logging args rather than f-strings, so records stay lazily formatted
+    "DTZ",    # naive datetimes
+    "ERA",    # commented-out code
+    "EXE",    # shebang and executable-bit mismatches
+    "FA",     # missing __future__ annotations where a runtime annotation would break
+    "FLY",    # static str.join over a literal sequence
+    "FURB",   # modernisations ruff can prove safe
+    "INT",    # gettext misuse
+    "ISC",    # implicit string concatenation
+    "PERF",   # loop patterns with a direct builtin equivalent
+    "PYI",    # stub and special-method typing conventions
+    "Q",      # quote style, matching the formatter
+    "RSE",    # raise with unnecessary parentheses
+    "RUF",    # ruff's own rules, including stale-noqa detection
+    "SLOT",   # __slots__ on subclasses of immutable builtins
+    "T10",    # leftover debugger calls
+    "YTT",    # sys.version comparisons
+]
 ignore = [
     "ANN401",   # Dynamically typed expressions (typing.Any) disallowed — unavoidable for **kwargs and duck-typed APIs
     "BLE001",   # Blind exception catches — intentional at infrastructure boundaries (Qdrant, git, subprocess)
     "FBT001",   # Boolean-typed positional argument — these are keyword-only defaults
     "FBT002",   # Boolean default positional argument — these are keyword-only defaults
+    "ISC001",   # Single-line implicit concatenation: the formatter owns this and ruff warns on the overlap
 ]
 
 [tool.ruff.format]
@@ -76,6 +105,7 @@ line-ending = "auto"
     "PT017",  # @patch params misidentified as fixtures
     "PT019",  # @patch params misidentified as fixtures
     "FBT003", # boolean positional in patch.object calls
+    "RUF059", # unpacking a full return tuple documents its shape even where only part is asserted on
 ]
 "evals/**" = [
     "T201",   # print is expected in CLI evaluation scripts
@@ -83,6 +113,9 @@ line-ending = "auto"
 ]
 "scripts/check_tracked_imports.py" = [
     "T201",   # print is expected in a make-verify diagnostic script
+]
+"scripts/merge_sarif.py" = [
+    "T201",   # print is this script's output; it reports what it merged to the terminal
 ]
 "src/codebase_rag/cli.py" = [
     "T201",   # print is expected in CLI scripts
@@ -93,13 +126,16 @@ line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
+strict = true
 check_untyped_defs = true
+# The vector store, Streamlit, and the ragas/langchain stack ship no usable stubs, so their
+# imports resolve to Any. Without this every module that touches them fails to import at all,
+# which is a worse trade than the Any that strict mode otherwise objects to.
 ignore_missing_imports = true
 explicit_package_bases = true
 mypy_path = "src"
+# Frozen fixture corpus, not code this project ships. See the ruff exclusion above.
+exclude = "^tests/fixtures/"
 
 [tool.coverage.run]
 relative_files = true
@@ -112,6 +148,13 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+# Strict rather than auto: an async test only runs under a loop when it says so with the marker.
+# Under auto, a coroutine test that loses its marker in a refactor still gets collected and still
+# passes, so the mode that looks more convenient is the one that can hide a test that stopped
+# running. The loop is per-test, which is what keeps a client bound to one test's loop from being
+# reused by the next.
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: needs live Qdrant (make services-start)",
     "e2e: end-to-end flow, needs live services",

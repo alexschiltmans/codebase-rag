@@ -22,6 +22,7 @@ units.
 """
 
 import logging
+from typing import Any
 
 from langchain_core.documents import Document
 
@@ -97,7 +98,7 @@ class HybridRetriever:
 
         # Reciprocal Rank Fusion: each ranker contributes weight / (rrf_k + rank),
         # using each list's own rank order rather than its raw score magnitude.
-        doc_to_score: dict[str, dict] = {}
+        doc_to_score: dict[str, dict[str, Any]] = {}
 
         def doc_id(doc: Document) -> str:
             return str(doc.metadata.get("source", "")) + str(doc.metadata.get("chunk_index", ""))

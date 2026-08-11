@@ -82,9 +82,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
 from langfuse import Langfuse
 from ragas import evaluate
-from ragas.dataset_schema import EvaluationDataset, MultiTurnSample, SingleTurnSample
+from ragas.dataset_schema import EvaluationDataset, EvaluationResult, MultiTurnSample, SingleTurnSample
 from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.evaluation import EvaluationResult
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics._answer_relevance import AnswerRelevancy
 from ragas.metrics._context_recall import ContextRecall
@@ -140,7 +139,7 @@ JUDGE_NUM_PREDICT = 4096
 # wrapper installed in `_install_schema_constrained_judging`, read by
 # `_SchemaConstrainedChatOllama` — see that function for why this is a context
 # var rather than a constructor argument.
-_JUDGE_RESPONSE_SCHEMA: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+_JUDGE_RESPONSE_SCHEMA: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
     "judge_response_schema", default=None
 )
 
@@ -193,7 +192,7 @@ def _install_schema_constrained_judging() -> None:
     PydanticPrompt._schema_constrained = True  # type: ignore[attr-defined]
 
 
-def build_ragas_metrics(wrapped_llm: Any, wrapped_embeddings: Any) -> list:
+def build_ragas_metrics(wrapped_llm: Any, wrapped_embeddings: Any) -> list[Any]:
     """Build the ragas metrics this harness scores, in report order.
 
     Single source of truth for the metric set: `RAGAS_METRIC_NAMES` (the
@@ -476,7 +475,7 @@ def build_rag_chain(retriever_type: str = "bm25", repos: list[str] | None = None
     )
 
 
-def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict]) -> list[dict]:
+def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Run the RAG chain on each test question and collect results."""
     results = []
     for i, item in enumerate(testset):
@@ -524,7 +523,7 @@ def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict]) -> list[dict]:
     return results
 
 
-def compute_custom_metrics(results: list[dict]) -> dict:
+def compute_custom_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     """Compute custom keyword-based metrics (no LLM judge required)."""
     keyword_recalls = []
     source_precisions = []
@@ -622,12 +621,12 @@ def check_coverage_gate(
 
 
 def run_ragas_evaluation(
-    results: list[dict],
+    results: list[dict[str, Any]],
     judge_model_name: str,
     max_workers: int,
     skip_metrics: set[str],
     judge_timeout_s: int,
-) -> dict:
+) -> dict[str, Any]:
     """Run ragas evaluation metrics on the results.
 
     Args:
@@ -731,7 +730,9 @@ def run_ragas_evaluation(
         return {"scores": {"ragas_error": str(e)}, "coverage": {}, "requested_metrics": requested_metrics}
 
 
-def log_to_langfuse(results: list[dict], custom_metrics: dict, ragas_scores: dict) -> None:
+def log_to_langfuse(
+    results: list[dict[str, Any]], custom_metrics: dict[str, Any], ragas_scores: dict[str, Any]
+) -> None:
     """Log evaluation scores to Langfuse."""
     config = Config.get_instance()
     if not config.langfuse_enabled:
@@ -783,10 +784,10 @@ def log_to_langfuse(results: list[dict], custom_metrics: dict, ragas_scores: dic
 
 
 def generate_results_markdown(
-    results: list[dict],
-    custom_metrics: dict,
-    ragas_scores: dict,
-    ragas_coverage: dict,
+    results: list[dict[str, Any]],
+    custom_metrics: dict[str, Any],
+    ragas_scores: dict[str, Any],
+    ragas_coverage: dict[str, Any],
     judge_model_name: str,
     is_self_judged: bool,
     latency_probe_s: float,
@@ -878,7 +879,9 @@ def generate_results_markdown(
     return "\n".join(lines)
 
 
-def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict], repos: list[str]) -> str:
+def generate_ablation_markdown(
+    all_metrics: dict[str, dict[str, Any]], testset: list[dict[str, Any]], repos: list[str]
+) -> str:
     """Generate a markdown ablation report comparing retriever configurations.
 
     Args:
@@ -946,10 +949,10 @@ def generate_ablation_markdown(all_metrics: dict[str, dict], testset: list[dict]
 def publish_retriever_results(
     evals_dir: Path,
     retriever_type: str,
-    results: list[dict],
-    custom_metrics: dict,
-    ragas_scores: dict,
-    ragas_coverage: dict,
+    results: list[dict[str, Any]],
+    custom_metrics: dict[str, Any],
+    ragas_scores: dict[str, Any],
+    ragas_coverage: dict[str, Any],
     requested_metrics: set[str],
     latency_probe_s: float,
     judge_model_name: str,
@@ -1068,7 +1071,7 @@ def main() -> None:
     else:
         logger.info("Using '%s' as a fixed RAGAS judge model", judge_model_name)
 
-    all_custom_metrics: dict[str, dict] = {}
+    all_custom_metrics: dict[str, dict[str, Any]] = {}
 
     for retriever_type in RETRIEVER_TYPES:
         logger.info("=== Retriever: %s ===", retriever_type)

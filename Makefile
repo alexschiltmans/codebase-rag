@@ -198,6 +198,32 @@ typecheck: venv ## Run mypy
 .PHONY: check
 check: lint format-check typecheck test-unit ## Fast gate: lint, format, types, unit tests
 
+# ── Static analysis / SARIF ──────────────────────────────────────────────────
+# Every analyser that can name a file, a line, and a rule writes SARIF into .review/, and
+# merge_sarif.py collapses them into one file. That merged file is what a review reads alongside
+# a change's spec delta: located findings on one side, stated intent on the other, instead of a
+# raw diff and a guess about which parts were deliberate.
+REVIEW_DIR := .review
+OPENGREP   := .tools/opengrep
+
+.PHONY: opengrep-install
+opengrep-install: ## Fetch the pinned Opengrep binary into .tools/
+	@bash scripts/install_opengrep.sh
+
+.PHONY: scan
+scan: venv opengrep-install ## Run ruff and Opengrep into .review/*.sarif, then merge
+	@mkdir -p $(REVIEW_DIR)
+	@printf "$(BLUE)ruff → $(REVIEW_DIR)/ruff.sarif$(NC)\n"
+	@$(PYTHON) -m ruff check --output-format sarif --output-file $(REVIEW_DIR)/ruff.sarif \
+		src/ tests/ scripts/ evals/ || true
+	@printf "$(BLUE)opengrep → $(REVIEW_DIR)/opengrep.sarif$(NC)\n"
+	@$(OPENGREP) scan --config semgrep-rules/ --sarif --output $(REVIEW_DIR)/opengrep.sarif . >/dev/null || true
+	@$(PYTHON) scripts/merge_sarif.py --review-dir $(REVIEW_DIR)
+
+.PHONY: scan-strict
+scan-strict: scan ## Same as scan, but exit non-zero if anything was found
+	@$(PYTHON) scripts/merge_sarif.py --review-dir $(REVIEW_DIR) --fail-on-findings
+
 # Run deliberately, not part of the gate: it queries an advisory database and can't run offline.
 # `-r` + `--disable-pip` avoids pip-audit building its own resolver venv, whose `ensurepip` aborts
 # with SIGABRT under uv-managed interpreters; `--no-emit-project` and `--require-hashes` keep the

@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Iterator
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -14,7 +15,7 @@ from codebase_rag.services.answer_service import answer, last_citations, stream_
 router = APIRouter()
 
 
-def _sse_event(event: str, data: dict) -> str:
+def _sse_event(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 

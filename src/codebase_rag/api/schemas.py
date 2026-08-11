@@ -1,6 +1,6 @@
 """Pydantic request/response models for the HTTP API."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -64,4 +64,4 @@ class IngestJobSchema(BaseModel):
     source: str
     state: Literal["running", "succeeded", "failed"]
     error: str | None = None
-    result: dict | None = None
+    result: dict[str, Any] | None = None
