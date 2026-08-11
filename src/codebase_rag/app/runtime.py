@@ -337,7 +337,7 @@ class AppRuntime:
 
     def delete_repo(self, repo_name: str) -> int:
         """Delete a repo from Qdrant and rebuild BM25 so it stops being
-        retrievable via keyword search too (fixes the AI-2 leak)."""
+        retrievable via keyword search too."""
         from codebase_rag.retrieval.bm25_search import delete_bm25_corpus, rebuild_bm25_index
 
         deleted = self.qdrant_store.delete_by_repo(repo_name)

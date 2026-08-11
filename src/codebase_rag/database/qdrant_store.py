@@ -256,7 +256,6 @@ class QdrantStore:
             return
 
         try:
-            # Generate embeddings for all documents
             texts = [doc.page_content for doc in documents]
             embeddings = self.embedding_manager.get_embeddings(texts)
 
@@ -415,7 +414,7 @@ class QdrantStore:
     def _ensure_repo_index(self) -> None:
         """Ensure a keyword payload index exists on the 'repo' field.
 
-        This is idempotent — Qdrant silently ignores the call if the index
+        This is idempotent: Qdrant silently ignores the call if the index
         already exists.
         """
         with contextlib.suppress(Exception):

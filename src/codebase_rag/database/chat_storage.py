@@ -145,7 +145,6 @@ class ChatHistoryManager:
             return False
 
 
-# Singleton instance of ChatHistoryManager
 _chat_history_manager_instance = None
 
 

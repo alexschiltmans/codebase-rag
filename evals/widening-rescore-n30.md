@@ -22,7 +22,7 @@ Widening `sources` can only turn a miss into a hit, never the reverse, so every 
 MRR should rise or hold. They all rose. No arm fell. This is the expected signature of a scoring
 change, not a retrieval change, and its absence would have meant a bug in the rescoring script.
 
-## Embedder table (vector, depth 10, unthresholded) — the published headline comparison
+## Embedder table (vector, depth 10, unthresholded): the published headline comparison
 
 | embedder | hit before | hit after | delta (points) | delta (questions) |
 |---|---|---|---|---|
@@ -46,7 +46,7 @@ retrieved correctly, from a file the old test set didn't list, is what widening 
 - 4B vs shipped: 3.45 points before (1 question, already discarded as noise), now exactly tied
   (0.7931 both). Was never a headline claim.
 - 0.6B vs bge-m3: exact tie before (0.7931 both). After widening, 0.6B leads by 3.45 points (1
-  question) — inside the resolution floor, so still not a distinguishable ranking, but no longer a
+  question), inside the resolution floor, so still not a distinguishable ranking, but no longer a
   literal tie either. The pre-existing MRR-based preference for 0.6B (0.6869 vs 0.6514 after
   rescoring) is unaffected and remains the stronger signal, consistent with how the original findings
   already read this pair.

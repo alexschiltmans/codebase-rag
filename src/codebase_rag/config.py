@@ -49,13 +49,12 @@ class Config:
     """Configuration settings for the application.
 
     Uses the singleton pattern for global access to configuration.
-    Repo URLs are configured via environment variables — no defaults are provided.
+    Repo URLs are configured via environment variables; no defaults are provided.
     """
 
-    # Class variable to store the singleton instance
     _instance: ClassVar[Optional["Config"]] = None
 
-    # Repository settings — configured via REPO_URLS (comma-separated) and REPO_LOCAL_PATH
+    # Repository settings, configured via REPO_URLS (comma-separated) and REPO_LOCAL_PATH
     repo_urls: list[str] = field(default_factory=list)
     repo_local_path: Path = Path("./data/repos")
 

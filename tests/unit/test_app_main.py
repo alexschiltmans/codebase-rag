@@ -60,8 +60,8 @@ class TestDisplayAutoIngestGate:
     @patch("codebase_rag.app.main.st")
     def test_cancelled_auto_job_ungates_without_error_tone(self, mock_st: MagicMock) -> None:
         """A cancelled auto job must ungate the chat like a failed one, but
-        without borrowing the "failed" wording or warning tone (design.md:
-        cancelled is distinct from failure, no error tone)."""
+        without borrowing the "failed" wording or warning tone: cancelled is
+        distinct from failure, so no error tone."""
         runtime = MagicMock()
         runtime.ingestion.current_job.return_value = None
         runtime.ingestion.auto_job_cancelled.return_value = True

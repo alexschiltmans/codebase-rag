@@ -180,7 +180,7 @@ class TestCheckCoverageGate:
         assert check_coverage_gate(coverage, min_coverage=0.9) is None
 
     def test_skipped_metric_absent_from_coverage_cannot_fail_gate(self) -> None:
-        # A skipped metric never enters `ragas_coverage` in the first place —
+        # A skipped metric never enters `ragas_coverage` in the first place;
         # simulate that by simply not including it here.
         coverage = {"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}}
         assert check_coverage_gate(coverage, min_coverage=0.9) is None
@@ -193,7 +193,7 @@ class TestCheckCoverageGate:
         assert check_coverage_gate(coverage, min_coverage=0.9) == "answer_relevancy"
 
     def test_missing_requested_metric_is_reported_deterministically(self) -> None:
-        # 9.2: several requested metrics all missing (wholesale failure) — the
+        # 9.2: several requested metrics all missing (wholesale failure); the
         # reported name must be stable, not whichever the set happens to yield.
         requested = {"faithfulness", "answer_relevancy", "context_recall"}
         first = check_coverage_gate({}, min_coverage=0.9, requested_metrics=requested)
@@ -205,11 +205,11 @@ class TestCheckCoverageGate:
 
     def test_requested_metric_missing_from_coverage_fails_gate(self) -> None:
         # Wholesale judge-phase failure: nothing was measured at all, but
-        # something was requested — an empty `coverage` must not read as "pass".
+        # something was requested: an empty `coverage` must not read as "pass".
         assert check_coverage_gate({}, min_coverage=0.9, requested_metrics={"faithfulness"}) == "faithfulness"
 
     def test_empty_coverage_with_no_requested_metrics_passes(self) -> None:
-        # Nothing was requested (e.g. all metrics explicitly skipped) — an
+        # Nothing was requested (e.g. all metrics explicitly skipped); an
         # empty `coverage` here really does mean "nothing to check".
         assert check_coverage_gate({}, min_coverage=0.9, requested_metrics=set()) is None
 
@@ -314,7 +314,7 @@ class TestWholesaleJudgeFailureGate:
 
     def test_no_metrics_requested_is_not_a_wholesale_failure(self, tmp_path: Path) -> None:
         # All metrics explicitly skipped: empty coverage here is legitimate
-        # ("nothing asked for"), not a failure to measure — should publish.
+        # ("nothing asked for"), not a failure to measure; should publish.
         args = _publish_args(ragas_coverage={}, ragas_scores={}, requested_metrics=set())
 
         publish_retriever_results(tmp_path, "vector", **args)
@@ -345,7 +345,7 @@ class TestResolveSkipMetrics:
     def test_skipped_metric_would_be_excluded_from_scores_and_coverage(self) -> None:
         # A skipped metric is filtered out of `metrics` before `evaluate()` runs
         # (see `run_ragas_evaluation`), so it never appears as a DataFrame column
-        # in the first place — simulate that resulting frame directly.
+        # in the first place; simulate that resulting frame directly.
         df = pd.DataFrame({"faithfulness": [1.0, 1.0]})
         scores, coverage = compute_ragas_scores_and_coverage(df)
         assert "context_recall" not in scores

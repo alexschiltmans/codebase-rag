@@ -86,8 +86,6 @@ def test_load_network():
     assert network is not None
     """)
 
-    # Initialize a proper Git repository
-
     repo = git.Repo.init(temp_repo_dir)
 
     repo.git.add(".")
@@ -114,7 +112,6 @@ def test_git_loader_get_file_paths(sample_repo: Path) -> None:
         "tests/test_core.py",
     ]
 
-    # Convert all paths to strings for easier comparison
     file_paths_str = [str(path.relative_to(sample_repo)) for path in file_paths]
 
     for expected in expected_files:

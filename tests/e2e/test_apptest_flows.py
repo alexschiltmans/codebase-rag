@@ -140,7 +140,7 @@ def test_dismiss_failed_query_returns_to_idle_without_resubmitting(mocked_rag_ch
 
 @pytest.mark.e2e
 def test_new_chat_after_failure_clears_error_and_blocks_stale_retry(mocked_rag_chain: MagicMock) -> None:
-    """Regression test for UI-3: a failed query's error state must not
+    """A failed query's error state must not
     survive navigating to a new chat, and the new chat must not receive
     an orphan assistant answer from the old chat's query."""
     mocked_rag_chain.stream.side_effect = RuntimeError("backend unreachable")
@@ -204,7 +204,7 @@ def test_invalid_github_url_error_persists_until_dismissed(mocked_rag_chain: Mag
 
     assert "valid GitHub URL" in sidebar_text()
 
-    at.run()  # another rerun — the message must still be there
+    at.run()  # another rerun; the message must still be there
     assert "valid GitHub URL" in sidebar_text()
 
 
@@ -247,7 +247,7 @@ def test_local_folder_valid_path_shows_file_count_and_ingest_button(
 
 @pytest.mark.e2e
 def test_refused_github_ingest_shows_banner_and_keeps_url(mocked_rag_chain: MagicMock) -> None:
-    """Regression test for UI-1: a refused start() must not be discarded —
+    """A refused start() must not be discarded:
     the URL input must survive and an error banner must appear."""
     at = AppTest.from_file(APP_PATH)
     at.run()
@@ -269,7 +269,7 @@ def test_refused_github_ingest_shows_banner_and_keeps_url(mocked_rag_chain: Magi
 
 @pytest.mark.e2e
 def test_refused_local_ingest_shows_banner_and_keeps_selection(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
-    """Regression test for UI-2: a refused local-folder start() must not
+    """A refused local-folder start() must not
     clear the folder selection or preview."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "main.py").write_text("print('hi')")
@@ -294,8 +294,8 @@ def test_refused_local_ingest_shows_banner_and_keeps_selection(mocked_rag_chain:
 
 @pytest.mark.e2e
 def test_same_local_path_resubmittable_after_ingest(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
-    """Regression test for UI-5: the edge-triggered path sync used to make
-    the form one-shot — the same path couldn't be re-submitted after an
+    """The edge-triggered path sync used to make
+    the form one-shot: the same path couldn't be re-submitted after an
     ingest cleared the selection."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "main.py").write_text("print('hi')")
@@ -324,7 +324,7 @@ def test_same_local_path_resubmittable_after_ingest(mocked_rag_chain: MagicMock,
 
 @pytest.mark.e2e
 def test_clearing_typed_path_removes_preview(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
-    """Regression test for UI-5: clearing the typed path must clear the
+    """Clearing the typed path must clear the
     selection, preview, and Ingest button, not leave the stale state on
     screen."""
     (tmp_path / "src").mkdir()
@@ -454,7 +454,7 @@ def test_picker_selection_wins_over_stale_typed_text(mocked_rag_chain: MagicMock
     assert at.session_state["selected_folder"] == str(picked_dir)
 
     # The picked path must stay authoritative on the render after the pick too, not just
-    # the one where it landed — the stale text still sitting in the box must not revert it.
+    # the one where it landed: the stale text still sitting in the box must not revert it.
     at.run()
 
     assert not at.exception
@@ -567,7 +567,7 @@ def test_stranded_dialog_token_is_cleared_instead_of_polled_forever(mocked_rag_c
     """A token with no result and a dialog that isn't open is unrecoverable
     (the picker thread is gone). `_poll_folder_dialog` must clear the token
     and surface an error rather than leaving the wait fragment gated open
-    forever. Unlike the round-5 test, `poll()` never succeeds here — the
+    forever. Unlike the round-5 test, `poll()` never succeeds here; the
     token can never resolve on its own."""
     at = AppTest.from_file(APP_PATH)
     at.run()
@@ -587,7 +587,7 @@ def test_stranded_dialog_token_is_cleared_instead_of_polled_forever(mocked_rag_c
 
 @pytest.mark.e2e
 def test_successful_local_ingest_does_not_crash_the_sidebar(mocked_rag_chain: MagicMock, tmp_path: Path) -> None:
-    """A successful start() must clear the form without raising — assigning
+    """A successful start() must clear the form without raising: assigning
     directly to the already-instantiated text-input widget's session-state
     key would otherwise crash the rerun."""
     (tmp_path / "src").mkdir()

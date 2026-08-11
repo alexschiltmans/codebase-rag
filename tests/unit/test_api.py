@@ -1,5 +1,5 @@
 """API tests with FastAPI's TestClient. The retriever, LLM, and Qdrant store
-are all mocked — these tests exercise routing, request/response shapes, and
+are all mocked; these tests exercise routing, request/response shapes, and
 job-lock behavior, not the retrieval stack itself.
 """
 

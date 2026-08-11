@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/aschiltmansnavara/codebase-rag/actions/workflows/ci.yml"><img src="https://github.com/aschiltmansnavara/codebase-rag/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/coverage-83%25-brightgreen.svg" alt="Coverage: 83%">
+  <img src="https://img.shields.io/badge/coverage-89%25-brightgreen.svg" alt="Coverage: 89%">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT"></a>
@@ -21,7 +21,7 @@
 
 - **Fully local.** Runs entirely on your machine. Your code never leaves your hardware.
 - **BM25 retrieval by default.** The eval framework ran the same test set through vector-only, BM25-only, and hybrid RRF retrieval and measured recall for each, rather than assuming hybrid would win; BM25-only came out ahead, so that's what the app queries with. See the [retrieval stack findings](evals/retrieval-stack-findings.md).
-- **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 30 questions. See [retrieval stack findings](evals/retrieval-stack-findings.md) for the current embedder, candidate-depth and reranker measurements.
+- **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 43 questions, 42 of them scored. See [retrieval stack findings](evals/retrieval-stack-findings.md) for the current embedder, candidate-depth and reranker measurements.
 - **Observable.** Optional Langfuse integration traces every retrieval and generation step, so you can debug quality issues instead of guessing.
 - **Documented decisions.** Architecture Decision Records explain *why* each technology was chosen, not just *what* was used. See the [ADR index](docs/adr-index.md).
 - **Batteries included for the infrastructure.** `make services-start` gives you the vector DB and tracing dashboard with no configuration; `make app` starts the Streamlit app on the host. Inference is the one piece you choose: bring a native Ollama, any OpenAI-compatible server, or Docker Model Runner. A containerized Ollama is available too (`make services-start PROFILE=full`), but on macOS it runs on the CPU. [Getting Started](docs/getting-started.md) explains why that matters.
@@ -29,7 +29,7 @@
 ## Features
 
 **Retrieval Design**
-- **BM25 search.** The app queries with BM25 keyword retrieval by default. `VectorRetriever` and `HybridRetriever` (Reciprocal Rank Fusion, weighted 0.7/0.3) remain in the codebase and are exercised by the eval ablation, but no user query goes through them.
+- **BM25 search.** The Streamlit app and the CLI always query with BM25 keyword retrieval. `VectorRetriever` and `HybridRetriever` (Reciprocal Rank Fusion, weighted 0.7/0.3) stay in the codebase and are reachable three ways: the eval ablation scores them alongside BM25, the ingestion pipeline runs a hybrid search as a post-ingest check, and `RETRIEVER=hybrid` switches the HTTP API onto the fused path. That setting does not reach the app or the CLI.
 - **Language-aware chunking.** Naively splitting code by token count breaks at arbitrary lines, destroying context. Python and Markdown/RST get structure-aware splitting; `.ipynb` notebooks get their own strategy that splits code cells as Python and markdown cells as Markdown; everything else uses generic recursive splitting.
 - **Source citations.** Every answer includes the source files and repositories it drew from, so answers are verifiable.
 

@@ -56,8 +56,7 @@ def restore_codebase_rag_logger_state() -> Iterator[None]:
     module-global `_prior_level` around each test.
 
     Several `test_pipeline.py` tests call `setup_logging` directly without a matching
-    `_teardown_logging`, which (correctly, by design, see fix-ingest-logging's design.md
-    on the single-run-per-process limitation) leaves `_prior_level` captured and the
+    `_teardown_logging`, which leaves `_prior_level` captured and the
     logger's level pinned until a teardown call comes along. Without this fixture, that
     leak crosses test boundaries: whichever test runs first (order is randomized by
     pytest-randomly) permanently sets the level every later real `setup_logging` call

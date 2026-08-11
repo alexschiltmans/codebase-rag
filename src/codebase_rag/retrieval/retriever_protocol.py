@@ -8,7 +8,7 @@ from langchain_core.documents import Document
 class RetrieverProtocol(Protocol):
     """Protocol defining the interface for document retrievers.
 
-    Any retriever consumed by `RAGChain` conforms to this single method —
+    Any retriever consumed by `RAGChain` conforms to this single method:
     structural typing means `VectorRetriever`, `BM25Retriever`, and
     `HybridRetriever` satisfy it without inheriting from it.
     """

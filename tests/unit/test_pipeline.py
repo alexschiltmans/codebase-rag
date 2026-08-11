@@ -411,7 +411,7 @@ class TestIngestPipeline:
         self, mock_config_cls: MagicMock, mock_logging: MagicMock, mock_qdrant_cls: MagicMock
     ) -> None:
         """A cancel that lands right as indexing starts must not run
-        delete_by_repo — otherwise a re-ingest's existing chunks are wiped
+        delete_by_repo; otherwise a re-ingest's existing chunks are wiped
         with nothing indexed to replace them."""
         mock_config = MagicMock()
         mock_config.qdrant_host = "localhost"
@@ -883,7 +883,7 @@ class TestIngestPipeline:
 
         assert len(result) == 1
         assert result[0].metadata.get("repo") == "myrepo"
-        # DocumentProcessor should NOT have been called — cache was fresh
+        # DocumentProcessor should NOT have been called: cache was fresh
         mock_doc_proc_cls.assert_not_called()
 
     @patch("codebase_rag.data_ingestion.pipeline.DocumentProcessor")

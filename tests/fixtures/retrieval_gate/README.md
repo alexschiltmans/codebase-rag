@@ -6,16 +6,16 @@ retrieve over a corpus that does not move when the application changes.
 
 ## Contents
 
-- `corpus/` — the documents. Deliberately unrelated to this project's own subject matter, so a
+- `corpus/`: the documents. Deliberately unrelated to this project's own subject matter, so a
   query cannot accidentally match on vocabulary the retrieval code itself uses. Sixteen files
   across Python and Markdown, chunking to 92 chunks at the default 614-character chunk size.
-- `queries.json` — the query set. `expected_sources` are matched as case-insensitive substrings
+- `queries.json`: the query set. `expected_sources` are matched as case-insensitive substrings
   against retrieved document paths, the same convention `evals/retrieval_metrics.py` uses.
-- `vector_ranking.json` — a frozen ranked list per query, standing in for what a vector search
+- `vector_ranking.json`: a frozen ranked list per query, standing in for what a vector search
   returned. Generated once with a TF-IDF cosine scorer, which is a different scoring family from
   BM25, so the two arms genuinely disagree and rank fusion has something to fuse. It is a fixture,
   not a measurement: it says nothing about vector retrieval quality.
-- `thresholds.json` — the recorded band. Both a floor and a ceiling per arm per metric.
+- `thresholds.json`: the recorded band. Both a floor and a ceiling per arm per metric.
 
 ## Changing anything here
 

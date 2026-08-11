@@ -2,9 +2,9 @@
 
 Lives outside ``app/`` so the module split's "no threading in app/" rule
 (only ``IngestionManager`` may own a thread within the app package) holds
-literally, while the dialog itself — a real, kept feature per the spec's
-2026-07-19 revision of the local-folder design — still needs a background
-thread so a blocking native subprocess never freezes the UI.
+literally. The dialog is a kept feature, but running it on a background
+thread is necessary because a blocking native subprocess would otherwise
+freeze Streamlit's UI.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # A bare `choose folder` run from osascript belongs to a faceless
 # background process: the panel opens without keyboard focus, never
 # raises above the browser, and with a fullscreen browser it lands on a
-# different Space entirely — the click looks like a no-op. Routing it
+# different Space entirely: the click looks like a no-op. Routing it
 # through System Events and activating first makes the dialog take
 # focus and switch to the user's Space. First use prompts once for
 # Automation permission (osascript -> System Events).

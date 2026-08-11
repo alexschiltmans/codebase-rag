@@ -52,7 +52,7 @@ class HybridRetriever:
             bm25_weight: Weight for the BM25 ranker's contribution (default: 0.3).
             top_k: Default number of results to return (default: 5).
             rrf_k: Reciprocal Rank Fusion constant (default: 60, the standard value used
-                by Elasticsearch and the original RRF paper — it dampens the influence of
+                by Elasticsearch and the original RRF paper; it dampens the influence of
                 low ranks so results outside the top few contribute little).
         """
         self.vector_retriever = vector_retriever
@@ -72,7 +72,7 @@ class HybridRetriever:
         (so a document topping every contributing ranker scores 1.0) and returned
         for display, but are not used to filter results here: after RRF a document
         ranked #1 by even one ranker always scores well above zero, so a fixed
-        cutoff on the fused score can't distinguish relevant from irrelevant —
+        cutoff on the fused score can't distinguish relevant from irrelevant;
         relevance filtering happens upstream, on the vector retriever's raw cosine
         score (see `VectorRetriever.search`). Returns an empty list when both
         component retrievers return nothing.

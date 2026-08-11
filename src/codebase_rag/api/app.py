@@ -1,8 +1,8 @@
 """FastAPI app factory for the retrieval HTTP API.
 
-Run as its own uvicorn process next to Streamlit (see design.md), binding to
-localhost by default. Exposing it beyond localhost requires adding
-authentication first — there is none today.
+Runs as its own uvicorn process rather than mounted inside Streamlit, binding
+to localhost by default. Exposing it beyond localhost requires adding
+authentication first; there is none today.
 """
 
 from fastapi import FastAPI

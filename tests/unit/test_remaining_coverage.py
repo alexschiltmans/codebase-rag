@@ -253,7 +253,7 @@ class TestRAGChainConversationMemory:
 
     def test_retrieve_documents_calls_search_once(self) -> None:
         """Retrieval goes through the protocol's `search(query, k)` exactly
-        once — no attribute probing, no fallback call path."""
+        once: no attribute probing, no fallback call path."""
         chain = self._make_chain()
         cast(MagicMock, chain.retriever.search).return_value = [(Document(page_content="doc", metadata={}), 0.9)]
 
@@ -294,9 +294,9 @@ class TestRAGChainConversationMemory:
         assert "[MYREPO]" in sources[0]["file_name"]
 
     def test_empty_retrieval_returns_refusal_answer(self) -> None:
-        """Regression test for AI-1: an out-of-scope query, for which the
+        """An out-of-scope query, for which the
         retriever returns no documents, must reach the refusal answer and
-        cite no sources — not a hallucinated answer from stale context."""
+        cite no sources, not a hallucinated answer from stale context."""
         chain = self._make_chain()
         cast(MagicMock, chain.retriever.search).return_value = []
 
@@ -365,7 +365,7 @@ class TestHybridRetrieverExtra:
 
     def test_both_components_empty_returns_empty(self) -> None:
         """Regression test: HybridRetriever no longer filters on fused score,
-        so the only way to get [] back is both components returning nothing —
+        so the only way to get [] back is both components returning nothing.
         which is what should happen for an out-of-scope query once the
         vector retriever's own similarity threshold has done its job."""
         mock_vector = MagicMock()
@@ -525,8 +525,8 @@ class TestBM25RetrieverExtra:
         """Protocol contract: `k=None` means the retriever's own default,
         sourced from the module constant rather than an inline literal.
 
-        Five of twenty documents match, so the cap — not the number of
-        matches — is what limits the result count. The ratio matters: BM25
+        Five of twenty documents match, so the cap (not the number of
+        matches) is what limits the result count. The ratio matters: BM25
         gives a term appearing in more than about half the corpus a negative
         IDF, and those documents are then dropped by the score > 0 filter.
         """
@@ -543,7 +543,7 @@ class TestBM25RetrieverExtra:
         """Regression test: a query with no term overlap in the corpus must
         return [], not `k` zero-scored documents padded in to fill the
         result list (the bug that kept HybridRetriever's refusal path
-        unreachable — see fix-rrf-relevance-thresholds design.md)."""
+        unreachable)."""
         retriever = BM25Retriever(
             [
                 Document(page_content="power grid model calculation", metadata={}),

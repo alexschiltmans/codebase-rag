@@ -232,7 +232,7 @@ class TestLocalFolderTab:
 
 class TestFolderDialogWaitFragment:
     """Exercises the fragment function directly (via ``__wrapped__``), since
-    AppTest never runs a standalone ``run_every`` fragment tick on its own —
+    AppTest never runs a standalone ``run_every`` fragment tick on its own;
     only inline, the one time it's first encountered in a script run."""
 
     @patch("codebase_rag.app.ui_sidebar.st")

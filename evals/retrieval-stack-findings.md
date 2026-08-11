@@ -335,8 +335,8 @@ rather than a coverage one.
 
 The hardest single question is *"What happens when you try to connect a line between nodes with different
 rated voltages?"* (`component/line.hpp`, checked to be genuinely single-source: no other file in the corpus
-explains this validation rule), missed by 20 of the 22 first-stage arms. It is not unanswerable — the
-shipped model's d100 vector and hybrid arms both retrieve it, at ranks 62 and 71 — just consistently
+explains this validation rule), missed by 20 of the 22 first-stage arms. It is not unanswerable: the
+shipped model's d100 vector and hybrid arms both retrieve it, at ranks 62 and 71, just consistently
 missed by every other arm's top 10.
 
 | reranker | first stage | hit | MRR | baseline hit | baseline MRR |
@@ -464,7 +464,7 @@ they were never resting on the embedder margin that just reversed, and the figur
 same shape (bge-reranker-v2-m3 is the strongest reranker; no score threshold is safe for a newly
 adopted embedder). See those sections below for the original reasoning, which still applies.
 
-## Read this before reading any table (original measurement, N=29 — historical, see the update above)
+## Read this before reading any table (original measurement, N=29, historical, see the update above)
 
 **29 questions means one question is 3.45 points of hit rate.** Differences smaller than roughly 7
 points are two questions or fewer and are reported here as not distinguishable, not as rankings. Four
@@ -475,7 +475,7 @@ MRR is the more informative metric in this test set. It is not quantized to whol
 hit rate is, and several of the conclusions below rest on MRR moving consistently while hit rate sits
 still.
 
-## Embedder (original measurement, N=29 — historical, see the update above)
+## Embedder (original measurement, N=29, historical, see the update above)
 
 All arms: vector retrieval, depth 10, unthresholded, fp16, one corpus, one metric, **chunk size
 1000**.
@@ -502,7 +502,7 @@ its index roughly three times faster. They tie exactly on hit rate, but see the 
 because that tie is not the whole story. Both the tie and the ensemble opportunity it suggested have
 since been answered; see the ensemble section in the update above.
 
-## Candidate depth (original measurement, N=29 — historical, see the update above)
+## Candidate depth (original measurement, N=29, historical, see the update above)
 
 Depth was fixed at 10 before this work and had never been varied.
 
@@ -534,7 +534,7 @@ Across every configuration measured, exactly one question is retrieved by nothin
 
 > How do you create input data for a power-grid-model calculation?
 
-## Reranker (original measurement, N=29 — historical, see the update above)
+## Reranker (original measurement, N=29, historical, see the update above)
 
 Scored at output depth 10, over frozen candidate lists so no first stage is re-run.
 
@@ -574,7 +574,7 @@ A note for anyone re-running the listwise arm: `qwen3.5:9b` is a reasoning model
 seconds on a single 20-passage window when allowed to think, against 7 to 10 seconds with thinking
 disabled. The orderings it produced were comparable either way.
 
-## Per-question flips against the shipped configuration (original measurement, N=29 — historical, see the update above)
+## Per-question flips against the shipped configuration (original measurement, N=29, historical, see the update above)
 
 Aggregates hide which questions moved. Baseline is the shipped configuration (all-mpnet-base-v2,
 hybrid, depth 10) at hit 0.6897.

@@ -212,6 +212,7 @@ models/
 
 # OpenSpec workflow artifacts and installed skills/commands
 openspec/
+.opencode/
 .claude/skills/openspec-*/
 .claude/commands/opsx/
 .copilot/

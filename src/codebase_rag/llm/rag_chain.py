@@ -88,7 +88,7 @@ class RAGChain:
         self.max_conversation_history = max_conversation_history
         self.prompt_budget_chars = prompt_budget_chars
         # Populated by stream() once its generator is fully consumed, since
-        # st.write_stream() only returns the concatenated text — callers that
+        # st.write_stream() only returns the concatenated text; callers that
         # need sources/metrics read them from here afterward.
         self.last_result: dict[str, Any] | None = None
 
@@ -125,7 +125,6 @@ class RAGChain:
             if self.use_conversation_memory:
                 self.add_user_message(query)
 
-            # Retrieve relevant documents
             top_k = kwargs.get("top_k", self.top_k)
             retrieval_span = trace.span(name="retrieval", input={"query": query, "top_k": top_k}) if trace else None
             documents = self._retrieve_documents(query, top_k)
@@ -189,7 +188,7 @@ class RAGChain:
 
         Retrieval happens synchronously first (same as `run()`), then generation is
         yielded chunk by chunk. Once the generator is fully consumed, `self.last_result`
-        holds the same dict shape `run()` returns — callers that need sources or
+        holds the same dict shape `run()` returns; callers that need sources or
         metrics (rather than just the displayed text) should read it from there
         afterward, since a generator can't both yield text and return a value.
 
@@ -209,7 +208,6 @@ class RAGChain:
             if self.use_conversation_memory:
                 self.add_user_message(query)
 
-            # Retrieve relevant documents
             top_k = kwargs.get("top_k", self.top_k)
             retrieval_span = trace.span(name="retrieval", input={"query": query, "top_k": top_k}) if trace else None
             documents = self._retrieve_documents(query, top_k)
@@ -287,7 +285,7 @@ class RAGChain:
         """Retrieve documents for a query through the retriever protocol.
 
         Relevance filtering happens inside the retriever itself (see
-        `VectorRetriever.search`), not here — after RRF fusion, a fused
+        `VectorRetriever.search`), not here: after RRF fusion, a fused
         score can no longer distinguish relevant from irrelevant results.
         Exceptions from the retriever propagate to `run()`/`stream()`
         rather than being caught and retried.
@@ -354,9 +352,6 @@ class RAGChain:
 
     def _format_sources(self, documents: list[Any]) -> list[dict[str, str]]:
         """Format sources for citation in the response.
-
-        This function formats document sources for display in the UI, ensuring that
-        paths are properly formatted for the codebase repositories.
 
         Args:
             documents: Either a list of Documents, or a list of (Document, score) tuples.
@@ -457,7 +452,7 @@ class RAGChain:
         Drops the lowest-ranked (last) context document first, then the
         oldest conversation history message. If the prompt still doesn't
         fit once both are exhausted, the question itself is truncated
-        (head kept, tail cut, with an elision marker) as a last resort —
+        (head kept, tail cut, with an elision marker) as a last resort;
         the alternative is Ollama truncating it silently server-side.
         The prompt template is never altered. Per-item character costs
         are computed once so drops don't require rebuilding the whole
@@ -509,7 +504,7 @@ class RAGChain:
             new_context_total = no_context_len if n_docs == 1 else context_total - doc_lens[n_docs - 1] - 2
             new_total = total - context_total + new_context_total
             if new_total >= total:
-                # A doc shorter than its replacement sentinel would grow the prompt, not shrink it — stop.
+                # A doc shorter than its replacement sentinel would grow the prompt, not shrink it; stop.
                 break
             n_docs -= 1
             docs_dropped += 1

@@ -80,8 +80,8 @@ class BM25Retriever:
         Two distinct cases score at or below zero, and both should be
         excluded. A document containing none of the query terms scores
         exactly 0. Separately, BM25 assigns a *negative* IDF to any term
-        appearing in more than roughly half the corpus — such a term
-        carries no discriminative signal — so documents matching only
+        appearing in more than roughly half the corpus (such a term
+        carries no discriminative signal), so documents matching only
         those terms can score slightly below 0.
 
         Args:

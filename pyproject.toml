@@ -82,10 +82,10 @@ select = [
     "YTT",    # sys.version comparisons
 ]
 ignore = [
-    "ANN401",   # Dynamically typed expressions (typing.Any) disallowed — unavoidable for **kwargs and duck-typed APIs
-    "BLE001",   # Blind exception catches — intentional at infrastructure boundaries (Qdrant, git, subprocess)
-    "FBT001",   # Boolean-typed positional argument — these are keyword-only defaults
-    "FBT002",   # Boolean default positional argument — these are keyword-only defaults
+    "ANN401",   # Dynamically typed expressions (typing.Any) disallowed: unavoidable for **kwargs and duck-typed APIs
+    "BLE001",   # Blind exception catches: intentional at infrastructure boundaries (Qdrant, git, subprocess)
+    "FBT001",   # Boolean-typed positional argument: these are keyword-only defaults
+    "FBT002",   # Boolean default positional argument: these are keyword-only defaults
     "ISC001",   # Single-line implicit concatenation: the formatter owns this and ruff warns on the overlap
 ]
 

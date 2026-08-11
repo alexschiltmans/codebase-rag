@@ -35,7 +35,7 @@ from codebase_rag.services import repo_service
 # Top-level directory names skipped during auto-discovery (see
 # discover_included_dirs). These are dependency/build/cache directories
 # that are large, low-signal for retrieval, and never meant to be
-# hand-authored — picking a folder that contains one by accident (e.g. a
+# hand-authored. Picking a folder that contains one by accident (e.g. a
 # JS project's node_modules) shouldn't silently embed it.
 DEFAULT_EXCLUDED_DIRS = frozenset(
     {
@@ -709,7 +709,6 @@ class IngestPipeline:
             if deleted:
                 self.logger.info("Cleared %d stale chunks for repo '%s'", deleted, repo_name)
 
-        # Index documents in batches to show progress
         start_time = time.time()
         batch_size = 100
         total_batches = (len(documents) + batch_size - 1) // batch_size

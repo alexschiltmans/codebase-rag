@@ -73,7 +73,9 @@ def search(
             when a repo filter is set, since filtering happens after ranking).
         repo: Optional repo name filter.
         token_budget: Stop adding results once their combined token estimate
-            would exceed this.
+            would exceed this. The highest-ranked result is always returned even
+            if it alone exceeds the budget, so the list is never empty when the
+            retriever found anything.
         tokenizer: Optional tokenizer passed through to the token estimator.
     """
     fetch_k = (k or 10) * (4 if repo else 1)

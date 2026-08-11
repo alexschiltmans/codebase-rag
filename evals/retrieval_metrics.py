@@ -14,7 +14,7 @@ def compute_retrieval_hit_and_reciprocal_rank(expected: list[str], actual: list[
         actual: Retrieved document paths, in rank order.
 
     Returns:
-        `(hit, reciprocal_rank)` — hit is 1 if any expected source matches any
+        `(hit, reciprocal_rank)`: hit is 1 if any expected source matches any
         retrieved document, else 0; reciprocal_rank is `1 / (1-based rank of
         the first match)`, or 0 if there is no match.
     """

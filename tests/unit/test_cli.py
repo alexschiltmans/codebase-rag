@@ -505,7 +505,7 @@ class TestCLIIntegration:
 
         Points CODEBASE_RAG_DATA_DIR at a known fixture index rather than relying on whatever the
         developer's machine happens to have ingested (or hasn't, on a fresh clone or in CI, since
-        data/cache is gitignored) — the prior version of this test asserted returncode in (0, 1)
+        data/cache is gitignored); the prior version of this test asserted returncode in (0, 1)
         and "no BM25 index not found", both true whether or not "test" matched anything, and both
         vacuously true on a machine with no index at all.
         """

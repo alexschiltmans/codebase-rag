@@ -34,7 +34,7 @@ Usage:
     uv run python evals/run_eval.py --judge-timeout 1800
 
 Model backend: the judge client is always `_SchemaConstrainedChatOllama` against
-`config.ollama_base_url` (default `http://127.0.0.1:11434`) — ragas's schema
+`config.ollama_base_url` (default `http://127.0.0.1:11434`): ragas's schema
 constraint is Ollama-specific, so the judge needs a running Ollama regardless
 of `LLM_PROVIDER`. The generation client honors `LLM_PROVIDER`: with
 `LLM_PROVIDER=openai-compat`, generation goes through `create_llm_client` to
@@ -48,7 +48,7 @@ judge job into minutes. Keep `OLLAMA_BASE_URL=http://127.0.0.1:11434` for the
 native Metal endpoint; confirm from the logged base URL that the judge used it.
 
 Operational precondition: this harness must not share its Ollama instance with
-the running app or another eval — both compete for the same single-threaded
+the running app or another eval; both compete for the same single-threaded
 server and inflate every latency figure with queueing time. Run
 `docker stop codebase-rag-app` before an eval to guarantee that.
 
@@ -60,8 +60,8 @@ Ollama (no GPU passthrough) that turned one judge job into ~10 minutes with a
 ~7h50m projection for a single retriever's judging.
 
 The judge decodes under a JSON schema constraint (`_SchemaConstrainedChatOllama`
-plus `_install_schema_constrained_judging`). Without it a 9B judge — the
-project's cap — echoes each metric's JSON schema instead of an instance, or
+plus `_install_schema_constrained_judging`). Without it a 9B judge (the
+project's cap) echoes each metric's JSON schema instead of an instance, or
 truncates a verbose one; no tolerant parser recovers either. Constraining
 Ollama's decoding to the active RAGAS prompt's schema forbids the schema echo
 and, with a raised context/output budget, avoids the truncation, so all three
@@ -129,7 +129,7 @@ RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
 # plus the answer plus its own scaffolding, which overruns Ollama's default 2048
 # num_ctx and truncates the response mid-JSON. Faithfulness is the demanding
 # case: it judges every statement in the answer, and a per-statement reason plus
-# verdict runs long — a 2048 output budget force-closed the JSON before the last
+# verdict runs long; a 2048 output budget force-closed the JSON before the last
 # statement's verdict on the longest answers. These give headroom so a verbose
 # but valid verdict finishes instead of being cut off.
 JUDGE_NUM_CTX = 16384
@@ -137,7 +137,7 @@ JUDGE_NUM_PREDICT = 4096
 
 # Active RAGAS output schema for the judge's next call. Set per prompt by the
 # wrapper installed in `_install_schema_constrained_judging`, read by
-# `_SchemaConstrainedChatOllama` — see that function for why this is a context
+# `_SchemaConstrainedChatOllama`; see that function for why this is a context
 # var rather than a constructor argument.
 _JUDGE_RESPONSE_SCHEMA: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
     "judge_response_schema", default=None
@@ -149,7 +149,7 @@ class _SchemaConstrainedChatOllama(ChatOllama):
 
     Ollama can restrict generation to a JSON schema (`format=<schema>`), which
     is the only lever that reliably stops a 9B judge from echoing the metric's
-    schema instead of an instance, or truncating a verbose one — a tolerant
+    schema instead of an instance, or truncating a verbose one; a tolerant
     output parser can recover neither. `_chat_params` already sources `format`
     from a per-call kwarg falling back to `self.format`; this reads the active
     schema from the context var instead, so each prompt constrains to its own
@@ -170,8 +170,8 @@ def _install_schema_constrained_judging() -> None:
     and doesn't thread the target schema down to the LLM call, so the client
     can't know which schema to constrain to. This wraps `generate_multiple`
     (which `generate` delegates to) so the active prompt's JSON schema is on
-    `_JUDGE_RESPONSE_SCHEMA` for the whole call — including RAGAS's own
-    fix-output-format retry, whose nested call re-sets it to that fixer's
+    `_JUDGE_RESPONSE_SCHEMA` for the whole call, including RAGAS's own
+    output-format-fixing retry, whose nested call re-sets it to that fixer's
     `StringIO` model and restores it after. Idempotent.
     """
     from ragas.prompt.pydantic_prompt import PydanticPrompt
@@ -204,8 +204,8 @@ def build_ragas_metrics(wrapped_llm: Any, wrapped_embeddings: Any) -> list[Any]:
     All three metrics are producible because the judge decodes under a JSON
     schema constraint (see `_SchemaConstrainedChatOllama`). Without it, a 9B
     judge (the project's cap) echoes each metric's JSON schema instead of an
-    instance — `context_recall` failed on nearly every question and
-    `faithfulness` on a smaller fraction — which no tolerant output parser can
+    instance (`context_recall` failed on nearly every question and
+    `faithfulness` on a smaller fraction), which no tolerant output parser can
     recover. Constraining the judge's decoding to the active prompt's schema
     forbids the schema echo outright, so the set does not need trimming to what
     an unconstrained judge happens to format correctly.
@@ -240,7 +240,7 @@ def resolve_judge_model_name(generation_model_name: str) -> str:
     them adds self-preference bias and, for a 350M model, questionable
     competence as a judge in the first place. Prefer a fixed, larger model via
     `--judge-model <name>` or the `RAGAS_JUDGE_MODEL` env var. If neither is
-    set, falls back to the generation model — callers must caveat scores in
+    set, falls back to the generation model; callers must caveat scores in
     that case (see `is_self_judged` usage in `main()`).
 
     Args:
@@ -351,7 +351,7 @@ def resolve_judge_timeout_s() -> int:
     ragas job chains several LLM calls (statement generation, NLI
     classification, output-format retries) that each take real time even
     with `reasoning=False`. Configurable via `--judge-timeout <seconds>` or
-    `RAGAS_JUDGE_TIMEOUT`, default 1200 (20 minutes) — chosen after the
+    `RAGAS_JUDGE_TIMEOUT`, default 1200 (20 minutes): chosen after the
     previous 600s default was hit mid-call by `qwen3.5:9b` with reasoning
     still enabled (see `run_ragas_evaluation`'s `reasoning=False`).
     """
@@ -425,7 +425,7 @@ def build_rag_chain(retriever_type: str = "bm25", repos: list[str] | None = None
     """Initialize the RAG chain with live services.
 
     Args:
-        retriever_type: One of "vector", "bm25", "hybrid" — which retriever
+        retriever_type: One of "vector", "bm25", "hybrid": which retriever
             backs the chain. Defaults to "bm25", matching the shipped app.
         repos: Repository scope both arms retrieve from. None resolves the
             scope the same way a command-line run does.
@@ -570,7 +570,7 @@ def compute_ragas_scores_and_coverage(df: Any) -> tuple[dict[str, float | None],
     """Derive per-metric scores and judge-job coverage from a ragas result DataFrame.
 
     Args:
-        df: `EvaluationResult.to_pandas()` output — one row per sample, judge
+        df: `EvaluationResult.to_pandas()` output: one row per sample, judge
             metric columns alongside `user_input`/`response`/`retrieved_contexts`/
             `reference`, NaN in a metric's column for a failed judge job.
 
@@ -605,8 +605,8 @@ def check_coverage_gate(
         min_coverage: Minimum required `completed / attempted` share.
         requested_metrics: Metric names this run was supposed to measure (not
             skipped). A requested metric missing from `ragas_coverage` entirely
-            — the judge phase failed wholesale, or produced no samples to score
-            — also fails the gate; an empty `ragas_coverage` only means "pass"
+            (the judge phase failed wholesale, or produced no samples to score)
+            also fails the gate; an empty `ragas_coverage` only means "pass"
             when nothing was requested in the first place.
     """
     for metric_name in sorted(requested_metrics or set()):
@@ -632,7 +632,7 @@ def run_ragas_evaluation(
     Args:
         results: Output of `run_rag_on_testset`.
         judge_model_name: Ollama model to use as the RAGAS judge. See
-            `resolve_judge_model_name` — this may or may not be the same
+            `resolve_judge_model_name`; this may or may not be the same
             model that generated the answers being judged.
         max_workers: Maximum concurrent judge calls. See `resolve_max_workers`.
         skip_metrics: Metric names to exclude entirely. See `resolve_skip_metrics`.
@@ -643,7 +643,7 @@ def run_ragas_evaluation(
         A dict with `scores` (metric -> score, `None` for an enabled metric
         with zero completed jobs), `coverage` (metric ->
         `{attempted, completed, failed}`), and `requested_metrics` (the metric
-        names that weren't skipped — what this run was supposed to measure,
+        names that weren't skipped: what this run was supposed to measure,
         used by `check_coverage_gate` to catch a wholesale judge-phase failure
         that leaves `coverage` empty).
 
@@ -655,7 +655,7 @@ def run_ragas_evaluation(
     reasoning left on took ~10 minutes and still hit the previous 600s
     `RunConfig` timeout mid-thought, projecting ~7h50m for one retriever's 48
     judge jobs. `reasoning=False` is harmless for non-reasoning judge models
-    too — Ollama ignores `think` for models that don't support it.
+    too. Ollama ignores `think` for models that don't support it.
     """
     config = Config.get_instance()
 
@@ -684,7 +684,7 @@ def run_ragas_evaluation(
 
     # Defensive: main() already rejects an all-skip run before the loop; this guards direct callers too.
     if not metrics:
-        logger.info("All ragas metrics skipped — nothing to judge")
+        logger.info("All ragas metrics skipped; nothing to judge")
         return {"scores": {}, "coverage": {}, "requested_metrics": requested_metrics}
 
     # Build evaluation dataset from results
@@ -803,7 +803,7 @@ def generate_results_markdown(
     )
     lines.append(
         f"**Latency probe:** {latency_probe_s:.2f}s (single generation timed before the test set ran; "
-        "compare `avg_latency_s` only against runs with a similar probe — a high probe means the "
+        "compare `avg_latency_s` only against runs with a similar probe; a high probe means the "
         "run was contended)\n"
     )
 
@@ -821,7 +821,7 @@ def generate_results_markdown(
                 "> ⚠️ **Self-judged.** No `--judge-model`/`RAGAS_JUDGE_MODEL` was set, so the "
                 f"same model that generated these answers (`{judge_model_name}`) also scored them. "
                 "This adds self-preference bias, and a model this size is a weak judge to begin "
-                "with — treat these numbers as indicative at best. The custom keyword recall / "
+                "with; treat these numbers as indicative at best. The custom keyword recall / "
                 "source precision metrics above don't use an LLM judge and are more trustworthy.\n"
             )
         lines.append("| Metric | Score | Coverage |")
@@ -898,7 +898,7 @@ def generate_ablation_markdown(
     lines = ["# Retrieval Ablation\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(
-        "Same test set (`evals/testset.json`), same LLM, same top_k — only the retriever "
+        "Same test set (`evals/testset.json`), same LLM, same top_k; only the retriever "
         "feeding the RAG chain changes. Full per-question detail for each configuration is "
         "in `results_<retriever>.md`.\n"
     )
@@ -929,7 +929,7 @@ def generate_ablation_markdown(
         "BM25 scores are never thresholded (zero-overlap documents are excluded by construction).\n"
     )
     lines.append(
-        "Avg Latency figures are comparable only across runs with similar latency probes — see "
+        "Avg Latency figures are comparable only across runs with similar latency probes; see "
         "each configuration's `results_<retriever>.md` for its probe.\n"
     )
     lines.append("| Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
@@ -963,8 +963,8 @@ def publish_retriever_results(
     """Gate on judge coverage, then write the JSON and markdown reports for one retriever.
 
     Checks `check_coverage_gate` before any write. On a gate failure, logs the
-    failing metric — with its counts if it has any, or the wholesale-failure
-    reason from `ragas_scores` if it doesn't — and exits the process non-zero
+    failing metric (with its counts if it has any, or the wholesale-failure
+    reason from `ragas_scores` if it doesn't) and exits the process non-zero
     without writing `results_<retriever_type>.{json,md}`, leaving whatever was
     previously published there untouched.
     """
@@ -1056,14 +1056,14 @@ def main() -> None:
     )
     if skip_metrics >= RAGAS_METRIC_NAMES:
         logger.error(
-            "--skip-metric disables every ragas metric (%s) — nothing would be judged. "
+            "--skip-metric disables every ragas metric (%s); nothing would be judged. "
             "Skip fewer metrics, or drop --skip-metric entirely if you don't want ragas at all.",
             sorted(RAGAS_METRIC_NAMES),
         )
         sys.exit(1)
     if is_self_judged:
         logger.warning(
-            "No --judge-model/RAGAS_JUDGE_MODEL set — RAGAS will judge '%s' with itself. "
+            "No --judge-model/RAGAS_JUDGE_MODEL set; RAGAS will judge '%s' with itself. "
             "Scores will be marked self-judged in the reports; pass a fixed, larger judge "
             "model to avoid self-preference bias.",
             judge_model_name,
@@ -1116,7 +1116,7 @@ def main() -> None:
             log_to_langfuse(results, custom_metrics, ragas_scores)
 
         print("\n" + "=" * 60)
-        print(f"EVALUATION SUMMARY — {retriever_type}")
+        print(f"EVALUATION SUMMARY: {retriever_type}")
         print("=" * 60)
         print(f"Questions: {len(results)}")
         print(f"Answered:  {custom_metrics['questions_answered']}")
@@ -1130,7 +1130,7 @@ def main() -> None:
         if ragas_scores and "ragas_error" not in ragas_scores:
             print(f"\nRAGAS scores (judge: {judge_model_name}):")
             if is_self_judged:
-                print("  WARNING: self-judged — same model generated and scored these answers.")
+                print("  WARNING: self-judged: same model generated and scored these answers.")
             for k, v in ragas_scores.items():
                 cov = ragas_coverage.get(k)
                 cov_str = f" ({cov['completed']}/{cov['attempted']})" if cov else ""

@@ -335,7 +335,7 @@ def _folder_dialog_wait_fragment(runtime: AppRuntime) -> None:
     picked_path = _poll_folder_dialog(runtime, allow_self_terminate=True)
     # A pick can land while `is_open()` is still True: FolderPicker is process-wide, so
     # another session's dialog can keep it True for a session whose own pick already landed.
-    # Rerun on that too, not just "no longer open" — the widget holding the new path
+    # Rerun on that too, not just "no longer open": the widget holding the new path
     # otherwise never gets redrawn until some unrelated interaction triggers a rerun.
     if picked_path is None and runtime.folder_picker.is_open():
         st.caption("⏳ Folder dialog opened — waiting for your selection…")
@@ -354,7 +354,7 @@ def _poll_folder_dialog(runtime: AppRuntime, *, allow_self_terminate: bool = Fal
     open (stranded, e.g. cancelled) be cleared, but only on the *second* such miss: a result
     can still land between one poll and the next (the wait fragment's own poll can be the
     first real attempt on a token the main body's poll ran too early to see), so a single miss
-    isn't enough signal — it's tracked with ``_folder_dialog_stale_poll`` across fragment ticks.
+    isn't enough signal: it's tracked with ``_folder_dialog_stale_poll`` across fragment ticks.
     """
     token = st.session_state.get("folder_dialog_token")
     if token is None:
