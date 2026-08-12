@@ -251,6 +251,42 @@ class TestRAGChainConversationMemory:
         assert prompt.count("current question") == 1
         assert history_dropped == 0
 
+    def test_static_prefix_is_byte_identical_across_turns(self) -> None:
+        """KV-cache reuse needs a byte-identical prefix, so consecutive turns must share the static bytes."""
+        chain = self._make_chain(use_conversation_memory=True)
+        docs_turn1 = [Document(page_content="first turn context", metadata={"source": "a.py"})]
+        docs_turn2 = [Document(page_content="different second turn context", metadata={"source": "b.py"})]
+
+        chain.add_user_message("first question")
+        prompt1, *_ = chain._build_within_budget("first question", docs_turn1)
+        chain.add_assistant_message("first answer")
+        chain.add_user_message("second question")
+        prompt2, *_ = chain._build_within_budget("second question", docs_turn2)
+
+        assert prompt1.startswith(RAGChain._STATIC_PREFIX)
+        assert prompt2.startswith(RAGChain._STATIC_PREFIX)
+        # No per-turn content leaks into the static prefix.
+        assert "first" not in RAGChain._STATIC_PREFIX
+        assert "second" not in RAGChain._STATIC_PREFIX
+
+    def test_section_order_context_then_history_then_question(self) -> None:
+        """Order must be static, then context, then history, then question."""
+        chain = self._make_chain(use_conversation_memory=True)
+        chain.conversation_history = [
+            {"role": "user", "content": "earlier question"},
+            {"role": "assistant", "content": "earlier answer"},
+        ]
+        docs = [Document(page_content="retrieved snippet", metadata={"source": "a.py"})]
+
+        prompt, *_ = chain._build_within_budget("the current question", docs)
+
+        prefix_at = prompt.index(RAGChain._STATIC_PREFIX)
+        context_at = prompt.index("retrieved snippet")
+        history_at = prompt.index("earlier question")
+        question_at = prompt.index("the current question")
+
+        assert prefix_at < context_at < history_at < question_at
+
     def test_retrieve_documents_calls_search_once(self) -> None:
         """Retrieval goes through the protocol's `search(query, k)` exactly
         once: no attribute probing, no fallback call path."""

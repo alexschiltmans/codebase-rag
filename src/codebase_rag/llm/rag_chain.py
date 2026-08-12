@@ -58,6 +58,14 @@ class RAGChain:
 
     _HISTORY_PREFIX = "Previous conversation:\n"
 
+    # First and byte-stable across turns so Ollama/LM Studio can reuse the KV cache; no per-turn content may precede it.
+    _STATIC_PREFIX = "You are a helpful coding assistant. Answer the question based on the context below.\n\n"
+
+    # Context before history: a follow-up's context often overlaps the prior turn's, extending the reusable prefix.
+    _DEFAULT_PROMPT_TEMPLATE = (
+        _STATIC_PREFIX + "Context information:\n{context}\n\n{conversation_history}\n\nQuestion: {question}\n\nAnswer: "
+    )
+
     def __init__(
         self,
         retriever: RetrieverProtocol,
@@ -93,14 +101,7 @@ class RAGChain:
         self.last_result: dict[str, Any] | None = None
 
         if prompt_template is None:
-            self.prompt_template = (
-                "You are a helpful coding assistant. "
-                "Answer the question based on the context below.\n\n"
-                "{conversation_history}\n\n"
-                "Context information:\n{context}\n\n"
-                "Question: {question}\n\n"
-                "Answer: "
-            )
+            self.prompt_template = self._DEFAULT_PROMPT_TEMPLATE
         else:
             self.prompt_template = prompt_template
 
