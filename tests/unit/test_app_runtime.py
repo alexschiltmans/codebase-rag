@@ -17,6 +17,8 @@ def _config(**overrides: object) -> MagicMock:
     config.llm_model_name = "test-model"
     config.ollama_base_url = "http://localhost:11434"
     config.default_repo_url = ""
+    config.rerank_enabled = False
+    config.rewrite_enabled = False
     for key, value in overrides.items():
         setattr(config, key, value)
     return config
@@ -105,12 +107,64 @@ class TestNewRagChain:
         with patch("codebase_rag.app.runtime.RAGChain") as mock_rag_chain_cls:
             runtime.new_rag_chain()
             mock_rag_chain_cls.assert_called_once_with(
-                retriever=runtime.bm25_retriever,
+                retriever=runtime.retriever,
                 llm=runtime.llm,
                 use_conversation_memory=True,
                 max_conversation_history=10,
                 prompt_budget_chars=(8192 - 1024 - 256) * 4,
             )
+
+    def test_default_config_shares_the_bare_bm25_retriever(self) -> None:
+        runtime, _ = _build_runtime(_config())
+        assert runtime.retriever is runtime.bm25_retriever
+
+    def test_rerank_stage_wraps_the_base_retriever_when_enabled(self) -> None:
+        runtime, _ = _build_runtime(_config(rerank_enabled=True, rerank_model="m", rerank_candidate_depth=50))
+        from codebase_rag.retrieval.rerank import RerankingRetriever
+
+        assert isinstance(runtime.retriever, RerankingRetriever)
+        assert runtime.retriever.retriever is runtime.bm25_retriever
+
+    def test_rewrite_stage_is_outermost_when_both_enabled(self) -> None:
+        runtime, _ = _build_runtime(
+            _config(
+                rerank_enabled=True,
+                rerank_model="m",
+                rerank_candidate_depth=50,
+                rewrite_enabled=True,
+                rewrite_timeout_s=5.0,
+            )
+        )
+        from codebase_rag.retrieval.rerank import RerankingRetriever
+        from codebase_rag.retrieval.rewrite import RewritingRetriever
+
+        assert isinstance(runtime.retriever, RewritingRetriever)
+        assert isinstance(runtime.retriever.retriever, RerankingRetriever)
+
+    def test_stack_is_built_once_not_per_chain(self) -> None:
+        """Two chains must receive the same composed retriever object, so an enabled
+        reranker is not reloaded per query. Asserts on what RAGChain was handed,
+        not just that the attribute is stable, so a per-query rebuild would fail here."""
+        runtime, _ = _build_runtime(_config(rerank_enabled=True, rerank_model="m", rerank_candidate_depth=50))
+        with patch("codebase_rag.app.runtime.RAGChain") as mock_rag_chain_cls:
+            runtime.new_rag_chain()
+            runtime.new_rag_chain()
+
+        first_retriever = mock_rag_chain_cls.call_args_list[0].kwargs["retriever"]
+        second_retriever = mock_rag_chain_cls.call_args_list[1].kwargs["retriever"]
+        assert first_retriever is second_retriever
+        assert first_retriever is runtime.retriever
+
+    def test_swap_bm25_rebuilds_the_stack_over_the_new_index(self) -> None:
+        runtime, _ = _build_runtime(_config(rerank_enabled=True, rerank_model="m", rerank_candidate_depth=50))
+        new_index = MagicMock()
+
+        runtime.swap_bm25(new_index)
+
+        from codebase_rag.retrieval.rerank import RerankingRetriever
+
+        assert isinstance(runtime.retriever, RerankingRetriever)
+        assert runtime.retriever.retriever is new_index
 
 
 class TestHealthChecks:

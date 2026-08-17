@@ -71,6 +71,7 @@ metrics are producible without reaching for a larger judge.
 import contextvars
 import json
 import logging
+import math
 import os
 import sys
 import time
@@ -105,7 +106,9 @@ from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever as Bm25Index
 from codebase_rag.retrieval.bm25_search import load_bm25_corpus
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
+from codebase_rag.retrieval.retrieval_stack import apply_stages
 from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
+from codebase_rag.services.token_estimator import estimate_tokens
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -124,6 +127,44 @@ DEFAULT_EVAL_REPOS = ["power-grid-model"]
 BM25_CORPUS_DIR = EVALS_DIR.parent / "data" / "cache" / "bm25_corpus"
 
 RETRIEVER_TYPES = ("vector", "bm25", "hybrid")
+
+
+def stage_config(config: Config) -> dict[str, Any]:
+    """Snapshot the rerank/rewrite stage settings a run measured.
+
+    Recorded in every JSON payload and every markdown header so a committed
+    results file identifies its own stack rather than leaving the reader to
+    infer it. `slug` is empty for the default (both stages off) so a plain run
+    keeps the historical `results_<retriever>` filenames, and is a non-empty
+    suffix (e.g. `_rerank` or `_rerank_rewrite`) otherwise so an on-run and an
+    off-run write to different files instead of one overwriting the other.
+    """
+    parts = []
+    if config.rerank_enabled:
+        parts.append("rerank")
+    if config.rewrite_enabled:
+        parts.append("rewrite")
+    return {
+        "rerank_enabled": config.rerank_enabled,
+        "rerank_model": config.rerank_model if config.rerank_enabled else None,
+        "rerank_candidate_depth": config.rerank_candidate_depth if config.rerank_enabled else None,
+        "rewrite_enabled": config.rewrite_enabled,
+        "rewrite_timeout_s": config.rewrite_timeout_s if config.rewrite_enabled else None,
+        "slug": ("_" + "_".join(parts)) if parts else "",
+    }
+
+
+def describe_stages(stages: dict[str, Any]) -> str:
+    """One-line human description of a stage config, for markdown headers and logs."""
+    if not stages["rerank_enabled"] and not stages["rewrite_enabled"]:
+        return "none (base retriever only)"
+    parts = []
+    if stages["rerank_enabled"]:
+        parts.append(f"rerank (`{stages['rerank_model']}`, depth {stages['rerank_candidate_depth']})")
+    if stages["rewrite_enabled"]:
+        parts.append(f"rewrite (timeout {stages['rewrite_timeout_s']}s)")
+    return ", ".join(parts)
+
 
 # Judge context/output budget. RAGAS feeds the judge the full retrieved context
 # plus the answer plus its own scaffolding, which overruns Ollama's default 2048
@@ -466,6 +507,19 @@ def build_rag_chain(retriever_type: str = "bm25", repos: list[str] | None = None
     if status["status"] != "connected":
         raise RuntimeError(f"Cannot connect to {config.provider} backend: {status['message']}")
 
+    # Apply the optional rerank/rewrite stages exactly as the app does, through the shared
+    # composition, so an eval run measures the same stack a user would get. Without this the
+    # harness would build the bare first stage and a reranked run would measure nothing.
+    retriever = apply_stages(retriever, config, llm)
+    logger.info(
+        "Retrieval stages: rerank=%s (model=%s, depth=%d), rewrite=%s (timeout=%.1fs)",
+        config.rerank_enabled,
+        config.rerank_model if config.rerank_enabled else "-",
+        config.rerank_candidate_depth,
+        config.rewrite_enabled,
+        config.rewrite_timeout_s,
+    )
+
     return RAGChain(
         retriever=retriever,
         llm=llm,
@@ -476,15 +530,29 @@ def build_rag_chain(retriever_type: str = "bm25", repos: list[str] | None = None
 
 
 def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Run the RAG chain on each test question and collect results."""
+    """Run the RAG chain on each test question and collect results.
+
+    Runs each question through `stream()` rather than `run()` so time-to-first-token
+    is measurable: the first yielded chunk marks TTFT, and `rag_chain.last_result`
+    holds the same dict `run()` returns once the generator is drained. Prompt tokens
+    per answer are counted from that prompt with the shared token estimator, so this
+    efficiency figure is what decides whether the extra stages pay for themselves.
+    """
     results = []
     for i, item in enumerate(testset):
         question = item["question"]
         logger.info("(%d/%d) %s", i + 1, len(testset), question)
         start = time.time()
         try:
-            output = rag_chain.run(question)
+            ttft: float | None = None
+            chunks: list[str] = []
+            for chunk in rag_chain.stream(question):
+                if ttft is None:
+                    ttft = time.time() - start
+                chunks.append(chunk)
             elapsed = time.time() - start
+            output = rag_chain.last_result or {"answer": "".join(chunks), "documents": [], "sources": []}
+            prompt_tokens = estimate_tokens(output.get("prompt", ""))
             contexts = [doc.page_content for doc in output.get("documents", [])]
             results.append(
                 {
@@ -500,10 +568,17 @@ def run_rag_on_testset(rag_chain: RAGChain, testset: list[dict[str, Any]]) -> li
                     "expected_failure": item.get("expected_failure", False),
                     "metrics": output.get("metrics", {}),
                     "elapsed": elapsed,
+                    "ttft_s": ttft,
+                    "prompt_tokens": prompt_tokens,
                 }
             )
             logger.info(
-                "  -> %.1fs, %d docs retrieved, answer length %d", elapsed, len(contexts), len(output["answer"])
+                "  -> %.1fs (TTFT %s), %d docs retrieved, %d prompt tokens, answer length %d",
+                elapsed,
+                f"{ttft:.1f}s" if ttft is not None else "n/a",
+                len(contexts),
+                prompt_tokens,
+                len(output["answer"]),
             )
         except Exception as e:
             logger.error("  -> FAILED: %s", e)
@@ -529,10 +604,22 @@ def compute_custom_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     source_precisions = []
     hit_rates = []
     reciprocal_ranks = []
+    prompt_tokens = []
+    ttfts = []
 
     for r in results:
         if r.get("error"):
             continue
+        # Efficiency metrics only count questions that actually retrieved and generated.
+        # An empty-retrieval question carries a near-empty prompt and no generation, which would
+        # drag both averages down and make a configuration that fails to retrieve look cheaper
+        # and faster on exactly the two metrics this comparison turns on. The guard is on
+        # contexts rather than on a zero token count because estimate_tokens floors at 1.
+        if r.get("contexts"):
+            if r.get("prompt_tokens") is not None:
+                prompt_tokens.append(r["prompt_tokens"])
+            if r.get("ttft_s") is not None:
+                ttfts.append(r["ttft_s"])
         # Keyword recall: fraction of expected keywords found in answer
         answer_lower = r["answer"].lower()
         keywords = r.get("keywords", [])
@@ -563,7 +650,30 @@ def compute_custom_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "questions_failed": sum(1 for r in results if r.get("error")),
         "avg_latency_s": sum(r.get("elapsed", 0) for r in results if not r.get("error"))
         / max(1, sum(1 for r in results if not r.get("error"))),
+        "p95_latency_s": _percentile([r.get("elapsed", 0.0) for r in results if not r.get("error")], 0.95),
+        "avg_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0,
+        "avg_ttft_s": sum(ttfts) / len(ttfts) if ttfts else 0,
+        "p95_ttft_s": _percentile(ttfts, 0.95),
+        # How many answered questions actually retrieved and generated, so the efficiency
+        # averages above are read against their real denominator rather than the full set.
+        "efficiency_questions": len(prompt_tokens),
     }
+
+
+def _percentile(values: list[float], q: float) -> float:
+    """Return the q-th percentile of `values` (nearest-rank), or 0 if empty.
+
+    Reported alongside the mean because a mean alone hides the tail: the listwise
+    reranker arm measured a 43s mean against a 98s p95, understating its worst case
+    by more than half. Nearest-rank (`ceil(q * N)`, 1-indexed): at N=20 the p95 is
+    the 19th of 20, not the max. A truncated `int(q * N)` returned the max there,
+    off by one whenever `q * N` is an exact integer.
+    """
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, math.ceil(q * len(ordered)))
+    return ordered[min(rank, len(ordered)) - 1]
 
 
 def compute_ragas_scores_and_coverage(df: Any) -> tuple[dict[str, float | None], dict[str, dict[str, int]]]:
@@ -792,11 +902,13 @@ def generate_results_markdown(
     is_self_judged: bool,
     latency_probe_s: float,
     repos: list[str],
+    stages: dict[str, Any],
 ) -> str:
     """Generate a markdown report from the evaluation results."""
     lines = ["# Evaluation Results\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(f"**Test set:** {len(results)} questions\n")
+    lines.append(f"**Retrieval stages:** {describe_stages(stages)}\n")
     lines.append(
         f"**Repositories retrieved from:** {', '.join(f'`{repo}`' for repo in repos)} (retrieval was "
         "restricted to these; anything else in the index or the corpus directory was not searched)\n"
@@ -836,21 +948,31 @@ def generate_results_markdown(
 
     # Per-question breakdown
     lines.append("\n## Per-Question Breakdown\n")
-    lines.append("| # | Difficulty | Category | Hit | RR | Keyword Recall | Docs | Latency | Expected Failure |")
-    lines.append("|---|-----------|----------|-----|----|-----------------|------|---------|------------------|")
+    lines.append(
+        "| # | Difficulty | Category | Hit | RR | Keyword Recall | Docs | Prompt Tokens | TTFT | "
+        "Latency | Expected Failure |"
+    )
+    lines.append(
+        "|---|-----------|----------|-----|----|-----------------|------|---------------|------|"
+        "---------|------------------|"
+    )
 
     for i, r in enumerate(results):
         if r.get("error"):
             exp_fail = r.get("expected_failure", False)
             diff = r.get("difficulty", "")
             cat = r.get("category", "")
-            lines.append(f"| {i + 1} | {diff} | {cat} | - | - | ERROR | - | - | {exp_fail} |")
+            lines.append(f"| {i + 1} | {diff} | {cat} | - | - | ERROR | - | - | - | - | {exp_fail} |")
             continue
         keywords = r.get("keywords", [])
         answer_lower = r["answer"].lower()
         kr = sum(1 for kw in keywords if kw.lower() in answer_lower) / len(keywords) if keywords else 0
         docs = len(r.get("contexts", []))
         lat = r.get("elapsed", 0)
+        ptok = r.get("prompt_tokens")
+        ttft = r.get("ttft_s")
+        ptok_str = str(ptok) if ptok is not None else "-"
+        ttft_str = f"{ttft:.1f}s" if ttft is not None else "-"
         exp_fail = r.get("expected_failure", False)
         diff = r.get("difficulty", "")
         cat = r.get("category", "")
@@ -861,7 +983,8 @@ def generate_results_markdown(
         else:
             hit_str, rr_str = "-", "-"
         lines.append(
-            f"| {i + 1} | {diff} | {cat} | {hit_str} | {rr_str} | {kr:.2f} | {docs} | {lat:.1f}s | {exp_fail} |"
+            f"| {i + 1} | {diff} | {cat} | {hit_str} | {rr_str} | {kr:.2f} | {docs} | {ptok_str} | "
+            f"{ttft_str} | {lat:.1f}s | {exp_fail} |"
         )
 
     # Failure cases
@@ -880,7 +1003,7 @@ def generate_results_markdown(
 
 
 def generate_ablation_markdown(
-    all_metrics: dict[str, dict[str, Any]], testset: list[dict[str, Any]], repos: list[str]
+    all_metrics: dict[str, dict[str, Any]], testset: list[dict[str, Any]], repos: list[str], stages: dict[str, Any]
 ) -> str:
     """Generate a markdown ablation report comparing retriever configurations.
 
@@ -890,6 +1013,8 @@ def generate_ablation_markdown(
         testset: The loaded test set, used to report its composition by
             question category.
         repos: The repository scope every arm retrieved from.
+        stages: The rerank/rewrite stage config every arm ran under, so the
+            report identifies its own stack.
     """
     conceptual_count = sum(1 for item in testset if item.get("category") == "conceptual")
     exact_term_count = sum(1 for item in testset if item.get("category") == "factual_lookup")
@@ -897,10 +1022,11 @@ def generate_ablation_markdown(
 
     lines = ["# Retrieval Ablation\n"]
     lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
+    lines.append(f"**Retrieval stages:** {describe_stages(stages)} (every arm ran under this stack)\n")
     lines.append(
         "Same test set (`evals/testset.json`), same LLM, same top_k; only the retriever "
         "feeding the RAG chain changes. Full per-question detail for each configuration is "
-        "in `results_<retriever>.md`.\n"
+        f"in `results_<retriever>{stages['slug']}.md`.\n"
     )
     lines.append(
         f"**Repositories retrieved from:** {', '.join(f'`{repo}`' for repo in repos)}. Every arm was "
@@ -930,18 +1056,30 @@ def generate_ablation_markdown(
     )
     lines.append(
         "Avg Latency figures are comparable only across runs with similar latency probes; see "
-        "each configuration's `results_<retriever>.md` for its probe.\n"
+        f"each configuration's `results_<retriever>{stages['slug']}.md` for its probe. Prompt tokens per answer "
+        "and TTFT are the efficiency metrics. They are reported per configuration rather than "
+        "predicted from precision: top_k is fixed, so better ordering changes which chunks are "
+        "sent and not how many, and prompt tokens move with chunk length instead. p95 "
+        "columns sit next to the means because a mean alone hides the tail. Prompt tokens and TTFT "
+        "are averaged only over questions that actually retrieved and generated; `Eff. Qs` is that "
+        "denominator, so an arm that fails to retrieve does not look cheaper for it.\n"
     )
-    lines.append("| Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Answered | Failed | Avg Latency |")
     lines.append(
-        "|-----------|----------|-----|----------------|-------------------|----------|--------|-------------|"
+        "| Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Answered | Failed | "
+        "Avg Latency | p95 Latency | Prompt Tokens | Avg TTFT | p95 TTFT | Eff. Qs |"
+    )
+    lines.append(
+        "|-----------|----------|-----|----------------|-------------------|----------|--------|"
+        "-------------|-------------|---------------|----------|----------|---------|"
     )
     for retriever_type in RETRIEVER_TYPES:
         m = all_metrics[retriever_type]
         lines.append(
             f"| {retriever_type} | {m['avg_hit_rate']:.4f} | {m['avg_mrr']:.4f} | "
             f"{m['avg_keyword_recall']:.4f} | {m['avg_source_precision']:.4f} | "
-            f"{m['questions_answered']} | {m['questions_failed']} | {m['avg_latency_s']:.1f}s |"
+            f"{m['questions_answered']} | {m['questions_failed']} | {m['avg_latency_s']:.1f}s | "
+            f"{m['p95_latency_s']:.1f}s | {m['avg_prompt_tokens']:.0f} | "
+            f"{m['avg_ttft_s']:.1f}s | {m['p95_ttft_s']:.1f}s | {m['efficiency_questions']} |"
         )
     return "\n".join(lines)
 
@@ -959,6 +1097,7 @@ def publish_retriever_results(
     is_self_judged: bool,
     min_coverage: float,
     repos: list[str],
+    stages: dict[str, Any],
 ) -> None:
     """Gate on judge coverage, then write the JSON and markdown reports for one retriever.
 
@@ -994,12 +1133,13 @@ def publish_retriever_results(
             )
         sys.exit(1)
 
-    results_path = evals_dir / f"results_{retriever_type}.json"
+    results_path = evals_dir / f"results_{retriever_type}{stages['slug']}.json"
     with open(results_path, "w") as f:
         json.dump(
             {
                 "retriever": retriever_type,
                 "repos": repos,
+                "stages": stages,
                 "results": results,
                 "custom_metrics": custom_metrics,
                 "latency_probe_s": round(latency_probe_s, 4),
@@ -1016,9 +1156,17 @@ def publish_retriever_results(
     logger.info("Raw results saved to %s", results_path)
 
     md = generate_results_markdown(
-        results, custom_metrics, ragas_scores, ragas_coverage, judge_model_name, is_self_judged, latency_probe_s, repos
+        results,
+        custom_metrics,
+        ragas_scores,
+        ragas_coverage,
+        judge_model_name,
+        is_self_judged,
+        latency_probe_s,
+        repos,
+        stages,
     )
-    md_path = evals_dir / f"results_{retriever_type}.md"
+    md_path = evals_dir / f"results_{retriever_type}{stages['slug']}.md"
     with open(md_path, "w") as f:
         f.write(md.rstrip("\n") + "\n")
     logger.info("Markdown report saved to %s", md_path)
@@ -1028,8 +1176,10 @@ def main() -> None:
     """Run the full evaluation pipeline across every retriever configuration.
 
     Runs the test set once per retriever ("vector", "bm25", "hybrid") so the
-    hybrid retriever the app actually ships can be compared against its two
-    components, and writes a combined ablation report.
+    BM25 retriever the app actually ships can be compared against vector-only
+    and hybrid, and writes a combined ablation report. The default switched from
+    hybrid to BM25 on ablation evidence; the arm names here are the three
+    configurations measured, not a claim about which one ships.
     """
     use_langfuse = "--langfuse" in sys.argv
 
@@ -1046,9 +1196,12 @@ def main() -> None:
     judge_timeout_s = resolve_judge_timeout_s()
     # Resolved once and handed to every arm, so a long run cannot measure three different corpora.
     repos = resolve_eval_repos()
+    stages = stage_config(config)
     logger.info(
-        "Resolved eval config: repos=%s, max_workers=%d, min_coverage=%.2f, skip_metrics=%s, judge_timeout_s=%d",
+        "Resolved eval config: repos=%s, stages=%s, max_workers=%d, min_coverage=%.2f, "
+        "skip_metrics=%s, judge_timeout_s=%d",
         ",".join(repos),
+        describe_stages(stages),
         max_workers,
         min_coverage,
         sorted(skip_metrics),
@@ -1110,6 +1263,7 @@ def main() -> None:
             is_self_judged,
             min_coverage,
             repos,
+            stages,
         )
 
         if use_langfuse:
@@ -1118,6 +1272,7 @@ def main() -> None:
         print("\n" + "=" * 60)
         print(f"EVALUATION SUMMARY: {retriever_type}")
         print("=" * 60)
+        print(f"Stages:    {describe_stages(stages)}")
         print(f"Questions: {len(results)}")
         print(f"Answered:  {custom_metrics['questions_answered']}")
         print(f"Failed:    {custom_metrics['questions_failed']}")
@@ -1125,7 +1280,12 @@ def main() -> None:
         print(f"Avg MRR:               {custom_metrics['avg_mrr']:.4f}")
         print(f"Avg keyword recall:   {custom_metrics['avg_keyword_recall']:.4f}")
         print(f"Avg source precision: {custom_metrics['avg_source_precision']:.4f}")
-        print(f"Avg latency:          {custom_metrics['avg_latency_s']:.1f}s")
+        eff_n = custom_metrics["efficiency_questions"]
+        print(f"Avg prompt tokens:    {custom_metrics['avg_prompt_tokens']:.0f} (over {eff_n} retrieving questions)")
+        print(f"Avg TTFT:             {custom_metrics['avg_ttft_s']:.1f}s (p95 {custom_metrics['p95_ttft_s']:.1f}s)")
+        avg_lat = custom_metrics["avg_latency_s"]
+        p95_lat = custom_metrics["p95_latency_s"]
+        print(f"Avg latency:          {avg_lat:.1f}s (p95 {p95_lat:.1f}s)")
         print(f"Latency probe:        {latency_probe_s:.1f}s")
         if ragas_scores and "ragas_error" not in ragas_scores:
             print(f"\nRAGAS scores (judge: {judge_model_name}):")
@@ -1137,8 +1297,8 @@ def main() -> None:
                 print(f"  {k}: {v:.4f}{cov_str}" if isinstance(v, float) else f"  {k}: {v}{cov_str}")
         print("=" * 60)
 
-    ablation_md = generate_ablation_markdown(all_custom_metrics, testset, repos)
-    ablation_path = EVALS_DIR / "ablation.md"
+    ablation_md = generate_ablation_markdown(all_custom_metrics, testset, repos, stages)
+    ablation_path = EVALS_DIR / f"ablation{stages['slug']}.md"
     with open(ablation_path, "w") as f:
         f.write(ablation_md.rstrip("\n") + "\n")
     logger.info("Ablation report saved to %s", ablation_path)

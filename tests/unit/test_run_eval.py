@@ -25,6 +25,7 @@ from evals.run_eval import (
     DEFAULT_EVAL_REPOS,
     RAGAS_METRIC_NAMES,
     _install_schema_constrained_judging,
+    _percentile,
     _SchemaConstrainedChatOllama,
     build_rag_chain,
     build_ragas_metrics,
@@ -234,6 +235,14 @@ def _publish_args(
         "is_self_judged": False,
         "min_coverage": 0.9,
         "repos": ["repo-a", "repo-b"],
+        "stages": {
+            "rerank_enabled": False,
+            "rerank_model": None,
+            "rerank_candidate_depth": None,
+            "rewrite_enabled": False,
+            "rewrite_timeout_s": None,
+            "slug": "",
+        },
     }
 
 
@@ -282,6 +291,59 @@ class TestPublishRetrieverResults:
         assert json.loads((tmp_path / "results_vector.json").read_text())["repos"] == ["repo-a", "repo-b"]
         markdown = (tmp_path / "results_vector.md").read_text()
         assert "`repo-a`, `repo-b`" in markdown
+
+    def test_reports_record_the_stage_config_they_ran_under(self, tmp_path: Path) -> None:
+        """An on-run and an off-run must be distinguishable from their committed files alone."""
+        ragas_coverage = {"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}}
+        args = _publish_args(ragas_coverage, {"faithfulness": 0.95})
+        args["stages"] = {
+            "rerank_enabled": True,
+            "rerank_model": "BAAI/bge-reranker-v2-m3",
+            "rerank_candidate_depth": 50,
+            "rewrite_enabled": False,
+            "rewrite_timeout_s": None,
+            "slug": "_rerank",
+        }
+
+        publish_retriever_results(tmp_path, "bm25", **args)
+
+        # Filename carries the slug, so a following off-run does not overwrite this.
+        payload = json.loads((tmp_path / "results_bm25_rerank.json").read_text())
+        assert payload["stages"]["rerank_enabled"] is True
+        assert payload["stages"]["rerank_candidate_depth"] == 50
+        assert not (tmp_path / "results_bm25.json").exists()
+        assert "bge-reranker-v2-m3" in (tmp_path / "results_bm25_rerank.md").read_text()
+
+
+class TestStageConfig:
+    def test_defaults_off_produce_empty_slug(self) -> None:
+        from unittest.mock import MagicMock
+
+        from evals.run_eval import stage_config
+
+        config = MagicMock(rerank_enabled=False, rewrite_enabled=False)
+        stages = stage_config(config)
+
+        assert stages["slug"] == ""
+        assert stages["rerank_model"] is None
+
+    def test_both_enabled_slug_names_both_stages(self) -> None:
+        from unittest.mock import MagicMock
+
+        from evals.run_eval import stage_config
+
+        config = MagicMock(
+            rerank_enabled=True,
+            rerank_model="m",
+            rerank_candidate_depth=50,
+            rewrite_enabled=True,
+            rewrite_timeout_s=5.0,
+        )
+        stages = stage_config(config)
+
+        assert stages["slug"] == "_rerank_rewrite"
+        assert stages["rerank_model"] == "m"
+        assert stages["rewrite_timeout_s"] == 5.0
 
 
 class TestWholesaleJudgeFailureGate:
@@ -638,3 +700,22 @@ class TestResolveJudgeTimeout:
         monkeypatch.setattr(sys, "argv", ["run_eval.py"])
         monkeypatch.setenv("RAGAS_JUDGE_TIMEOUT", "600")
         assert resolve_judge_timeout_s() == 600
+
+
+class TestPercentile:
+    def test_empty_returns_zero(self) -> None:
+        assert _percentile([], 0.95) == 0.0
+
+    def test_exact_integer_index_is_not_off_by_one(self) -> None:
+        """At N=20, q*N=19.0 is an exact integer; p95 is the 19th of 20, not the max.
+        The previous truncated int(q*N) returned the max here."""
+        values = [float(i) for i in range(1, 21)]  # 1..20
+        assert _percentile(values, 0.95) == 19.0
+
+    def test_p95_at_n30(self) -> None:
+        values = [float(i) for i in range(1, 31)]  # 1..30
+        # ceil(0.95 * 30) = ceil(28.5) = 29 -> 29th value
+        assert _percentile(values, 0.95) == 29.0
+
+    def test_single_value(self) -> None:
+        assert _percentile([7.0], 0.95) == 7.0

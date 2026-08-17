@@ -13,6 +13,7 @@ from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
 from codebase_rag.retrieval.hybrid_search import HybridRetriever
+from codebase_rag.retrieval.retrieval_stack import apply_stages, close_stages
 from codebase_rag.retrieval.retriever_protocol import RetrieverProtocol
 from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
 from codebase_rag.services.token_estimator import get_tokenizer
@@ -40,7 +41,6 @@ class ApiState:
         # HybridRetriever stays constructible (eval ablation, pipeline duplicate-detection
         # search) but the API serves from the configured retriever, defaulting to BM25
         # to match the app.
-        self.retriever: RetrieverProtocol = self._select_retriever()
         self.llm = create_llm_client(
             model_name=self.config.llm_model_name,
             temperature=0.0,
@@ -50,12 +50,15 @@ class ApiState:
             timeout=120,
             num_ctx=self.config.ollama_num_ctx,
         )
+        # Selected after the LLM exists: the optional rewrite stage needs it.
+        self.retriever: RetrieverProtocol = self._select_retriever()
         self.tokenizer = get_tokenizer(self.qdrant_store.embedding_manager)
         self.cache_dir = self.config.cache_dir
         self.ingestion = ApiIngestionManager(on_success=lambda _job: self.refresh_bm25())
 
     def _select_retriever(self) -> RetrieverProtocol:
-        return self.hybrid_retriever if self.config.retriever == "hybrid" else self.bm25_retriever
+        base = self.hybrid_retriever if self.config.retriever == "hybrid" else self.bm25_retriever
+        return apply_stages(base, self.config, self.llm)
 
     def _load_bm25_retriever(self) -> BM25Retriever:
         bm25_file = self.config.cache_dir / "bm25_retriever.json"
@@ -77,4 +80,7 @@ class ApiState:
         """Reload the BM25 index from disk after an ingest completes."""
         self.bm25_retriever = self._load_bm25_retriever()
         self.hybrid_retriever.bm25_retriever = self.bm25_retriever
+        # Release the previous stack's stage resources (e.g. the rewrite thread pool)
+        # before rebuilding, so nothing is leaked per ingest.
+        close_stages(getattr(self, "retriever", None))
         self.retriever = self._select_retriever()

@@ -22,6 +22,7 @@ from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
+from codebase_rag.retrieval.retriever_protocol import RetrieverProtocol
 from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
 from codebase_rag.services.folder_picker import FolderPicker
 
@@ -276,6 +277,10 @@ class AppRuntime:
             timeout=120,
             num_ctx=config.ollama_num_ctx,
         )
+        # Composed once here, not per query: the rerank stage caches a ~2GB model on the
+        # instance, so rebuilding the stack for every question would reload it from disk
+        # each time. Rebuilt only when the base index is swapped (see swap_bm25).
+        self.retriever = self._build_retrieval_stack()
         threading.Thread(target=_run_health_checks, args=(self,), daemon=True).start()
 
         self.folder_picker = FolderPicker()
@@ -289,25 +294,50 @@ class AppRuntime:
 
         A new instance per session keeps conversation history isolated
         without needing a new retriever, LLM client, or Qdrant connection.
+        The composed retrieval stack (base + optional rerank/rewrite stages)
+        is built once in ``__init__`` and shared here, so the reranker model
+        is not reloaded per query.
         """
         return RAGChain(
-            retriever=self.bm25_retriever,
+            retriever=self.retriever,
             llm=self.llm,
             use_conversation_memory=True,
             max_conversation_history=MAX_CONVERSATION_HISTORY,
             prompt_budget_chars=self.llm.prompt_budget_chars,
         )
 
+    def _build_retrieval_stack(self) -> RetrieverProtocol:
+        """Compose the base BM25 retriever with the optional rerank/rewrite stages.
+
+        Delegates to the shared ``apply_stages`` so the runtime, the HTTP API,
+        and the eval harness cannot drift on stage ordering or enablement.
+        """
+        from codebase_rag.retrieval.retrieval_stack import apply_stages
+
+        return apply_stages(self.bm25_retriever, self.config, self.llm)
+
     def swap_bm25(self, index: BM25Retriever) -> None:
-        """Atomically replace the runtime's BM25 retriever.
+        """Atomically replace the runtime's BM25 retriever and rebuild the stack.
 
         Called after a successful ingest instead of clearing
         ``st.cache_resource`` and rebuilding everything: the embedding
         model, Qdrant client, and LLM client survive untouched, and every
         open session sees the new index on its next rerun because they
         share this runtime.
+
+        The composed stack is rebuilt so the new base index feeds the rerank and
+        rewrite stages. The rebuild constructs new stage instances, so with
+        reranking enabled the cached cross-encoder is dropped and the next
+        question pays a full model load, roughly 2GB from the local cache. That
+        is the opposite of what building the stack once in ``__init__`` is for,
+        and it is worth carrying the loaded model across a swap if ingests ever
+        become frequent; with reranking off by default nothing is reloaded.
         """
+        from codebase_rag.retrieval.retrieval_stack import close_stages
+
+        close_stages(getattr(self, "retriever", None))
         self.bm25_retriever = index
+        self.retriever = self._build_retrieval_stack()
 
     def _on_ingest_success(self, _job: IngestJob) -> None:
         get_repo_list.clear()

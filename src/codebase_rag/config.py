@@ -44,6 +44,34 @@ def _env_optional_int(name: str, default: int | None) -> int | None:
         raise ValueError(f"{name} must be an integer, got '{raw}'") from None
 
 
+def _env_float(name: str, default: float) -> float:
+    """Read a float env var, treating an empty value as unset.
+
+    Same guard as `_env_int`: float("") raises, and because the singleton is
+    never assigned when construction fails, that raise would repeat on every
+    later get_instance().
+    """
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a number, got '{raw}'") from None
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a boolean env var, treating an empty value as unset.
+
+    Accepts the usual truthy spellings case-insensitively; anything else reads
+    as false, matching the existing `langfuse_enabled` convention.
+    """
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    return raw.lower() in ("true", "1", "yes", "on")
+
+
 @dataclass
 class Config:
     """Configuration settings for the application.
@@ -74,6 +102,19 @@ class Config:
 
     # Retriever settings
     retriever: str = "bm25"
+
+    # Reranking: an optional local cross-encoder stage that rescores the configured retriever's
+    # top candidates. Off by default until evals justify flipping it; model and depth are the
+    # measured winners (see retrieval.rerank). Enabling loads the model lazily on first query.
+    rerank_enabled: bool = False
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_candidate_depth: int = 50
+
+    # Query rewriting: an optional pre-retrieval stage where the local model expands a terse
+    # query with likely identifiers before retrieval. Off by default; expands, never replaces,
+    # and falls back to the original query on failure or timeout (see retrieval.rewrite).
+    rewrite_enabled: bool = False
+    rewrite_timeout_s: float = 5.0
 
     # LLM settings
     provider: str = "ollama"
@@ -147,6 +188,11 @@ class Config:
                 chat_storage_path=Path(_env("CHAT_STORAGE_PATH", str(cls.chat_storage_path))),
                 retriever=retriever,
                 provider=provider,
+                rerank_enabled=_env_bool("RERANK_ENABLED", cls.rerank_enabled),
+                rerank_model=_env("RERANK_MODEL", cls.rerank_model),
+                rerank_candidate_depth=_env_int("RERANK_CANDIDATE_DEPTH", cls.rerank_candidate_depth),
+                rewrite_enabled=_env_bool("REWRITE_ENABLED", cls.rewrite_enabled),
+                rewrite_timeout_s=_env_float("REWRITE_TIMEOUT_S", cls.rewrite_timeout_s),
                 ollama_base_url=_env("OLLAMA_BASE_URL", cls.ollama_base_url),
                 llm_base_url=llm_base_url,
                 llm_api_key=_env("LLM_API_KEY", cls.llm_api_key),

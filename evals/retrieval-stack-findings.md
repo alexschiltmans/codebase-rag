@@ -1,13 +1,15 @@
 # Retrieval Stack Findings
 
 **Date:** 2026-08-05, updated same day after the test set was strengthened, again after chunking
-changed, again after the modern embedders were re-measured under that chunking, and on 2026-08-06
-after chunk size was swept per embedder
+changed, again after the modern embedders were re-measured under that chunking, on 2026-08-06
+after chunk size was swept per embedder, and on 2026-08-17 after the rerank and rewrite stages were
+measured end to end
 **Corpus:** power-grid-model only, 19637 chunks under the current chunking. Every table below the
 chunking update was measured at 12346, before it.
 **Test set:** `evals/testset.json`, 42 scored questions as of the update below (originally 29; one
 question is marked `expected_failure` and excluded either way)
-**Harness:** `evals/bench_retrieval.py` for first stages, `evals/rerank_bench.py` for rerankers
+**Harness:** `evals/bench_retrieval.py` for first stages, `evals/rerank_bench.py` for rerankers, and
+`evals/run_eval.py` for the end-to-end stage measurement in the first update below
 
 This measures four model slots that had never been measured separately: the embedder, the candidate
 depth, the reranker, and the generation/judge model size limit. No shipped default changed as a result
@@ -15,6 +17,59 @@ of this work.
 
 The retrieval sections are retrieval-only, produced without an LLM and without a judge, so they say
 nothing directly about answer quality. The generation and judge section is separate and says so.
+
+## Update: rerank and rewrite measured end to end (2026-08-17)
+
+Every reranker figure elsewhere in this document is retrieval-only, scored over frozen candidate lists
+at output depth 10. This update is the first measurement of those stages in the path the application
+actually runs: `run_eval.py`, all 43 questions, generation and a fixed `qwen3.5:9b` judge, three
+retrievers times four stage configurations. All twelve arms scored 43/43 on every ragas metric and
+none is self-judged. Per-arm files are `evals/results_<retriever>[_rerank][_rewrite].{json,md}`.
+
+On the shipped BM25 retriever:
+
+| config | hit | MRR | prompt tokens | TTFT | p95 latency | faithfulness / context recall |
+|---|---|---|---|---|---|---|
+| baseline | **0.8333** | 0.6087 | **801** | **0.163s** | **1.532s** | 0.462 / 0.564 |
+| rewrite | 0.7381 | 0.5595 | 809 | 1.173s | 2.923s | 0.560 / 0.572 |
+| rerank | 0.7857 | 0.6833 | 841 | 1.505s | 2.821s | 0.593 / 0.631 |
+| rerank + rewrite | 0.8095 | **0.7238** | 816 | 3.263s | 4.903s | 0.555 / 0.676 |
+
+**Both stages ship off by default.** Hit rate does not improve in any of the nine stage configurations
+on any retriever, prompt tokens never fall, and TTFT regresses by 7x to 20x. What the stages buy is
+ordering and grounding, not coverage, which is the same conclusion the retrieval-only tables reach,
+now with the live cost attached to it.
+
+**Output depth changes the reranker's hit rate story.** The tables below show hit rate flat under
+reranking, scored at output depth 10. The application returns 5, and at 5 the same reranker loses
+coverage on every first stage: BM25 0.8333 to 0.7857, vector and hybrid 0.8333 to 0.8095. Over a
+depth-50 pool the cross-encoder promotes documents the first stage ranked 6 to 50 above one that was
+already inside the top 5. A reranker evaluated at output depth 10 will look better than it behaves at
+output depth 5.
+
+**The losses are one failure mode.** On vector and hybrid the five lost questions are identical and
+all five are exact-term lookups: the C++ standard, the third-party dependencies, the transformer
+winding types, the short-circuit fault types, and the minimum CMake version. Three were at rank 1
+before reranking. A cross-encoder scores how much a passage reads like an answer, and a `find_package`
+line or an enum block does not read like one next to prose discussing the same topic.
+
+**The stages do not compose additively.** Rewriting alone is the worst configuration measured on BM25
+(MRR 0.5595). Reranking alone is 0.6833. Together they reach 0.7238 and recover three exact-term
+lookups that reranking alone loses, including the dependencies question. Rewriting widens the
+candidate pool but rescores the top 5 and damages the ordering; reranking cannot reach what the first
+stage never surfaced but repairs ordering once it is there. Neither is worth enabling alone on this
+corpus, and the pair costs 3.263s to first token.
+
+**Candidate depth 50 confirmed against 100 on the shipped first stage**, which had only been measured
+at 100 before. From one BM25 candidate list truncated to each depth, scored at output depth 10: input
+recall is identical at 0.9048, so ranks 51 to 100 hold nothing BM25 had not already found by rank 50.
+MRR is 0.7357 at depth 50 against 0.7294 at depth 100, and latency is 2.13s / 2.44s p95 against
+4.32s / 4.85s. Depth 100 costs twice the latency for no reachable document.
+
+**What blocks the efficiency case is `top_k`, not the models.** It is fixed at 5, so better ordering
+changes which five chunks are sent and never how many, and added query terms displace documents rather
+than supplementing them. Adaptive k, or fusing the expanded and unexpanded result lists, is where the
+next attempt should start.
 
 ## Update: chunk size swept per embedder
 
