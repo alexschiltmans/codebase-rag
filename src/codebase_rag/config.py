@@ -72,6 +72,12 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.lower() in ("true", "1", "yes", "on")
 
 
+# Retrievers an operator may select. The app, the CLI and the HTTP API all resolve
+# `retriever` through `retrieval.retrieval_stack.select_base_retriever`, so this list
+# is what every surface accepts, not what one of them happens to support.
+SUPPORTED_RETRIEVERS = ("bm25", "hybrid")
+
+
 @dataclass
 class Config:
     """Configuration settings for the application.
@@ -100,7 +106,12 @@ class Config:
     # Chat storage settings (SQLite)
     chat_storage_path: Path = Path("./data/chat_history.db")
 
-    # Retriever settings
+    # Which retriever every entry point queries with. BM25 over hybrid on a 42-question
+    # measurement where the two split: hybrid ranks the expected file first more often
+    # (26/42 against 21/42) but BM25's chunks carry more of the answer, on both the judged
+    # context_recall (0.564 against 0.479) and the judge-free keyword recall (0.558 against
+    # 0.505). All five retrieved chunks go into one prompt, so on the app's answer surface
+    # what the context contains outweighs what order it arrives in.
     retriever: str = "bm25"
 
     # Reranking: an optional local cross-encoder stage that rescores the configured retriever's
@@ -168,8 +179,9 @@ class Config:
                 raise ValueError(f"LLM_PROVIDER must be 'ollama' or 'openai-compat', got '{provider}'")
 
             retriever = _env("RETRIEVER", cls.retriever)
-            if retriever not in ("bm25", "hybrid"):
-                raise ValueError(f"RETRIEVER must be 'bm25' or 'hybrid', got '{retriever}'")
+            if retriever not in SUPPORTED_RETRIEVERS:
+                accepted = " or ".join(f"'{name}'" for name in SUPPORTED_RETRIEVERS)
+                raise ValueError(f"RETRIEVER must be {accepted}, got '{retriever}'")
 
             llm_base_url = _env("LLM_BASE_URL", cls.llm_base_url)
             if provider == "openai-compat" and not llm_base_url:

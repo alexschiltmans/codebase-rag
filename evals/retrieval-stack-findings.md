@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-05, updated same day after the test set was strengthened, again after chunking
 changed, again after the modern embedders were re-measured under that chunking, on 2026-08-06
-after chunk size was swept per embedder, and on 2026-08-17 after the rerank and rewrite stages were
-measured end to end
+after chunk size was swept per embedder, and twice on 2026-08-17: after the rerank and rewrite
+stages were measured end to end, and after the shipped retriever default was re-examined
 **Corpus:** power-grid-model only, 19637 chunks under the current chunking. Every table below the
 chunking update was measured at 12346, before it.
 **Test set:** `evals/testset.json`, 42 scored questions as of the update below (originally 29; one
@@ -18,6 +18,66 @@ of this work.
 The retrieval sections are retrieval-only, produced without an LLM and without a judge, so they say
 nothing directly about answer quality. The generation and judge section is separate and says so.
 
+## Update: the shipped retriever default re-examined (2026-08-17)
+
+The default was reconsidered because the reason recorded for it had stopped being true: BM25 was
+selected on recall, and all three retrievers now find the expected source on the same count of
+questions. A full re-run of `run_eval.py` with the fixed `qwen3.5:9b` judge, both optional stages
+off, same corpus and scope as the update below. All three arms scored 43/43 on every ragas metric
+and none is self-judged. **The default did not change; the justification for it did.**
+
+| arm | coverage | rank-1 | MRR | source precision | context recall | keyword recall | faithfulness | answer rel |
+|---|---|---|---|---|---|---|---|---|
+| bm25 (ships) | 35/42 | 21/42 | 0.6087 | 0.3163 | **0.5638** | **0.5577** | 0.5438 | 0.8176 |
+| hybrid | 35/42 | **26/42** | 0.7044 | **0.3953** | 0.4791 | 0.5050 | 0.4750 | **0.8332** |
+| vector | 35/42 | 27/42 | **0.7321** | 0.3953 | 0.5240 | 0.4786 | 0.5148 | 0.8559 |
+
+Rank-1 is not emitted by the harness; it is recomputed from each arm's saved `sources_actual` with
+`compute_retrieval_hit_and_reciprocal_rank`, the same function behind hit rate and MRR.
+
+What reproduces, and what does not. Every retrieval-side figure above is bit-identical to the
+previous run, as are the retrieved contexts themselves: 43/43 questions returned the same chunks in
+the same order in all three arms. Retrieval here is deterministic and carries no run-to-run error.
+Generation is not, despite `temperature=0.0`: only 1/43 and 2/43 answers were identical between the
+two runs, and every judged metric inherits that. Measured between the two runs, context_recall moved
+by at most 0.021, answer_relevancy by at most 0.034, and **faithfulness reversed sign** (hybrid led
+BM25 by 0.077, then trailed by 0.069). Faithfulness cannot support a comparison at this sample size
+and should not be quoted from either run.
+
+The two retrievers split, reproducibly, along a line worth naming:
+
+- **Hybrid is better at file-level targeting.** It ranks the expected file first on 26/42 questions
+  against 21/42, and a higher fraction of what it returns matches the expected sources (0.3953
+  against 0.3163). The rank-1 gap is broad rather than driven by outliers: hybrid wins 11 questions,
+  BM25 wins 6, 15 are tied at rank 1, 10 at neither.
+- **BM25 retrieves more of the answer's content.** It leads context_recall by 0.085 and keyword
+  recall by 0.053, both same-sign across two runs and both outside their measured noise. These come
+  from different mechanisms, one judged and one purely lexical, which is why they carry more weight
+  together than either would alone.
+
+The default stays `bm25` on that split. All five retrieved chunks are concatenated into one prompt,
+so on the app's answer surface what the context contains matters more than the order it arrives in;
+rank-1 is the better metric for the ranked-list surfaces (`codebase-rag query`, `POST /search`), and
+those give up something real here. Caveats worth carrying: 42 questions on one repository, and both
+content metrics could carry a lexical bias toward the keyword retriever, since reference answers and
+BM25 both key off the question's wording.
+
+Two things the coverage column hides. The 35/42 tie is a coincidence of equal-sized failure sets, not
+agreement: BM25 finds 4 questions hybrid misses entirely and hybrid finds 4 BM25 misses. And the arms
+are not returning the same material reordered, mean Jaccard overlap of their retrieved chunk sets is
+0.183.
+
+The `vector` arm remains unshippable evidence and is listed for reference only: it is measured with
+the relevance cutoff disabled to isolate raw embedding ranking, so its leading MRR does not describe
+a configuration the application can be set to.
+
+Availability, measured separately against a live index rather than argued from the code: with
+`RETRIEVER=hybrid` and Qdrant unreachable, retrieval degrades to BM25 ordering rather than failing,
+because the store's existence check swallows the connection error and the fusion rescales against
+whichever rankers returned results. Cost is 0.01s on a refused connection and 1.06s on an unroutable
+host, bounded near 5s by the client's default timeout. The exception is a store that answers its
+existence check and then fails the query itself, which propagates and fails the question outright.
+
 ## Update: rerank and rewrite measured end to end (2026-08-17)
 
 Every reranker figure elsewhere in this document is retrieval-only, scored over frozen candidate lists
@@ -25,6 +85,14 @@ at output depth 10. This update is the first measurement of those stages in the 
 actually runs: `run_eval.py`, all 43 questions, generation and a fixed `qwen3.5:9b` judge, three
 retrievers times four stage configurations. All twelve arms scored 43/43 on every ragas metric and
 none is self-judged. Per-arm files are `evals/results_<retriever>[_rerank][_rewrite].{json,md}`.
+
+One caveat on those files, added after the fact: the three no-stage arms were re-run later the same
+day for the default re-examination above, so `results_{bm25,hybrid,vector}.{json,md}` now hold the
+newer run's numbers and no longer match the `baseline` rows below. The retrieval columns are
+identical between the two runs; the judged columns are not, faithfulness least of all. The tables in
+this section are left as measured, because every row in them comes from one run and they are only
+meaningful compared against each other. Read a baseline row against the rows beside it, not against
+the regenerated file.
 
 On the shipped BM25 retriever:
 

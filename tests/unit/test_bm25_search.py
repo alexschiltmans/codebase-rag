@@ -100,3 +100,79 @@ class TestLoadBm25Corpus:
         loaded = load_bm25_corpus(tmp_path, repos=["repo-a"])
 
         assert {doc.metadata["repo"] for doc in loaded} == {"repo-a"}
+
+
+class TestRepoRestriction:
+    """The `repos` restriction, which is how `--repo` reaches the retriever."""
+
+    @staticmethod
+    def _docs() -> list[Document]:
+        """Two documents carrying the query term, one per repo, plus filler.
+
+        The filler is load-bearing: BM25 gives a negative IDF to any term appearing in more
+        than roughly half the corpus, so a two-document corpus where both match scores every
+        result at or below zero and `search` correctly returns nothing.
+        """
+        matching = [
+            Document(page_content="target token", metadata={"source": "a.py", "repo": "repo-a"}),
+            Document(page_content="target token", metadata={"source": "b.py", "repo": "repo-b"}),
+        ]
+        filler = [
+            Document(page_content=f"unrelated body {i}", metadata={"source": f"f{i}.py", "repo": "repo-c"})
+            for i in range(4)
+        ]
+        return matching + filler
+
+    def _index(self, repos: list[str] | None) -> BM25Retriever:
+        return BM25Retriever(self._docs(), repos=repos)
+
+    def test_unrestricted_returns_every_repo(self) -> None:
+        results = self._index(None).search("target", k=5)
+
+        assert {doc.metadata["repo"] for doc, _ in results} == {"repo-a", "repo-b"}
+
+    def test_restriction_drops_out_of_scope_matches(self) -> None:
+        results = self._index(["repo-a"]).search("target", k=5)
+
+        assert [doc.metadata["repo"] for doc, _ in results] == ["repo-a"]
+
+    def test_restriction_applies_before_k(self) -> None:
+        """`k` means k in-scope results, not whatever survives filtering the global top k.
+
+        The out-of-scope document scores higher here, so a filter applied after the cut to
+        k=1 would return nothing at all.
+        """
+        docs = [
+            Document(page_content="target target target", metadata={"source": "b.py", "repo": "repo-b"}),
+            Document(page_content="target", metadata={"source": "a.py", "repo": "repo-a"}),
+            *(
+                Document(page_content=f"unrelated body {i}", metadata={"source": f"f{i}.py", "repo": "repo-c"})
+                for i in range(4)
+            ),
+        ]
+
+        results = BM25Retriever(docs, repos=["repo-a"]).search("target", k=1)
+
+        assert [doc.metadata["source"] for doc, _ in results] == ["a.py"]
+
+    def test_restriction_does_not_move_scores(self) -> None:
+        """Scoping selects from what was scored; it does not change what was scored.
+
+        BM25 scores depend on corpus-wide document frequencies and average document length, so a
+        restriction that narrowed the index instead would silently rescore the documents it kept.
+        """
+        unscoped = {doc.metadata["source"]: score for doc, score in self._index(None).search("target", k=5)}
+        scoped = self._index(["repo-a"]).search("target", k=5)
+
+        assert scoped
+        for doc, score in scoped:
+            assert score == unscoped[doc.metadata["source"]]
+
+    def test_restriction_survives_a_round_trip_through_json(self, tmp_path: Path) -> None:
+        """`load_json` is how every entry point builds this, so the scope has to be settable there."""
+        path = tmp_path / "index.json"
+        self._index(None).save_json(path)
+
+        loaded = BM25Retriever.load_json(path, repos=["repo-b"])
+
+        assert [doc.metadata["repo"] for doc, _ in loaded.search("target", k=5)] == ["repo-b"]

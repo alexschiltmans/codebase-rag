@@ -1,6 +1,6 @@
 # Retrieval Ablation
 
-**Date:** 2026-08-17 07:14
+**Date:** 2026-08-17 11:58
 
 **Retrieval stages:** none (base retriever only) (every arm ran under this stack)
 
@@ -16,6 +16,6 @@ Avg Latency figures are comparable only across runs with similar latency probes;
 
 | Retriever | Hit Rate | MRR | Keyword Recall | Source Precision | Answered | Failed | Avg Latency | p95 Latency | Prompt Tokens | Avg TTFT | p95 TTFT | Eff. Qs |
 |-----------|----------|-----|----------------|-------------------|----------|--------|-------------|-------------|---------------|----------|----------|---------|
-| vector | 0.8333 | 0.7321 | 0.4679 | 0.3953 | 43 | 0 | 0.9s | 1.5s | 805 | 0.2s | 0.2s | 43 |
-| bm25 | 0.8333 | 0.6087 | 0.5532 | 0.3163 | 43 | 0 | 0.9s | 1.5s | 801 | 0.2s | 0.2s | 43 |
-| hybrid | 0.8333 | 0.7044 | 0.4912 | 0.3953 | 43 | 0 | 0.9s | 1.4s | 797 | 0.2s | 0.2s | 43 |
+| vector | 0.8333 | 0.7321 | 0.4786 | 0.3953 | 43 | 0 | 0.9s | 1.5s | 805 | 0.2s | 0.2s | 43 |
+| bm25 | 0.8333 | 0.6087 | 0.5577 | 0.3163 | 43 | 0 | 0.8s | 1.5s | 801 | 0.2s | 0.2s | 43 |
+| hybrid | 0.8333 | 0.7044 | 0.5050 | 0.3953 | 43 | 0 | 0.9s | 1.6s | 797 | 0.2s | 0.2s | 43 |

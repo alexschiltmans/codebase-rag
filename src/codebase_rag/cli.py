@@ -12,6 +12,7 @@ from codebase_rag.config import Config
 from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
+from codebase_rag.retrieval.retriever_protocol import RetrieverProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +44,66 @@ def _data_dir() -> Path:
     return Path(override) if override else _PROJECT_ROOT
 
 
-def _load_bm25_retriever() -> BM25Retriever:
+def _load_bm25_retriever(repos: list[str] | None = None) -> BM25Retriever:
     """Load BM25 retriever from cache or return empty if missing."""
     cache_dir = _data_dir() / "data" / "cache"
     bm25_file = cache_dir / "bm25_retriever.json"
 
     if bm25_file.exists():
-        return BM25Retriever.load_json(bm25_file)
+        return BM25Retriever.load_json(bm25_file, repos=repos)
 
     logger.warning("No BM25 index found at %s. Run `make ingest-default` or use the UI to ingest a repo.", bm25_file)
     raise FileNotFoundError(f"BM25 index not found at {bm25_file}")
+
+
+def _create_llm(config: Config) -> Any:
+    """Build the generation client. Shared so `ask` and the rewrite stage cannot configure it apart."""
+    return create_llm_client(
+        model_name=config.llm_model_name,
+        temperature=0.0,
+        top_p=0.9,
+        top_k=40,
+        max_tokens=1024,
+        timeout=120,
+        num_ctx=config.ollama_num_ctx,
+    )
+
+
+def _build_retriever(config: Config, repos: list[str] | None = None, llm: Any = None) -> RetrieverProtocol:
+    """Build the configured retrieval stack, scoped to `repos` if given.
+
+    The CLI reads the same settings the app and the API do, so `RETRIEVER`, `RERANK_ENABLED`
+    and `REWRITE_ENABLED` each mean one thing across all three rather than moving some of them.
+
+    Two things are built lazily, because this command is meant for git hooks and CI where the
+    keyword path answers in milliseconds. The vector store is constructed inside the callable,
+    so the default never pays for a Qdrant client and the embedding model load behind it. The
+    generation client is built only when the rewrite stage is enabled and the caller has not
+    already got one; reranking needs no model client, and `query` has no other use for one.
+
+    Args:
+        config: Supplies the retriever choice and the stage flags.
+        repos: Optional repository restriction, pushed into both rankers.
+        llm: An existing generation client to hand the rewrite stage, if the caller has one.
+    """
+    from codebase_rag.retrieval.retrieval_stack import apply_stages, select_base_retriever
+
+    def vector_retriever() -> RetrieverProtocol:
+        from codebase_rag.database.qdrant_store import QdrantStore
+        from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
+
+        store = QdrantStore(
+            host=config.qdrant_host,
+            port=config.qdrant_port,
+            collection_name=config.collection_name,
+            embedding_model=config.embedding_model,
+        )
+        return VectorRetriever(store, score_threshold=resolve_score_threshold(config.embedding_model), repos=repos)
+
+    base = select_base_retriever(config, _load_bm25_retriever(repos), vector_retriever)
+    if llm is None and config.rewrite_enabled:
+        llm = _create_llm(config)
+    return apply_stages(base, config, llm)
 
 
 def _format_compact(results: list[tuple[Any, ...]]) -> str:
@@ -116,14 +167,19 @@ def query_command(args: argparse.Namespace) -> int:
             logger.error("--budget must be greater than 0")
             return 1
 
-        bm25_retriever = _load_bm25_retriever()
+        # --repo is a restriction on the retriever, not a filter over its output. The
+        # retriever therefore returns k in-scope results directly; this used to rank the
+        # entire corpus and filter afterwards, which is affordable against an in-memory
+        # keyword index and is not against a vector store.
+        repos = [args.repo] if args.repo else None
+        retriever = _build_retriever(Config.get_instance(), repos)
 
-        # When filtering by repo, over-fetch across the whole index so --repo
-        # narrows the result set rather than truncating it before the filter runs.
-        search_k = len(bm25_retriever.documents) if args.repo else args.k
-        search_results = bm25_retriever.search(args.question, k=search_k)
+        search_results = retriever.search(args.question, k=args.k)
         if not search_results:
-            logger.info("No results found for query")
+            if args.repo:
+                logger.info("No results found for repo '%s'", args.repo)
+            else:
+                logger.info("No results found for query")
             return 2
 
         # Convert LangChain Document tuples to our format for formatting
@@ -133,14 +189,6 @@ def query_command(args: argparse.Namespace) -> int:
             snippet = doc.page_content
             repo = doc.metadata.get("repo")
             formatted_results.append((path, score, snippet, repo))
-
-        # Filter by repo if specified, then cap back to k (search results are already
-        # sorted by score, so the top k of the filtered set is the correct top k).
-        if args.repo:
-            formatted_results = [r for r in formatted_results if r[3] == args.repo][: args.k]
-            if not formatted_results:
-                logger.info("No results found for repo '%s'", args.repo)
-                return 2
 
         # Apply budget trimming
         formatted_results = _trim_results_by_budget(formatted_results, args.budget, args.format)
@@ -165,21 +213,13 @@ def ask_command(args: argparse.Namespace) -> int:
     """Execute the ask subcommand."""
     try:
         config = Config.get_instance()
-        bm25_retriever = _load_bm25_retriever()
-
-        # Initialize LLM and RAG chain
-        llm = create_llm_client(
-            model_name=config.llm_model_name,
-            temperature=0.0,
-            top_p=0.9,
-            top_k=40,
-            max_tokens=1024,
-            timeout=120,
-            num_ctx=config.ollama_num_ctx,
-        )
+        # Built before the retriever so the rewrite stage shares this one client rather than
+        # standing up a second identical one.
+        llm = _create_llm(config)
+        retriever = _build_retriever(config, llm=llm)
 
         rag_chain = RAGChain(
-            retriever=bm25_retriever,
+            retriever=retriever,
             llm=llm,
             use_conversation_memory=False,
             prompt_budget_chars=llm.prompt_budget_chars,

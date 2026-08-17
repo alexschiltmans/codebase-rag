@@ -13,6 +13,7 @@ from langchain_core.documents import Document
 
 from codebase_rag.api.state import ApiState
 from codebase_rag.config import Config
+from codebase_rag.retrieval.hybrid_search import HybridRetriever
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +59,9 @@ class TestRetrieverSelection:
     def test_hybrid_when_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("RETRIEVER", "hybrid")
         state = _make_state()
-        assert state.retriever is state.hybrid_retriever
+        assert isinstance(state.retriever, HybridRetriever)
+        assert state.retriever.bm25_retriever is state.bm25_retriever
+        assert state.retriever.vector_retriever is state.vector_retriever
 
     def test_refresh_bm25_keeps_selection_in_sync(self) -> None:
         with _patched_state() as state:
@@ -73,12 +76,14 @@ class TestRetrieverSelection:
     def test_refresh_bm25_keeps_hybrid_selection_in_sync(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("RETRIEVER", "hybrid")
         with _patched_state() as state:
-            assert state.retriever is state.hybrid_retriever
+            assert isinstance(state.retriever, HybridRetriever)
 
             state.refresh_bm25()
 
-            assert state.retriever is state.hybrid_retriever
-            assert state.hybrid_retriever.bm25_retriever is state.bm25_retriever
+            # The fused retriever is rebuilt rather than mutated, so the assertion that
+            # matters is that it fuses the *reloaded* index, not that it is the same object.
+            assert isinstance(state.retriever, HybridRetriever)
+            assert state.retriever.bm25_retriever is state.bm25_retriever
 
 
 class TestPromptBudget:

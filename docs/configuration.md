@@ -16,7 +16,22 @@ All settings are configured via environment variables or a `.env` file in the pr
 | `EMBEDDING_DOCUMENT_PROMPT` | model's own | Prefix applied to documents. Unset uses the prompts the model declares. |
 | `EMBEDDING_MAX_SEQ_LENGTH` | model's own | Token window override. Chunk size follows it at 1.6 characters per token, capped at 2000 characters: long-context embedders declare windows in the tens of thousands, and a chunk that size matches everything and locates nothing. |
 | `EMBEDDING_DTYPE` | checkpoint's own | Load precision: `float32`, `float16`, or `bfloat16`. Unset does not mean float32; the checkpoint decides, and some are stored at bfloat16. Vectors built at one precision should not be queried at another. |
-| `RETRIEVER` | `bm25` | Retriever the HTTP API serves search and answer requests from: `bm25` or `hybrid`. `bm25` matches the Streamlit app's default, on ablation evidence in `evals/deprecated/ablation.md` (hit rate 0.6552 vs 0.5862 for hybrid; those figures are deprecated but the decision stands). `HybridRetriever` is still built and used by the eval ablation and by the ingestion pipeline's duplicate-detection search regardless of this setting. |
+| `RETRIEVER` | `bm25` | Retriever the Streamlit app, the CLI, and the HTTP API all query with: `bm25` or `hybrid`. One setting for every surface, so changing it moves all three together. `bm25` is the default on a 42-question measurement where the two split: hybrid ranks the expected file first more often (26/42 against 21/42) while BM25's contexts carry more of the answer (context_recall 0.564 against 0.479, keyword recall 0.558 against 0.505); see `evals/retrieval-stack-findings.md`. `vector` is not accepted, because the only measurement of it runs without the relevance cutoff and so describes a configuration the app cannot be set to. `HybridRetriever` is still built and used by the eval ablation and by the ingestion pipeline's duplicate-detection search regardless of this setting. Setting `hybrid` also puts the cosine relevance cutoff calibrated for `EMBEDDING_MODEL` on every query from every surface, where under `bm25` no query touches it; an embedding model with no calibrated cutoff then runs the app unfiltered, which is logged as a warning at startup. |
+
+## Optional retrieval stages
+
+Both stages are off by default and apply to every surface, the same way `RETRIEVER` does. They were
+measured end to end on this corpus: neither improves hit rate on any retriever, prompt tokens never
+fall, and time to first token regresses by 7x to 20x. What they buy is ordering and grounding. See
+`evals/retrieval-stack-findings.md` for the per-arm figures.
+
+| Variable | Default | Description |
+|---|---|---|
+| `RERANK_ENABLED` | `false` | Rescore the configured retriever's top candidates with a local cross-encoder. Enabling it loads the model lazily on the first query, roughly 2GB from the local cache, so the first question after startup pays for it. |
+| `RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` | Cross-encoder used when reranking is enabled. |
+| `RERANK_CANDIDATE_DEPTH` | `50` | How many candidates are pulled from the first stage for rescoring. Deeper costs time and raises the ceiling on what reranking can recover. |
+| `REWRITE_ENABLED` | `false` | Expand a terse query with likely identifiers using the local model before retrieval. Expands, never replaces, and falls back to the original query on failure or timeout. |
+| `REWRITE_TIMEOUT_S` | `5.0` | Seconds to wait for the expansion before giving up and retrieving on the original query. |
 
 ## Generation settings (all backends)
 

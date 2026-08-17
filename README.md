@@ -20,7 +20,7 @@
 ## Why This Project?
 
 - **Fully local.** Runs entirely on your machine. Your code never leaves your hardware.
-- **BM25 retrieval by default.** The eval framework ran the same test set through vector-only, BM25-only, and hybrid RRF retrieval and measured recall for each, rather than assuming hybrid would win; BM25-only came out ahead, so that's what the app queries with. See the [retrieval stack findings](evals/retrieval-stack-findings.md).
+- **BM25 retrieval by default.** The eval framework runs the same 42 scored questions through vector-only, BM25-only, and hybrid RRF retrieval rather than assuming hybrid would win. The three now find the expected source on 35 questions each, so recall no longer separates them, and the remaining metrics split: hybrid ranks the expected file first more often (26/42 against BM25's 21/42), while BM25 leads the two measures of whether the retrieved context carries the answer (context_recall 0.564 against 0.479, keyword recall 0.558 against 0.505). All five retrieved chunks go into one prompt, so content beats ordering here and BM25 stays the default. See the [retrieval stack findings](evals/retrieval-stack-findings.md).
 - **Evaluated, not just vibes.** Ships with a reproducible evaluation framework; the current test set is 43 questions, 42 of them scored. See [retrieval stack findings](evals/retrieval-stack-findings.md) for the current embedder, candidate-depth and reranker measurements.
 - **Observable.** Optional Langfuse integration traces every retrieval and generation step, so you can debug quality issues instead of guessing.
 - **Documented decisions.** Architecture Decision Records explain *why* each technology was chosen, not just *what* was used. See the [ADR index](docs/adr-index.md).
@@ -29,7 +29,7 @@
 ## Features
 
 **Retrieval Design**
-- **BM25 search.** The Streamlit app and the CLI always query with BM25 keyword retrieval. `VectorRetriever` and `HybridRetriever` (Reciprocal Rank Fusion, weighted 0.7/0.3) stay in the codebase and are reachable three ways: the eval ablation scores them alongside BM25, the ingestion pipeline runs a hybrid search as a post-ingest check, and `RETRIEVER=hybrid` switches the HTTP API onto the fused path. That setting does not reach the app or the CLI.
+- **BM25 search, and one setting that changes it.** `RETRIEVER` decides what the Streamlit app, the CLI, and the HTTP API query with, and it defaults to `bm25`. Setting `RETRIEVER=hybrid` switches all three onto `HybridRetriever` (Reciprocal Rank Fusion, weighted 0.7/0.3); there is no per-surface default to keep in sync. `VectorRetriever` is not selectable, because the only measurement of it disables relevance filtering to isolate ranking quality and so describes a configuration you cannot run. The ingestion pipeline also runs a hybrid search as a post-ingest check, and the eval ablation scores all three.
 - **Language-aware chunking.** Naively splitting code by token count breaks at arbitrary lines, destroying context. Python and Markdown/RST get structure-aware splitting; `.ipynb` notebooks get their own strategy that splits code cells as Python and markdown cells as Markdown; everything else uses generic recursive splitting.
 - **Source citations.** Every answer includes the source files and repositories it drew from, so answers are verifiable.
 
@@ -48,7 +48,7 @@
 graph TD
     UI["Streamlit UI<br/><i>chat, repo management</i>"]
     RAG["RAG Chain<br/><i>LangChain pipeline</i>"]
-    HS["BM25 Retrieval<br/><i>keyword search</i>"]
+    HS["Configured Retrieval<br/><i>BM25 keyword search by default</i>"]
     LLM["Local LLM Backend<br/><i>Ollama, LM Studio, etc</i>"]
     QD["Qdrant<br/><i>Vector Database</i>"]
     LF["Langfuse<br/><i>LLM Observability</i>"]
@@ -66,7 +66,7 @@ graph TD
 **Data flow:**
 
 1. **Ingest.** `GitLoader` clones a repo → `DocumentProcessor` splits files into chunks using language-specific strategies → chunks are embedded with `sentence-transformers/all-mpnet-base-v2` and stored in Qdrant, with a parallel BM25 index built for keyword search.
-2. **Retrieve.** User query hits the BM25 retriever, which returns the top-k matching documents.
+2. **Retrieve.** User query hits the configured retriever, BM25 unless `RETRIEVER` says otherwise, which returns the top-k matching documents.
 3. **Generate.** Retrieved documents are formatted into a context prompt and sent to the configured LLM backend (Ollama, LM Studio, llama.cpp, vLLM, or Jan). The `RAGChain` handles conversation memory, prompt construction, and Langfuse tracing.
 4. **Persist.** Chat history is stored in SQLite. Vector data lives in Qdrant. Both survive container restarts via Docker volumes.
 
@@ -192,7 +192,7 @@ fi
 
 `make api` starts a FastAPI server (`uvicorn`) alongside Streamlit, giving coding agents (Copilot, Claude Code, OpenCode, Cursor, aider) direct, token-budgeted access to the retrieval stack instead of falling back to grep/whole-file reads. It binds to `127.0.0.1` by default (`API_HOST`/`API_PORT`). **Exposing it beyond localhost requires adding authentication first; there is none today.**
 
-- `POST /search`, `{"query": str, "k": int, "repo": str | null, "token_budget": int, "format": "json" | "compact"}`. Ranks chunks with the configured retriever (BM25 by default, matching the app; set `RETRIEVER=hybrid` to switch), drops overlapping chunks from the same file, and stops once the combined token estimate would exceed `token_budget` (default 2000). Each result has `path`, `start_line`, `end_line`, `score`, `snippet`, `token_estimate`. `format=compact` returns plain text (`path:start-end (score)` + snippet) instead of a JSON envelope.
+- `POST /search`, `{"query": str, "k": int, "repo": str | null, "token_budget": int, "format": "json" | "compact"}`. Ranks chunks with the configured retriever (BM25 by default; `RETRIEVER=hybrid` switches this and every other surface together), drops overlapping chunks from the same file, and stops once the combined token estimate would exceed `token_budget` (default 2000). Each result has `path`, `start_line`, `end_line`, `score`, `snippet`, `token_estimate`. `format=compact` returns plain text (`path:start-end (score)` + snippet) instead of a JSON envelope.
 - `POST /answer`, `{"question": str, "stream": bool}`. Runs the full RAG chain and returns `answer` plus `sources` (file path + line range). `stream: true` returns Server-Sent Events (`event: token`, then a final `event: done` carrying `sources`).
 - `GET /repos`, ingested repositories with freshness metadata (last-ingest time, and the indexed HEAD SHA for git-backed repos).
 - `POST /ingest`, `{"source": str}`, accepting a git URL or a local filesystem path. Local paths are ingested from the working tree in place, without cloning. Re-ingesting diffs files by content hash so only changed files re-embed; unchanged chunks are left untouched. Returns a job status immediately (`202`); a second ingest while one is running gets `409`. Poll `GET /ingest/status` for completion.

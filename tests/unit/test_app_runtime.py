@@ -17,6 +17,7 @@ def _config(**overrides: object) -> MagicMock:
     config.llm_model_name = "test-model"
     config.ollama_base_url = "http://localhost:11434"
     config.default_repo_url = ""
+    config.retriever = "bm25"
     config.rerank_enabled = False
     config.rewrite_enabled = False
     for key, value in overrides.items():

@@ -159,17 +159,17 @@ class TestQueryCommand:
 class TestAskCommand:
     """Tests for the ask subcommand."""
 
-    @patch("codebase_rag.cli._load_bm25_retriever")
-    def test_ask_missing_index(self, mock_load_bm25: MagicMock) -> None:
+    @patch("codebase_rag.cli._build_retriever")
+    def test_ask_missing_index(self, mock_build: MagicMock) -> None:
         """Ask fails with exit code 1 when index is missing."""
-        mock_load_bm25.side_effect = FileNotFoundError("BM25 index not found")
+        mock_build.side_effect = FileNotFoundError("BM25 index not found")
 
         args = MagicMock(question="test")
         result = ask_command(args)
 
         assert result == 1
 
-    @patch("codebase_rag.cli._load_bm25_retriever")
+    @patch("codebase_rag.cli._build_retriever")
     @patch("codebase_rag.cli.Config.get_instance")
     @patch("codebase_rag.cli.create_llm_client")
     @patch("codebase_rag.cli.RAGChain")
@@ -178,11 +178,11 @@ class TestAskCommand:
         mock_rag_chain_class: MagicMock,
         mock_create_llm: MagicMock,
         mock_config: MagicMock,
-        mock_load_bm25: MagicMock,
+        mock_build: MagicMock,
     ) -> None:
         """Ask generates an answer via RAG chain."""
         mock_bm25_instance = MagicMock()
-        mock_load_bm25.return_value = mock_bm25_instance
+        mock_build.return_value = mock_bm25_instance
 
         mock_llm = MagicMock()
         mock_create_llm.return_value = mock_llm
@@ -198,7 +198,7 @@ class TestAskCommand:
         assert result == 0
         mock_rag_chain_instance.stream.assert_called_once_with("explain the architecture")
 
-    @patch("codebase_rag.cli._load_bm25_retriever")
+    @patch("codebase_rag.cli._build_retriever")
     @patch("codebase_rag.cli.Config.get_instance")
     @patch("codebase_rag.cli.create_llm_client")
     @patch("codebase_rag.cli.RAGChain")
@@ -209,13 +209,13 @@ class TestAskCommand:
         mock_rag_chain_class: MagicMock,
         mock_create_llm: MagicMock,
         mock_config: MagicMock,
-        mock_load_bm25: MagicMock,
+        mock_build: MagicMock,
     ) -> None:
         """Ask streams chunks live when stdout is a terminal."""
         mock_stdout.isatty.return_value = True
 
         mock_bm25_instance = MagicMock()
-        mock_load_bm25.return_value = mock_bm25_instance
+        mock_build.return_value = mock_bm25_instance
 
         mock_llm = MagicMock()
         mock_create_llm.return_value = mock_llm
@@ -232,7 +232,7 @@ class TestAskCommand:
         printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list if call.args)
         assert "This is a test" in printed
 
-    @patch("codebase_rag.cli._load_bm25_retriever")
+    @patch("codebase_rag.cli._build_retriever")
     @patch("codebase_rag.cli.Config.get_instance")
     @patch("codebase_rag.cli.create_llm_client")
     @patch("codebase_rag.cli.RAGChain")
@@ -241,7 +241,7 @@ class TestAskCommand:
         mock_rag_chain_class: MagicMock,
         mock_create_llm: MagicMock,
         mock_config: MagicMock,
-        mock_load_bm25: MagicMock,
+        mock_build: MagicMock,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A non-empty sources list must not fail the command.
@@ -251,7 +251,7 @@ class TestAskCommand:
         ``RAGChain._format_sources`` actually returns. That exited 1 after a correct answer.
         The literal below is that real shape, not a Document.
         """
-        mock_load_bm25.return_value = MagicMock()
+        mock_build.return_value = MagicMock()
         mock_create_llm.return_value = MagicMock()
 
         mock_rag_chain_instance = MagicMock()
@@ -343,76 +343,52 @@ class TestBudgetTrimming:
 class TestRepoFiltering:
     """Tests for repository filtering."""
 
-    @patch("codebase_rag.cli._load_bm25_retriever")
-    def test_query_with_repo_filter(self, mock_load_bm25: MagicMock) -> None:
-        """Query filters results by the repo metadata tag, not the source path."""
-        mock_doc1 = MagicMock()
-        mock_doc1.metadata = {
-            "source": "data/repos/foo/src/app.py",
-            "repo": "foo",
-        }
-        mock_doc1.page_content = "snippet1"
+    @patch("codebase_rag.cli._build_retriever")
+    def test_query_restricts_the_retriever_rather_than_filtering_its_output(self, mock_build: MagicMock) -> None:
+        """--repo is handed to the retriever, so `k` already means k in-scope results.
 
-        mock_doc2 = MagicMock()
-        mock_doc2.metadata = {
-            "source": "/Users/dev/local-folder/src/lib.py",
-            "repo": "bar",
-        }
-        mock_doc2.page_content = "snippet2"
+        The command used to rank the whole corpus and filter afterwards, which only worked
+        because the keyword index is in memory. Asserting the restriction goes down means
+        the fused path cannot regress into asking a vector store for the entire collection.
+        """
+        mock_doc = MagicMock()
+        mock_doc.metadata = {"source": "data/repos/foo/src/app.py", "repo": "foo"}
+        mock_doc.page_content = "snippet1"
 
-        mock_bm25_instance = MagicMock()
-        mock_bm25_instance.documents = [mock_doc1, mock_doc2]
-        mock_bm25_instance.search.return_value = [(mock_doc1, 0.95), (mock_doc2, 0.85)]
-        mock_load_bm25.return_value = mock_bm25_instance
+        retriever = MagicMock()
+        retriever.search.return_value = [(mock_doc, 0.95)]
+        mock_build.return_value = retriever
 
         args = MagicMock(question="test", k=5, format="compact", repo="foo", budget=2000)
         result = query_command(args)
 
         assert result == 0
-        mock_bm25_instance.search.assert_called_once_with("test", k=2)
+        assert mock_build.call_args.args[1] == ["foo"]
+        retriever.search.assert_called_once_with("test", k=5)
 
-    @patch("codebase_rag.cli._load_bm25_retriever")
-    def test_query_with_repo_filter_no_match(self, mock_load_bm25: MagicMock) -> None:
+    @patch("codebase_rag.cli._build_retriever")
+    def test_query_without_repo_leaves_the_retriever_unrestricted(self, mock_build: MagicMock) -> None:
+        """No --repo means no restriction, rather than a one-element scope."""
+        retriever = MagicMock()
+        retriever.search.return_value = []
+        mock_build.return_value = retriever
+
+        args = MagicMock(question="test", k=5, format="compact", repo=None, budget=2000)
+        query_command(args)
+
+        assert mock_build.call_args.args[1] is None
+
+    @patch("codebase_rag.cli._build_retriever")
+    def test_query_with_repo_filter_no_match(self, mock_build: MagicMock) -> None:
         """Query exits 2 (not 1) when --repo matches nothing, instead of a bare newline."""
-        mock_doc = MagicMock()
-        mock_doc.metadata = {"source": "data/repos/foo/src/app.py", "repo": "foo"}
-        mock_doc.page_content = "snippet1"
-
-        mock_bm25_instance = MagicMock()
-        mock_bm25_instance.search.return_value = [(mock_doc, 0.95)]
-        mock_load_bm25.return_value = mock_bm25_instance
+        retriever = MagicMock()
+        retriever.search.return_value = []
+        mock_build.return_value = retriever
 
         args = MagicMock(question="test", k=5, format="compact", repo="nonexistent", budget=2000)
         result = query_command(args)
 
         assert result == 2
-
-    @patch("codebase_rag.cli._load_bm25_retriever")
-    def test_query_repo_filter_over_fetches_before_applying_k(self, mock_load_bm25: MagicMock) -> None:
-        """--k limits results returned, not search depth: --repo must not discard matches before --k caps them."""
-        foo_docs = []
-        for i in range(6):
-            doc = MagicMock()
-            doc.metadata = {"source": f"data/repos/foo/src/f{i}.py", "repo": "foo"}
-            doc.page_content = f"snippet{i}"
-            foo_docs.append((doc, 0.9 - i * 0.01))
-
-        bar_doc = MagicMock()
-        bar_doc.metadata = {"source": "data/repos/bar/src/g.py", "repo": "bar"}
-        bar_doc.page_content = "bar snippet"
-
-        all_results = [(bar_doc, 0.95), *foo_docs]
-
-        mock_bm25_instance = MagicMock()
-        mock_bm25_instance.documents = [d for d, _ in all_results]
-        mock_bm25_instance.search.return_value = all_results
-        mock_load_bm25.return_value = mock_bm25_instance
-
-        args = MagicMock(question="test", k=5, format="json", repo="foo", budget=100_000)
-        result = query_command(args)
-
-        assert result == 0
-        mock_bm25_instance.search.assert_called_once_with("test", k=len(all_results))
 
 
 class TestKValidation:

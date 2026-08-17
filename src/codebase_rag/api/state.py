@@ -1,7 +1,7 @@
 """Process-wide resources for the HTTP API: one Qdrant client, one LLM
-client, both retrievers with the configured one selected, and the ingest job
-manager. Analogous to `app/runtime.py`'s `AppRuntime`, but without any
-Streamlit dependency since this runs as its own uvicorn process.
+client, the configured retriever, and the ingest job manager. Analogous to
+`app/runtime.py`'s `AppRuntime`, but without any Streamlit dependency since
+this runs as its own uvicorn process.
 """
 
 from __future__ import annotations
@@ -12,8 +12,7 @@ from codebase_rag.database.qdrant_store import QdrantStore
 from codebase_rag.llm.provider_factory import create_llm_client
 from codebase_rag.llm.rag_chain import RAGChain
 from codebase_rag.retrieval.bm25_search import BM25Retriever
-from codebase_rag.retrieval.hybrid_search import HybridRetriever
-from codebase_rag.retrieval.retrieval_stack import apply_stages, close_stages
+from codebase_rag.retrieval.retrieval_stack import apply_stages, close_stages, select_base_retriever
 from codebase_rag.retrieval.retriever_protocol import RetrieverProtocol
 from codebase_rag.retrieval.vector_search import VectorRetriever, resolve_score_threshold
 from codebase_rag.services.token_estimator import get_tokenizer
@@ -32,15 +31,6 @@ class ApiState:
             self.qdrant_store, score_threshold=resolve_score_threshold(self.config.embedding_model)
         )
         self.bm25_retriever = self._load_bm25_retriever()
-        self.hybrid_retriever = HybridRetriever(
-            vector_retriever=self.vector_retriever,
-            bm25_retriever=self.bm25_retriever,
-            vector_weight=0.7,
-            bm25_weight=0.3,
-        )
-        # HybridRetriever stays constructible (eval ablation, pipeline duplicate-detection
-        # search) but the API serves from the configured retriever, defaulting to BM25
-        # to match the app.
         self.llm = create_llm_client(
             model_name=self.config.llm_model_name,
             temperature=0.0,
@@ -57,7 +47,14 @@ class ApiState:
         self.ingestion = ApiIngestionManager(on_success=lambda _job: self.refresh_bm25())
 
     def _select_retriever(self) -> RetrieverProtocol:
-        base = self.hybrid_retriever if self.config.retriever == "hybrid" else self.bm25_retriever
+        """Resolve the configured retriever and wrap it in the enabled stages.
+
+        The fused retriever is built only when it is the configured one. It used to be
+        constructed on every startup and then usually discarded, which cost nothing but
+        implied the API had a second standing retriever it could switch to at runtime;
+        it never could, because the setting is read once here.
+        """
+        base = select_base_retriever(self.config, self.bm25_retriever, lambda: self.vector_retriever)
         return apply_stages(base, self.config, self.llm)
 
     def _load_bm25_retriever(self) -> BM25Retriever:
@@ -77,9 +74,13 @@ class ApiState:
         )
 
     def refresh_bm25(self) -> None:
-        """Reload the BM25 index from disk after an ingest completes."""
+        """Reload the BM25 index from disk after an ingest completes.
+
+        Re-resolving the retriever is what rewires the fused path onto the new index
+        under `RETRIEVER=hybrid`; the previous version reached into the standing
+        `HybridRetriever` and reassigned its `bm25_retriever` by hand.
+        """
         self.bm25_retriever = self._load_bm25_retriever()
-        self.hybrid_retriever.bm25_retriever = self.bm25_retriever
         # Release the previous stack's stage resources (e.g. the rewrite thread pool)
         # before rebuilding, so nothing is leaked per ingest.
         close_stages(getattr(self, "retriever", None))

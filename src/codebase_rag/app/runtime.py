@@ -307,14 +307,21 @@ class AppRuntime:
         )
 
     def _build_retrieval_stack(self) -> RetrieverProtocol:
-        """Compose the base BM25 retriever with the optional rerank/rewrite stages.
+        """Resolve the configured retriever and wrap it in the enabled stages.
 
-        Delegates to the shared ``apply_stages`` so the runtime, the HTTP API,
-        and the eval harness cannot drift on stage ordering or enablement.
+        Both halves delegate to the shared ``retrieval_stack`` helpers so the
+        runtime, the CLI, and the HTTP API cannot drift on which retriever is
+        the default or on stage ordering. This used to hardcode
+        ``self.bm25_retriever``, which meant ``RETRIEVER=hybrid`` moved the API
+        and silently did nothing here.
+
+        The vector retriever is passed as a callable because that is what the
+        CLI needs; here it already exists, so resolving it costs nothing.
         """
-        from codebase_rag.retrieval.retrieval_stack import apply_stages
+        from codebase_rag.retrieval.retrieval_stack import apply_stages, select_base_retriever
 
-        return apply_stages(self.bm25_retriever, self.config, self.llm)
+        base = select_base_retriever(self.config, self.bm25_retriever, lambda: self.vector_retriever)
+        return apply_stages(base, self.config, self.llm)
 
     def swap_bm25(self, index: BM25Retriever) -> None:
         """Atomically replace the runtime's BM25 retriever and rebuild the stack.
@@ -326,7 +333,11 @@ class AppRuntime:
         share this runtime.
 
         The composed stack is rebuilt so the new base index feeds the rerank and
-        rewrite stages. The rebuild constructs new stage instances, so with
+        rewrite stages. Under ``RETRIEVER=hybrid`` the rebuild also constructs a
+        fresh ``HybridRetriever`` around the new index and the existing vector
+        retriever, so the fused path picks the ingest up on the same rerun the
+        keyword path does; nothing here assumes the base is a bare BM25 index.
+        The rebuild constructs new stage instances, so with
         reranking enabled the cached cross-encoder is dropped and the next
         question pays a full model load, roughly 2GB from the local cache. That
         is the opposite of what building the stack once in ``__init__`` is for,

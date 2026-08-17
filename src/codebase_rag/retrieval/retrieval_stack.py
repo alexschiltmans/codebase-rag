@@ -1,22 +1,62 @@
-"""Compose the optional rerank and rewrite stages around a base retriever.
+"""Build the configured retrieval stack: which retriever, plus which stages wrap it.
 
-Single source of truth for stage ordering and enablement, shared by the
-Streamlit runtime, the HTTP API, and the eval harness. Without this the
-composition was copied into each entry point and would drift the moment a third
-stage or an ordering change landed; worse, the eval harness had no composition
-at all, so a reranked run measured the bare first stage.
+Single source of truth for both halves, shared by the Streamlit runtime, the CLI,
+and the HTTP API. Without this the composition was copied into each entry point and
+would drift the moment a third stage or an ordering change landed; worse, the eval
+harness had no composition at all, so a reranked run measured the bare first stage.
 
-Ordering is deliberate: rewrite is outermost. It expands the query before any
+`select_base_retriever` is the same idea applied to the retriever itself. Each entry
+point used to decide independently what to query with, and two of the three decided
+by hardcoding `BM25Retriever` and never reading the setting at all, so `RETRIEVER=`
+moved the API and silently did nothing to the app or the CLI. One setting resolved
+here means the project has one default rather than three that happen to agree.
+
+Stage ordering is deliberate: rewrite is outermost. It expands the query before any
 retrieval happens, so it must run before the rerank stage pulls and rescores
 candidates. Both stages bind to the `Retriever` protocol, so they compose over
 BM25, vector, or hybrid without any of them knowing they are wrapped.
 """
 
+from collections.abc import Callable
 from typing import Any
 
-from codebase_rag.config import Config
+from codebase_rag.config import SUPPORTED_RETRIEVERS, Config
 
 from .retriever_protocol import RetrieverProtocol
+
+
+def select_base_retriever(
+    config: Config,
+    bm25_retriever: RetrieverProtocol,
+    vector_retriever: Callable[[], RetrieverProtocol],
+) -> RetrieverProtocol:
+    """Resolve the first-stage retriever named by `config.retriever`.
+
+    Args:
+        config: Supplies `retriever`, the one setting that decides this.
+        bm25_retriever: The keyword index. Always needed: it is the whole answer
+            under `bm25` and one of the two fused rankers under `hybrid`.
+        vector_retriever: Called only when the configured retriever needs it, so a
+            caller with no vector store on hand (the CLI) pays nothing to build one
+            under the default. Fusion weights come from `HybridRetriever`'s own
+            defaults rather than being restated per call site.
+
+    Returns:
+        The base retriever, before any rerank or rewrite stage is applied.
+
+    Raises:
+        ValueError: If `config.retriever` names something unsupported. `Config.get_instance`
+            rejects those at load time, but a `Config` built directly bypasses that, and
+            quietly serving BM25 to an operator who asked for something else is worse than
+            failing.
+    """
+    if config.retriever == "bm25":
+        return bm25_retriever
+    if config.retriever == "hybrid":
+        from .hybrid_search import HybridRetriever
+
+        return HybridRetriever(vector_retriever=vector_retriever(), bm25_retriever=bm25_retriever)
+    raise ValueError(f"Unsupported retriever '{config.retriever}'; expected one of {', '.join(SUPPORTED_RETRIEVERS)}")
 
 
 def apply_stages(retriever: RetrieverProtocol, config: Config, llm: Any) -> RetrieverProtocol:

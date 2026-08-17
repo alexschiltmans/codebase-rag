@@ -32,14 +32,25 @@ class BM25Retriever:
     which is effective for finding documents containing specific terms.
     """
 
-    def __init__(self, documents: list[Document]) -> None:
+    def __init__(self, documents: list[Document], repos: list[str] | None = None) -> None:
         """Initialize the BM25 retriever with documents.
 
         Args:
             documents: List of documents to index.
+            repos: Optional repository names to restrict every search's *results* to.
+                None returns matches from everything indexed, which is what the app
+                and the API do. Note this narrows what comes back, it does not narrow
+                what is scored: BM25 scores depend on corpus-wide document frequencies
+                and average document length, so restricting the index instead would
+                change the scores of the documents that survive. Callers that want a
+                repo scored on its own build the index from that repo's corpus alone
+                (see `load_bm25_corpus`).
         """
         self.documents = documents
+        self.repos = repos
         self._initialize_index()
+        if repos is not None:
+            logger.info("Restricted to repositories: %s", ", ".join(repos))
 
     def _preprocess_text(self, text: str) -> list[str]:
         """Preprocess text for BM25 indexing.
@@ -69,6 +80,12 @@ class BM25Retriever:
         self.bm25 = BM25Okapi(self.corpus)
         logger.info("Initialized BM25 index with %d documents", len(self.documents))
 
+    def _in_scope(self, doc: Document) -> bool:
+        """Whether `doc` belongs to one of the repositories this retriever is restricted to."""
+        if self.repos is None:
+            return True
+        return doc.metadata.get("repo") in self.repos
+
     def search(self, query: str, k: int | None = None) -> list[tuple[Document, float]]:
         """Search for documents matching the query.
 
@@ -83,6 +100,10 @@ class BM25Retriever:
         appearing in more than roughly half the corpus (such a term
         carries no discriminative signal), so documents matching only
         those terms can score slightly below 0.
+
+        A repository restriction is applied before the cut to ``k``, so ``k`` is
+        ``k`` in-scope results rather than however many of the global top ``k``
+        happen to be in scope.
 
         Args:
             query: Search query.
@@ -104,7 +125,11 @@ class BM25Retriever:
         k_value = k if k is not None else DEFAULT_TOP_K
         scores = self.bm25.get_scores(query_tokens)
 
-        matches = [(doc, score) for doc, score in zip(self.documents, scores, strict=False) if score > 0]
+        matches = [
+            (doc, score)
+            for doc, score in zip(self.documents, scores, strict=False)
+            if score > 0 and self._in_scope(doc)
+        ]
         results = sorted(matches, key=lambda x: x[1], reverse=True)[:k_value]
 
         logger.info("BM25 search for '%s' returned %d results", query, len(results))
@@ -121,15 +146,16 @@ class BM25Retriever:
             json.dump([_doc_to_dict(doc) for doc in self.documents], f)
 
     @classmethod
-    def load_json(cls, path: Path) -> "BM25Retriever":
+    def load_json(cls, path: Path, repos: list[str] | None = None) -> "BM25Retriever":
         """Load a BM25 retriever from a JSON file of documents, rebuilding the index.
 
         Args:
             path: File previously written by `save_json`.
+            repos: Optional repository restriction, as in `__init__`.
         """
         with open(path) as f:
             data = json.load(f)
-        return cls([_dict_to_doc(d) for d in data])
+        return cls([_dict_to_doc(d) for d in data], repos=repos)
 
 
 def load_bm25_corpus(corpus_dir: Path, repos: list[str] | None = None) -> list[Document]:

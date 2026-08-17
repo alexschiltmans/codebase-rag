@@ -14,7 +14,7 @@
   "results": [
     {
       "question": "What types of calculations does power-grid-model support?",
-      "answer": "power-grid-model supports the following three types of calculations:\n\n1. **Power Flow** - This type of calculation is a \"what-if\" scenario analysis, allowing users to simulate changes in system parameters without affecting actual operation.\n2. **State Estimation** - This statistical method calculates the most probable state of the power grid under various conditions.\n3. **Short Circuit** - This involves analyzing and managing faults within the power grid for safety and reliability purposes.\n\nThese calculations are performed using the `calculate_power_flow` method defined in the provided context, which can be invoked with a specific `power_grid_model.PowerGridModel.calculate_power_flow` function call.",
+      "answer": "power-grid-model supports the following three types of calculations:\n\n1. **Power Flow** - This type of calculation is a \"what-if\" scenario analysis, allowing users to simulate changes in system conditions without affecting real-time operations.\n2. **State Estimation** - This statistical method calculates the most probable state of the power grid under various scenarios.\n3. **Short Circuit** - This involves analyzing and predicting the behavior of short circuits within the power grid.\n\nThese calculations are performed using the `calculate_power_flow` method defined in the provided context, which can be invoked with a specific `power_grid_model.PowerGridModel.calculate_power_flow` function call.",
       "contexts": [
         "## Calculation types  \nWith power-grid-model it is possible to perform three different types of calculations:  \n- [Power flow](#power-flow-algorithms): a \"what-if\" scenario calculation.\nThis calculation can be performed by using the\n{py:class}`calculate_power_flow <power_grid_model.PowerGridModel.calculate_power_flow>` method.\nAn example of usage of the power-flow calculation function is given in\n[Power flow Example](../examples/Power%20Flow%20Example.ipynb)\n- [State estimation](#state-estimation-algorithms): a statistical method that calculates the most probabilistic state of",
         "# Power Grid Model  \n`power-grid-model` is a library for steady-state distribution power system analysis distributed for Python and C.\nThe core of the library is written in C++.\nCurrently, it supports the following calculations:  \n* Power Flow\n* State Estimation\n* Short Circuit  \nSee the [power-grid-model documentation](https://power-grid-model.readthedocs.io/en/stable/) for more information.\nFor various conversions to the power-grid-model, refer to the\n[power-grid-model-io](https://github.com/PowerGridModel/power-grid-model-io) repository.",
@@ -45,21 +45,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.5663790702819824,
-        "retrieval_time": 0.03414297103881836,
-        "generation_time": 0.5322079658508301,
+        "total_time": 0.5610179901123047,
+        "retrieval_time": 0.04806017875671387,
+        "generation_time": 0.5129268169403076,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.5664403438568115,
-      "ttft_s": 0.1793811321258545,
+      "elapsed": 0.5610880851745605,
+      "ttft_s": 0.17771005630493164,
       "prompt_tokens": 887
     },
     {
       "question": "What C++ standard does power-grid-model require?",
-      "answer": "The Power Grid Model requires the C++ Standard Library, specifically including headers like `<vector>`, `<algorithm>`, and `<fstream>`. These are part of the C++11 standard library. The header file `power_grid_model_cpp/basics.hpp` also includes some basic functionalities that might be utilized within the Power Grid Model's interface, such as buffer operations and data handling.",
+      "answer": "The Power Grid Model requires the C++ Standard Library, specifically including headers like `<vector>`, `<algorithm>`, and `<fstream>`. These are part of the C++11 standard library. The header file `power_grid_model_cpp/basics.hpp` also includes some basic functionalities that might be useful for the model's operations.",
       "contexts": [
         "# Design of the Power Grid Model core  \nThe Power Grid Model at its core is a header-only C++ interface library, wrapped by a dynamic/shared C API library.\nThe core itself is an engine called the `MainModel` that provides the C++ interface and exhibits logic for the various\naspects that play a role in power grid calculations.\nThe `MainModel` itself can be deconstructed into an API part, a dispatch part, the grid model and the actual\n[calculation logic](#calculation-logic-and-data-flow).",
         "// SPDX-FileCopyrightText: Contributors to the Power Grid Model project <powergridmodel@lfenergy.org>\n//\n// SPDX-License-Identifier: MPL-2.0\n\n#pragma once\n#ifndef POWER_GRID_MODEL_CPP_HPP\n#define POWER_GRID_MODEL_CPP_HPP\n\n// Umbrella header for the C++ interface of the Power Grid Model library",
@@ -87,21 +87,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.3887166976928711,
-        "retrieval_time": 0.03281283378601074,
-        "generation_time": 0.3558769226074219,
+        "total_time": 0.34941887855529785,
+        "retrieval_time": 0.03639793395996094,
+        "generation_time": 0.31299400329589844,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.3887779712677002,
-      "ttft_s": 0.16288208961486816,
+      "elapsed": 0.3494870662689209,
+      "ttft_s": 0.15611505508422852,
       "prompt_tokens": 726
     },
     {
       "question": "What are the third-party C++ dependencies of power-grid-model?",
-      "answer": "The third-party C++ dependencies of Power Grid Model, as detailed in the context, include:\n\n1. **Ninja**: This is used for building the C++ project via pre-defined CMake presets. It's a build tool that generates Ninja build files to automate the compilation process.\n\n2. **CMake**: The `cmake` command is mentioned as being supported for developing the C++ project, indicating its role in managing the build process through CMake.\n\nThese dependencies are essential for setting up and building the C++ library that interacts with the Power Grid Model's header-only C API.",
+      "answer": "The third-party C++ dependencies of Power Grid Model, as detailed in the context, include:\n\n1. **Header Files**:\n   - `{{ \"[header files]({}/power_grid_model_c/power_grid_model_c/include)\".format(gh_link_head_blob)} }}` - This is a header file located at `/home/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/docs/advanced_documentation/include/power_grid_model_c.pb.h`.\n\n2. **Dynamic Library**:\n   - A dynamic library is created and named `power_grid_model_c.pb.dll` (or `power_grid_model.cpp.dll` on Linux/macOS) which contains the C++ code for the Power Grid Model engine. This library can be linked to other projects using a linker command like `ldc power-grid_model_c.o`.\n\nThese dependencies are essential for enabling the use of the Power Grid Model in various applications, as they provide the necessary header files and dynamic linking capabilities.",
       "contexts": [
         "# Design of the Power Grid Model core  \nThe Power Grid Model at its core is a header-only C++ interface library, wrapped by a dynamic/shared C API library.\nThe core itself is an engine called the `MainModel` that provides the C++ interface and exhibits logic for the various\naspects that play a role in power grid calculations.\nThe `MainModel` itself can be deconstructed into an API part, a dispatch part, the grid model and the actual\n[calculation logic](#calculation-logic-and-data-flow).",
         "# Build Guide  \nThis document explains how you can build this library from source, including some examples of build environments.\nIn this repository there are three builds:  \n* A `power-grid-model` ([PyPI](https://pypi.org/project/power-grid-model/)) Python package with a C++ extension as the\ncalculation core.\n* A [CMake](https://cmake.org/) project consisting of the C++ header-only calculation core, and the following build\ntargets:\n* A dynamic library (`.dll` on Windows, `.so` on Linux, or `.dylib` on macOS) with a stable pure C API/ABI which can\nbe used by any application (enabled by default).",
@@ -131,21 +131,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.5252609252929688,
-        "retrieval_time": 0.03259682655334473,
-        "generation_time": 0.49264001846313477,
+        "total_time": 0.7787337303161621,
+        "retrieval_time": 0.03448796272277832,
+        "generation_time": 0.7442119121551514,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.525324821472168,
-      "ttft_s": 0.18390297889709473,
+      "elapsed": 0.7788019180297852,
+      "ttft_s": 0.17467379570007324,
       "prompt_tokens": 932
     },
     {
       "question": "What is the component type hierarchy in power-grid-model?",
-      "answer": "The component type hierarchy in Power Grid Model (PGM) consists of a hierarchical structure where each component type has attributes and sub-types. Here's an overview:\n\n1. **Base Type**: `base` serves as the foundational type for all power grid components.\n2. **Inheritance**: Each component type inherits from its parent type, following an inheritance-like hierarchy:\n   - `node`\n   - `branch`\n   - `line`\n   - `generic_branch`\n   - `transformer`\n\nThis structure allows for a clear and organized representation of the components in terms of their attributes and relationships. Each component type can have sub-types that inherit from it, enabling a detailed breakdown of the grid's physical and electrical characteristics. The hierarchy is represented graphically as shown in the provided Markdown document.",
+      "answer": "The component type hierarchy in Power-Grid-Model is an inheritance-like structure where each component type has all its attributes from its parent type. Specifically, it's a tree structure with nodes representing individual components and branches extending from them to define relationships between different grid components. The hierarchy starts from the base `base` node and descends through various sub-types like `generic_branch`, `transformer`, etc., each inheriting attributes from their parent type.",
       "contexts": [
         "# Grid Component Modeling  \n```{note}\nThis document is about components not explicitly supported by PGM that can still be modeled using PGM components.\nFor documentation on the components supported by PGM, please refer to [Components](./components.md).\n```  \nThe power grid consists of many different component types and the list is ever-increasing.\nAs a result, it would be an impossible task to make the list of components supported by PGM exhaustive.\nMoreover, many grid component types share electrical attributes, so that one such grid component may be modeled as\nanother.",
         "# Component Type Hierarchy and Graph Data Model  \nTo represent the physical grid components and the calculation results, this library utilizes a graph data model.\nIn this document, the graph data model is presented with the list of all components types, and their relevant\ninput/output attributes.  \nThe components types are organized in an inheritance-like hierarchy.\nA sub-type has all the attributes from its parent type.\nThe hierarchy tree of the component types is shown below.  \n```{mermaid}\ngraph LR\nbase-->node\nbase-->branch\nbranch-->line\nbranch-->link\nbranch-->generic_branch\nbranch-->transformer",
@@ -179,21 +179,21 @@
       "category": "cross_file_reasoning",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.6195192337036133,
-        "retrieval_time": 0.024625062942504883,
-        "generation_time": 0.5948700904846191,
+        "total_time": 0.3883509635925293,
+        "retrieval_time": 0.02721881866455078,
+        "generation_time": 0.36110424995422363,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.6195690631866455,
-      "ttft_s": 0.15640807151794434,
+      "elapsed": 0.38841795921325684,
+      "ttft_s": 0.1466059684753418,
       "prompt_tokens": 769
     },
     {
       "question": "What calculation methods are available and what are their enum values?",
-      "answer": "The provided context does not contain information about the calculation methods available or their corresponding enumeration values. It seems that the relevant document might be missing. Please provide the referenced document, or let me know if you forgot to include it. Once I have access to the document, I will be able to answer your question regarding the calculation methods and their enum values.",
+      "answer": "The provided context does not contain information about the calculation methods available or their corresponding enumeration values. Please ensure that you include the relevant document or check if it was accidentally omitted. Once I have access to the document, I will be able to identify and list the available calculation methods along with their respective enum values.",
       "contexts": [
         "// NOLINTEND(modernize-use-using)\n\n// NOLINTBEGIN(performance-enum-size,cppcoreguidelines-use-enum-class)\n\n// enums\n/**\n * @brief Enumeration for calculation type.\n *\n */\nenum PGM_CalculationType {\n    PGM_power_flow = 0,       /**< power flow calculation */\n    PGM_state_estimation = 1, /**< state estimation calculation */\n    PGM_short_circuit = 2     /**< short circuit calculation */\n};",
         "### Enumerations  \nAll the enumeration types are defined as 8-bit signed integer as underlying type: `int8_t` in C++ and `'i1'` in Python.\nThe enumerations are defined in the Python module `power_grid_model.enum`.\nIn C++ the enumeration is defined with the same integer values.\nPlease refer the [Enum](../api_reference/python-api-reference.md#enum) for list of enumerations.  \nFor updateable enums, we choose to always use `-128` as a special NaN value, representing unspecified values.\nIn case an explicit option for default behaviour is desired, that value shall be different from the NaN value `-128`,",
@@ -224,21 +224,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.3582470417022705,
-        "retrieval_time": 0.02502894401550293,
-        "generation_time": 0.3331878185272217,
+        "total_time": 0.33652496337890625,
+        "retrieval_time": 0.028793811798095703,
+        "generation_time": 0.3077058792114258,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.35831785202026367,
-      "ttft_s": 0.16930603981018066,
+      "elapsed": 0.33658385276794434,
+      "ttft_s": 0.17566418647766113,
       "prompt_tokens": 799
     },
     {
       "question": "How do you create input data for a power-grid-model calculation?",
-      "answer": "To create input data for a power-grid-model calculation, you typically follow these steps based on the provided context and general best practices in Python/C++ for modeling steady-state distribution power systems:\n\n### Step-by-Step Guide to Creating Input Data\n\n1. **Define Calculation Parameters**:\n   - Start by defining the necessary parameters that will be used during calculations. This includes any specific values, constraints, or initial conditions relevant to your model.\n\n2. **Load Existing Data**:\n   - Use a data loading mechanism (like `json` in Python) to read existing input data from files such as CSV, Excel, or other formats. Ensure the data is structured appropriately for your calculations.\n\n3. **Parse and Validate Data**:\n   - Parse the loaded data into a format suitable for analysis. This might involve converting strings to appropriate numeric types (e.g., integers for timestamps, floats for measurements). Validate the data to ensure it meets expected formats and constraints (e.g., non-negative values for power outputs).\n\n4. **Create Input Data Structures**:\n   - Based on your calculation requirements, create input data structures that represent the inputs to your model. This could include lists of timestamps, voltage levels, current flows, etc. Ensure these structures are well-defined and consistent with the expected input format.\n\n5. **Generate Test Datasets**:\n   - For testing purposes, generate synthetic datasets that mimic real-world scenarios but adhere to specific rules or constraints defined in your model. This helps validate how your calculations perform under controlled conditions.\n\n6. **Export Data**:\n   - Export the validated and structured input data into JSON format using a library like `json` in Python. This allows for easy parsing by other tools or scripts that might be used to run your calculations.\n\n7. **Debugging and Validation**:\n   - After importing the dataset, validate it against expected results to ensure accuracy. Use assertions or print statements to check if values are within acceptable ranges and if the data structure matches what was defined in your model.\n\n### Example Code Snippet\n\nHere\u2019s a simplified example of how you might load and parse input data using Python:\n\n```python\nimport json\n\n# Load existing data (assuming it's in a CSV file)\nwith open('input_data.csv', 'r') as file:\n    data = json.load(file)\n\n# Validate and convert timestamps to datetime objects\nfor",
+      "answer": "To create input data for a power-grid-model calculation, you typically follow these steps:\n\n1. **Prepare the Data**: Gather or generate the necessary measured values (e.g., voltage, current, impedance) that represent the system's state at different points in time and across various phases of the power grid. These measurements are usually sourced from sensors, meters, or other measurement devices connected to the power system.\n\n2. **Data Format**: Ensure your data is in a format compatible with the Power Grid Model library. Common formats include CSV, JSON, or XML. The provided context mentions using `Power Grid Model`'s included libraries for handling these formats.\n\n3. **Loading Data into Python**:\n   - Use a Python script to read and parse the input data from a file (e.g., CSV).\n   - Example using pandas library:\n\n     ```python\n     import pandas as pd\n\n     # Load data from JSON or CSV\n     df = pd.read_json('path_to_your_data.json')  # Adjust path as necessary\n     ```\n\n4. **Extracting Relevant Fields**:\n   - Identify the fields that are relevant for your specific calculation (e.g., voltage magnitude, phase angles, impedance values).\n   - Ensure you extract these fields in a structured manner to facilitate further processing or analysis.\n\n5. **Preprocessing Data**: Clean and preprocess the data as needed (e.g., handling missing values, normalizing values).\n\n6. **Define Calculation Parameters**:\n   - Specify any necessary parameters for your calculations, such as time steps, frequency, or specific model constants.\n\n7. **Create a Dataset Class**: Define classes or functions to load and manipulate the data according to the Power Grid Model's requirements. This might involve creating custom classes to encapsulate the structure of your input data.\n\n8. **Integrate with Power Grid Model Library**:\n   - Use the imported libraries (e.g., `PowerGridModel::calculation_parameters`, `PowerGridModel::measured_values`) to perform calculations on the prepared dataset.\n   - Ensure that the data is correctly formatted and compatible with the model's expected input requirements.\n\nBy following these steps, you can effectively create and utilize input data for power-grid-model calculations within your project or other related workflows.",
       "contexts": [
         "## Examples  \nPlease refer to [Examples](https://github.com/PowerGridModel/power-grid-model-workshop/tree/main/examples) for more\ndetailed examples for power flow and state estimation.\nNotebooks for validating the input data and exporting input/output data are also included.",
         "<!--\nSPDX-FileCopyrightText: Contributors to the Power Grid Model project <powergridmodel@lfenergy.org>\n\nSPDX-License-Identifier: MPL-2.0\n-->\n\n# Power Grid Model\n\n`power-grid-model` is a library for steady-state distribution power system analysis distributed for Python and C.\nThe core of the library is written in C++.\n\nSee the [power-grid-model documentation](https://power-grid-model.readthedocs.io/en/stable/) for more information.\n\nSee the [C API documentation](https://power-grid-model.readthedocs.io/en/stable/advanced_documentation/c-api.html) for\ndetailed usage of this package.",
@@ -268,21 +268,21 @@
       "category": "how_does_it_work",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.5289580821990967,
-        "retrieval_time": 0.03044915199279785,
-        "generation_time": 1.4984829425811768,
+        "total_time": 1.4568798542022705,
+        "retrieval_time": 0.03458905220031738,
+        "generation_time": 1.4222619533538818,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.529026985168457,
-      "ttft_s": 0.1713268756866455,
+      "elapsed": 1.45694899559021,
+      "ttft_s": 0.16321420669555664,
       "prompt_tokens": 836
     },
     {
       "question": "What error is raised when a state estimation system is not observable?",
-      "answer": "When a state estimation system is not observable, either a `NotObservableError` or a `SparseMatrixError` is raised. This indicates that the calculation cannot proceed due to invalid measurements. The specifics of how these errors are handled depend on the context and implementation details within the code referenced in Document 3:\n\n- **NotObservableError**: This error typically occurs when the system's state estimation fails because it cannot determine a unique solution for the unknown parameters `p_sigma` (variance) and `q_sigma` (uncertainty variance). It is often used to signal that the measurement process itself is flawed or that there are inconsistencies in the data.\n\n- **SparseMatrixError**: This error arises when the system's state estimation fails due to an infinite value of `power_sigma`. In this case, the calculation might produce a matrix where all elements are zero (indicating no valid measurements), which is not meaningful for state estimation purposes. It signals that the measurement process has encountered an issue with data quality or representation.\n\nBoth errors highlight the importance of ensuring that the system's observations meet the conditions required for observable state estimation, as outlined in Document 3.",
+      "answer": "When a state estimation system is not observable, either a `NotObservableError` or a `SparseMatrixError` is raised. This indicates that the calculation cannot proceed due to invalid measurements. The specific error message would depend on the exact implementation details and the context of the code used for state estimation in this particular model.",
       "contexts": [
         "## Observability  \nIn order to perform a state estimation the number of measurements should be larger than or equal to the number of unknowns. For each node there are two unknowns: `AttributeType.u` and `AttributeType.u_angle`.  \n$$n_{\\text{measurements}} >= n_{\\text{unknowns}}$$  \nWhere  \n$$n_{\\text{unknowns}} = 2 n_{\\text{nodes}} - 1 $$  \nAnd",
         "estimation algorithms will assume angles to be zero by default (see the details about voltage sensors).\nIn observable systems this helps better outputting correct results.\nOn the other hand with unobservable systems, exceptions raised from calculations due to faulty results will be\nprevented.\n```",
@@ -314,21 +314,21 @@
       "category": "cross_file_reasoning",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.8160591125488281,
-        "retrieval_time": 0.030745983123779297,
-        "generation_time": 0.785285234451294,
+        "total_time": 0.3224520683288574,
+        "retrieval_time": 0.034684181213378906,
+        "generation_time": 0.28774285316467285,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.8161239624023438,
-      "ttft_s": 0.1534740924835205,
+      "elapsed": 0.32251811027526855,
+      "ttft_s": 0.1521470546722412,
       "prompt_tokens": 659
     },
     {
       "question": "What is the base power constant used in power-grid-model per-unit calculations?",
-      "answer": "The base power constant used in power-grid-model per-unit calculations, as stated in the context, is **1 p.u.** (pounds per unit). This means that the calculation starts with a power value of 1 p.u. and multiplies it by the grid's average current (I) to get the total power output for each unit of load.\n\nHere's a breakdown:\n\n*   **Pounds per Unit (p.u.):** This is the fundamental unit used in power-grid modeling, representing the amount of power delivered or consumed.\n*   **Grid Average Current (I):** The calculation uses this value as the base current for all load/generator components within the model. It's a crucial parameter reflecting the typical operating conditions of the grid.\n\nTherefore, to calculate the total power output per unit of load, you multiply the specified power by the average current:\n\n`S = S_{\\text{specified}} * \\bar{u}^2` \n\nWhere:\n* `S` is the total power output\n* `S_{\\text{specified}}` is the specified power value (1 p.u.)\n* `\\bar{u}` represents the grid average current.",
+      "answer": "The base power constant used in power-grid-model per-unit calculations is **1 p.u.** (pounds per unit). This means that all other constants and calculations are based on this value. Here's a breakdown of the relevant section from the provided context:\n\n```cpp\nS = S_{\\text{specified}} * baru^2\n```\nThis line calculates the power (S) as a function of the specified load (S\\_specified), where:\n- **S** is the per-unit power calculation.\n- **S\\_specified** represents the actual power measured in the distribution grid, which is assumed to be close to 1 p.u.\n\nThis constant serves as a reference point for all other calculations within the `MainModel` and its components, ensuring consistency across different scenarios or measurements.",
       "contexts": [
         "this is typically dominated by the following contributing factors (see also\n[this thread](https://github.com/PowerGridModel/power-grid-model/pull/951#issuecomment-2805154436)).  \n- voltages in the distribution grid are usually close to 1 p.u..\n- power sensor errors are usually best-effort estimates.\n- the interpretation of power measurements as current measurements is an approximation.  \n```{warning}\nIn short, the pre-factorization may produce results that may deviate from the actual grid state.\nIf higher precision is desired, please consider using",
         "# Design of the Power Grid Model core  \nThe Power Grid Model at its core is a header-only C++ interface library, wrapped by a dynamic/shared C API library.\nThe core itself is an engine called the `MainModel` that provides the C++ interface and exhibits logic for the various\naspects that play a role in power grid calculations.\nThe `MainModel` itself can be deconstructed into an API part, a dispatch part, the grid model and the actual\n[calculation logic](#calculation-logic-and-data-flow).",
@@ -356,21 +356,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.81734299659729,
-        "retrieval_time": 0.02347421646118164,
-        "generation_time": 0.7938408851623535,
+        "total_time": 0.5945620536804199,
+        "retrieval_time": 0.021915912628173828,
+        "generation_time": 0.5726208686828613,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.8174159526824951,
-      "ttft_s": 0.1644899845123291,
+      "elapsed": 0.5946240425109863,
+      "ttft_s": 0.14821314811706543,
       "prompt_tokens": 811
     },
     {
       "question": "What winding types are supported for transformers?",
-      "answer": "The context provided specifies that the `WindingType` class in the Power Grid Model supports three winding types:\n\n1. **Two-winding transformers**: These are characterized by parameters $r$, $x$, $b$, and $g$ given for each transformer end in the CIM-Dataset.\n2. **Three-winding transformers**: The Generic Branch example shows how these can be decomposed into three interconnected two-winding transformers, with parameters $r$, $x$, $b$, and $g$ being provided for each transformer end on the high-voltage side, while $r$, $x$, $b$, and $g$ are set to zero on the low-voltage side.\n\nThus, the winding types supported are two-winding transformers (with parameters given in CIM-Dataset) and three-winding transformers (where $r$, $x$, $b$, and $g$ are provided for each transformer end).",
+      "answer": "The context provided specifies that the `WindingType` class in the Power Grid Model supports three winding types:\n\n1. **Two-winding transformers** - These are characterized by parameters $r$, $x$, $b$, and $g$ given for each TransformerEnd.\n2. **Three-winding transformers** - The Generic Branch example shows how to model a transformer with three interconnected two-winding transformers, where the parameters $r$, $x$, $b$, and $g$ are provided for each of these branches.\n\nThus, the winding types supported for transformers are:\n\n- **Two-winding transformers** (with parameters given for each TransformerEnd)\n- **Three-winding transformers** (where $r$, $x$, $b$, and $g$ are specified for each branch)",
       "contexts": [
         "class WindingType(IntEnum):\n    \"\"\"Transformer Winding Types\"\"\"",
         "any further conversion. In contrast to Two-winding transformers, for Three-winding transformers the the parameters $r$, $x$, $b$, and $g$ are given for each TransformerEnd in the CIM-Dataset.",
@@ -400,21 +400,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.6681499481201172,
-        "retrieval_time": 0.026527881622314453,
-        "generation_time": 0.6416001319885254,
+        "total_time": 0.5990269184112549,
+        "retrieval_time": 0.03502297401428223,
+        "generation_time": 0.5639739036560059,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.6682119369506836,
-      "ttft_s": 0.13834595680236816,
+      "elapsed": 0.5991091728210449,
+      "ttft_s": 0.1461622714996338,
       "prompt_tokens": 637
     },
     {
       "question": "What fault types can be modeled for short circuit analysis?",
-      "answer": "The document outlines four specific fault types that can be modeled for short circuit analysis in power grid models. These are:\n\n1. **Fault Type (2)**: This is the default type, but it's noted to be invalid.\n2. **Invalid Short Circuit Type**: This occurs when `fault_phase` is not one of the supported values (`{FaultType::two_phase_to_ground, {false, true}, {0, FaultPhase.default_value}}`).\n3. **Invalid Short Circuit Type (-128)**: This represents a fault type that is invalid.\n4. **Three-Phase Fault**: This type is not explicitly defined in the provided context but is implied to be supported by the `fault_phase` parameter, as it's part of the broader definition of short circuit faults.\n\nThese fault types allow for modeling different scenarios and configurations within the power grid model, ensuring flexibility and accuracy in short circuit calculations.",
+      "answer": "The document outlines four types of fault types that can be modeled for short circuit analysis in power-grid models. These are:\n\n1. **Fault Type (2)**: This is the default type, but it's noted to be invalid.\n2. **Invalid Short Circuit Type**: This occurs when `fault_phase` is not specified or equals `FaultPhase.default_value`.\n3. **Negative Value Fault Type (-128)**: This represents a fault type where the current magnitude is negative.\n4. **Three-Phase Fault Type (0)**: This indicates a fault with three phases, which is not explicitly modeled in this context but is part of the broader definition of faults.\n\nThese types are supported for modeling different scenarios and can be used to simulate various fault conditions within the power-grid model.",
       "contexts": [
         "## Short Circuit Equations  \nIn the short circuit calculation, the following equations are solved with border conditions of faults added as\nconstraints.  \n$$\nI_N = Y_{bus}U_N\n$$  \nThis gives the initial symmetrical short circuit current ($I_k^{\\prime\\prime}$) for a fault.\nThis quantity is then used to derive almost all further calculations of short circuit studies applications.  \n```{note}\nShort-circuit calculations are currently implemented in the phase (abc) domain and therefore require a grounded network, similar to asymmetric power flow calculations.",
         "### Short circuit calculation algorithms\n\nIn the short circuit calculation, specific equations are solved with border conditions of faults added as constraints to\ndetermine the initial symmetrical short circuit current for a fault, which is then used to derive further calculations\nof short circuit studies applications.\n\nAt the moment, the following short circuit algorithms are implemented.\n\n| Algorithm | Default | Speed | Accuracy | Algorithm call |\n| --------- | ------- | ----- | -------- | -------------- |",
@@ -446,21 +446,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.7156219482421875,
-        "retrieval_time": 0.0371699333190918,
-        "generation_time": 0.6784310340881348,
+        "total_time": 0.6363949775695801,
+        "retrieval_time": 0.043444156646728516,
+        "generation_time": 0.5929219722747803,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.7156867980957031,
-      "ttft_s": 0.17820191383361816,
+      "elapsed": 0.6364610195159912,
+      "ttft_s": 0.17864990234375,
       "prompt_tokens": 878
     },
     {
       "question": "How does the power-grid-model core architecture work from input to output?",
-      "answer": "The power-grid-model core architecture follows a dynamic/shared library approach, with distinct components for different aspects of the power grid. Here's how it works from input to output:\n\n1. **Input (API Part)**:\n   - The `MainModel` is an engine that exposes various functionalities through its API part.\n   - This part interacts with external data sources and performs calculations based on defined logic.\n\n2. **Dispatch Part**:\n   - This component handles the dispatch of power generation, load management, and other operational tasks.\n   - It receives inputs from the `MainModel` or other components and executes dispatch logic to manage the grid's operation.\n\n3. **Grid Model Component**:\n   - This is a header-only C++ interface that abstracts the underlying implementation details.\n   - It provides a structured way for different parts of the power grid to communicate and interact with each other.\n\n4. **Core Logic Execution**:\n   - The `MainModel` encapsulates the core logic responsible for various calculations related to power flow, voltage regulation, synchronous generators, reactance, and more.\n   - This logic is executed in a dynamic/shared manner, allowing flexibility based on the specific use case and programming language.\n\n5. **Data Validation**:\n   - The `Node voltages` and `Branch Power Flows` are validated for symmetrical calculation to ensure accurate modeling of power grid behavior.\n\n6. **Output (Reactance Coil)**:\n   - While not explicitly detailed in the provided context, the reactance coil is connected to all remaining supported components.\n   - This component likely performs specific calculations or transformations based on the input data and validated outputs from the `MainModel`.\n\n7. **Validation and Symmetry Checks**:\n   - The validation process ensures that the model adheres to symmetrical principles, which are crucial for accurate power flow predictions and stability analysis in a real-world grid context.\n\nThis architecture allows for modularity, scalability, and ease of maintenance or extension by adding new components without disrupting existing functionality. It leverages dynamic/shared libraries to decouple the user interface from the core implementation, facilitating flexibility and adaptability across different power grid scenarios.",
+      "answer": "The power-grid-model core architecture follows a dynamic/shared library approach, separating the user interface (API) and dispatch logic. Here's how it works from input to output:\n\n1. **Input:** The core receives an API part that defines various components of the power grid model, such as line, reactance, special transformer, load, synchronous generator, shunt, and zig-zag transformer. These inputs are used for calculations.\n\n2. **Validation:** All remaining supported components for conversion to `PowerGridModel` are connected to this level, ensuring they conform to the expected structure and data types.\n\n3. **Node Voltage and Branch Power Flows Validation:** Node voltages and branch power flows are validated for symmetrical calculation, which is crucial for accurate modeling of power flow in a grid system.\n\n4. **Modeling Differences:** The architecture accounts for differences between Vision (the current model) and the `PowerGridModel` as outlined in the documentation (`power-grid-model-io.md`). This includes handling specific components like reactance coils, which are part of both models but have distinct behaviors.\n\n5. **Output:** Based on the validated inputs and modeling differences, the core outputs a structured representation of the power grid model, typically as a graph or data structure that can be easily consumed by other parts of an application or used for further processing. This output includes node voltages, branch power flows, line parameters, reactance values, and synchronous generator characteristics.\n\nThis architecture allows for flexibility in how different components are connected and utilized, making it adaptable to various use cases and programming languages while maintaining a clear separation between the user interface and core logic.",
       "contexts": [
         "# Design of the Power Grid Model core  \nThe Power Grid Model at its core is a header-only C++ interface library, wrapped by a dynamic/shared C API library.\nThe core itself is an engine called the `MainModel` that provides the C++ interface and exhibits logic for the various\naspects that play a role in power grid calculations.\nThe `MainModel` itself can be deconstructed into an API part, a dispatch part, the grid model and the actual\n[calculation logic](#calculation-logic-and-data-flow).",
         "## Detailed Power Grid Model core design  \nThe sheer size and complexity of the Power Grid Model core implementation makes it hard to generate an up-to-date and\ncomprehensive graph of its design.\nFor a full overview of the core, it is recommended to build and access the Power Grid Model core documentation by\nfollowing the steps in the [build guide](./build-guide.md#documentation).",
@@ -490,21 +490,21 @@
       "category": "how_does_it_work",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.3825373649597168,
-        "retrieval_time": 0.030837059020996094,
-        "generation_time": 1.3516738414764404,
+        "total_time": 1.0725409984588623,
+        "retrieval_time": 0.03474903106689453,
+        "generation_time": 1.0377719402313232,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.382606029510498,
-      "ttft_s": 0.16482114791870117,
+      "elapsed": 1.072620153427124,
+      "ttft_s": 0.15480804443359375,
       "prompt_tokens": 823
     },
     {
       "question": "What validation error classes exist for input data validation?",
-      "answer": "The document defines three specific `ValidationError` classes that extend the base `ValidationError` class to handle input data validation. These are:\n\n1. **NotBetweenError**: This class extends `ValidationError` and stores the component name, field name, and IDs as well as a list of error values representing invalid ranges or types.\n2. **KeyError**: Although not explicitly mentioned in the provided context, this is implied to be another valid exception for handling missing or invalid keys within input data.\n3. **ValidationException**: This class extends `ValidationError` and includes additional attributes like a list/dict of errors and a string representation of all validation issues.\n\nThese error classes are designed to provide structured feedback when the input data does not meet the expected criteria, such as being in the correct format or containing valid values for each field.",
+      "answer": "The document defines two specific validation error classes for input data validation:\n\n1. **ValidationError**: This abstract base class serves as the parent class for all other validation errors. It has three public member variables:\n   - `component`: The name of the component involved in the validation.\n   - `field`: The name of the field being validated.\n   - `ids`: A list or dictionary containing unique identifiers (IDs) for each field.\n\n2. **ValidationException**: This custom exception class is used to raise when specific validation errors occur. It inherits from `ValidationError`. Its constructor takes a list/dict of `ValidationError`s and a string representing the name of the validated data, along with a string representation of all the errors if any are present.\n\nThese classes allow for structured error handling in validation processes within the Power Grid Model's validation framework.",
       "contexts": [
         "class ValidationError(ABC):\n    \"\"\"\n    The Validation Error is an abstract base class which should be extended by all validation errors. It supplies\n    three public member variables: component, field and ids; storing information about the origin of the validation\n    error. Error classes can extend the public members. For example:\n\n        NotBetweenError(ValidationError):\n            component = 'vehicle'\n            field = 'direction'\n            id = [3, 14, 15, 92, 65, 35]\n            ref_value = (-3.1416, 3.1416)",
         "Raises:\n        KeyError | TypeError | ValueError: if the data structure is invalid.\n        ValidationException: if the contents are invalid.\n    \"\"\"\n    validation_errors = validate_input_data(\n        input_data=input_data, calculation_type=calculation_type, symmetric=symmetric\n    )\n    if validation_errors:\n        raise ValidationException(validation_errors, \"input_data\")",
@@ -533,21 +533,21 @@
       "category": "cross_file_reasoning",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.6465718746185303,
-        "retrieval_time": 0.04230093955993652,
-        "generation_time": 0.6042461395263672,
+        "total_time": 0.6380867958068848,
+        "retrieval_time": 0.025798797607421875,
+        "generation_time": 0.6122632026672363,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.646636962890625,
-      "ttft_s": 0.18346905708312988,
+      "elapsed": 0.6381680965423584,
+      "ttft_s": 0.15615510940551758,
       "prompt_tokens": 878
     },
     {
       "question": "What license is power-grid-model released under?",
-      "answer": "The provided context does not specify the license under which power-grid-model is released. It seems that the necessary document or information might be missing. Please provide the relevant document or confirm if it was accidentally omitted, and I will be able to determine the specific license for power-grid-model once I have access to it.",
+      "answer": "Power Grid Model is released under the Mozilla Public License, version 2.0.",
       "contexts": [
         "## Licenses third-party libraries  \nThis project includes third-party libraries,\nwhich are licensed under their own respective Open-Source licenses.\nSPDX-License-Identifier headers are used to show which license is applicable.\nThe concerning license files can be found in the\n[LICENSES](https://github.com/PowerGridModel/power-grid-model/tree/main/LICENSES) directory.",
         "## License  \nThis project is licensed under the Mozilla Public License, version 2.0 - see\n[LICENSE](https://github.com/PowerGridModel/power-grid-model/blob/main/LICENSE) for details.",
@@ -575,21 +575,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.3146789073944092,
-        "retrieval_time": 0.02769780158996582,
-        "generation_time": 0.2869608402252197,
+        "total_time": 0.17883586883544922,
+        "retrieval_time": 0.02777695655822754,
+        "generation_time": 0.1510310173034668,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.3147451877593994,
-      "ttft_s": 0.14302420616149902,
+      "elapsed": 0.17888188362121582,
+      "ttft_s": 0.13083100318908691,
       "prompt_tokens": 527
     },
     {
       "question": "What are the tap changing strategies available for transformer regulation?",
-      "answer": "The tap changing strategies available for transformer regulation include:\n\n1. **Automatic Tap Changing (ATC)**: This is an outer-loop optimization procedure that iteratively adjusts the transformer's tap positions based on power flow calculations to achieve desired voltage control objectives. It considers the current tap position and the voltage drop during transport, compensating for the voltage drop during transmission.\n\n2. **Manual Tap Changing (MTC)**: This strategy involves manually changing the transformer tap positions as per specified `tap_min` and `tap_max` values or `(tap_min >= tap_pos <= tap_max)`. It's used when automatic control is not feasible due to specific operational constraints.\n\nThese strategies are part of the automatic tap changing algorithm described in the document, which optimizes transformer operation by adjusting tap positions based on voltage control requirements and power flow conditions.",
+      "answer": "The automatic tap changing strategy involves iteratively adjusting transformer tap positions based on power flow calculations. Here's a breakdown of the available strategies:\n\n1. **Basic Tap Changing**:\n   - For each transformer, if it is not regulated and within the specified `tap_min` and `tap_max` bounds, the tap position changes.\n   \n2. **Clamping Strategies**:\n   - The document mentions that for a three-winding transformer, clamping strategies are similar to those used in a regular transformer but with additional considerations due to the primary side tap changer regulating only secondary or tertiary side voltages.\n\n3. **Automatic Tap Changing Algorithm**:\n   - This algorithm iteratively adjusts the tap positions of all regulators (including the one controlled by `transformer_tap_regulator`) based on power flow calculations.\n   \n4. **Optimization Procedure**:\n   - The automatic tap changing procedure is described as an outer-loop optimization, meaning it continuously evaluates and adjusts the transformer tap positions to achieve desired voltage control objectives.\n\nThese strategies allow for precise regulation of transformer voltages by adjusting the tap positions based on real-time power flow conditions, ensuring optimal performance in grid applications.",
       "contexts": [
         "#### Power flow with automatic tap changing\n\nSome of the most important regulators in the grid affect the tap position of transformers.\nThese [Transformer Tap Regulator](../user_manual/components.md#transformer-tap-regulator)s try to regulate\na control voltage\n$U_{\\text{control}}$ such that it is within a specified voltage band.\nThe $U_{\\text{control}}$ may be compensated for the voltage drop during transport.\nPower flow calculations that take the behavior of these regulators into account may be toggled by providing one of the",
         "### Transformer tap regulator  \n* type name: `transformer_tap_regulator`\n* base: [regulator](#regulator)  \n`transformer_tap_regulator` defines a regulator for transformers in the grid.\nA transformer tap regulator regulates a component that is either a\n[transformer](#transformer) or a\n[Three-Winding Transformer](#three-winding-transformer).  \nThe transformer tap regulator changes the `tap_pos` of the transformer it regulates in the range set by the user via\n`tap_min` and `tap_max` (i.e., `(tap_min <= tap_pos <= tap_max)` or `(tap_min >= tap_pos >= tap_max)`).",
@@ -619,21 +619,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.6415219306945801,
-        "retrieval_time": 0.027707815170288086,
-        "generation_time": 0.6137878894805908,
+        "total_time": 0.8208110332489014,
+        "retrieval_time": 0.030710220336914062,
+        "generation_time": 0.7900753021240234,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.6415970325469971,
-      "ttft_s": 0.17178010940551758,
+      "elapsed": 0.8208770751953125,
+      "ttft_s": 0.16808509826660156,
       "prompt_tokens": 908
     },
     {
       "question": "What happens when you try to connect a line between nodes with different rated voltages?",
-      "answer": "When trying to connect a line between nodes with different rated voltages, the `ConflictVoltage` error is raised. This occurs because the `initialize_array` function expects all nodes in the input array to have the same rated voltage (10.5e3 V) for the line to be successfully connected as an 'asym_line'. If any node has a different rated voltage, it results in a conflict and raises this error during validation.",
+      "answer": "When trying to connect a line between nodes with different rated voltages, the `ConflictVoltage` error is raised. This indicates that there's an issue in the construction process where the voltage levels are incompatible for the specified `asym_line`. Specifically, the error message suggests that the voltage at node 'a' (3) does not match the voltage at node 'b' (2), which violates the condition that a line can only connect between nodes with the same rated voltage.",
       "contexts": [
         "#### Construction  \nWe try to construct a grid with a line connecting two nodes with different rated voltages. An `ConflictVoltage` error is caught in the construction.",
         "### Line  \n* type name: `line`  \n`line` is a [branch](#branch) with specified serial impedance and shunt admittance.\nA cable is also modeled as `line`.\nA `line` can only connect two nodes with the same rated voltage.\nIf `i_n` is not provided, `loading` of line will be a `nan` value.",
@@ -661,21 +661,21 @@
       "category": "cross_file_reasoning",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.4135780334472656,
-        "retrieval_time": 0.03312110900878906,
-        "generation_time": 0.3804328441619873,
+        "total_time": 0.42027807235717773,
+        "retrieval_time": 0.03366494178771973,
+        "generation_time": 0.38659095764160156,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.4136209487915039,
-      "ttft_s": 0.17014288902282715,
+      "elapsed": 0.42034220695495605,
+      "ttft_s": 0.16252923011779785,
       "prompt_tokens": 708
     },
     {
       "question": "What is the minimum Python version required and what build system does the Python package use?",
-      "answer": "The minimum Python version required for building the library from source is **Python 3.6**. The Python package uses the `python3` compiler, which requires Python 3.6 or higher to compile successfully. This is specified in the build requirements section under \"Build Requirements\".\n\nHere's a breakdown of the relevant information:\n\n- **Minimum Python Version:** Python 3.6\n- **Build System:** `python3` (or `setuptools` for CMake builds)\n\nThis ensures that the compiler used during the build process is compatible with the minimum version of Python required to compile and run the library.",
+      "answer": "The Python package requires Python 3.6 or higher to compile successfully, as indicated by the `#<Python>` block in the context information. The build system used for this library is CMake, specifically via the `uv sync` toolchain. This means that the minimum Python version required is Python 3.6 and the build process will automatically download and use the necessary dependencies during compilation.\n\nHere's a breakdown:\n\n- **Minimum Python Version:** Python 3.6\n- **Build System:** CMake with `uv sync`\n\nThis setup ensures that the compiler toolchains are compatible with the minimum required version of Python, facilitating a smooth build process when compiling from source.",
       "contexts": [
         "#### Python  \nThe table below shows the Python dependencies.  \n<!-- pyml disable line-length-->\n| Library name                                                           | Remark                 | License                                                                                    |\n|------------------------------------------------------------------------|------------------------|--------------------------------------------------------------------------------------------|",
         "#### C++  \nThe table below shows the C++ build dependencies.  \n```{note}\nThe C++ dependencies below are **build-time only**. When building the Python package from source (via `uv sync`), they\nare automatically downloaded and used during the build \u2014 you do not need to install them manually.\nManual installation is only required for standalone CMake builds.\n```  \n<!-- pyml disable line-length-->",
@@ -703,21 +703,21 @@
       "category": "factual_lookup",
       "expected_failure": true,
       "metrics": {
-        "total_time": 0.4960951805114746,
-        "retrieval_time": 0.024723052978515625,
-        "generation_time": 0.47135019302368164,
+        "total_time": 0.5177168846130371,
+        "retrieval_time": 0.017750024795532227,
+        "generation_time": 0.49993395805358887,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.49616503715515137,
-      "ttft_s": 0.15162897109985352,
+      "elapsed": 0.5177798271179199,
+      "ttft_s": 0.1351940631866455,
       "prompt_tokens": 772
     },
     {
       "question": "How does power-grid-model decide whether it has enough sensor data to determine the grid's state statistically?",
-      "answer": "Power-grid-model decides whether it has enough sensor data by checking two primary conditions based on the availability of voltage phasor sensors and the number of unique power or current sensors available. Here\u2019s how it works:\n\n1. **Condition Checks**:\n   - **Voltage Phasor Sensors**: If there are at least one voltage phasor sensor, but no global angle current sensors, Power-grid-model will proceed to check the number of unique power or current sensors available.\n   - **Uniqueness Condition**: The total number of unique sensors (either voltage phasors or current sensors) must be greater than or equal to `n_bus - 1`. This ensures that there is at least one sensor for each bus in the network.\n\n2. **Statistical Decision Making**:\n   - If both conditions are satisfied, Power-grid-model calculates the state estimation using the Kalman filter algorithm.\n   - The Kalman filter uses a combination of measurements (power flow or voltage values) and their associated uncertainties to estimate the most probable state of the grid. It iteratively updates its estimates based on new measurements until convergence is reached.\n\nIn summary, Power-grid-model checks for sufficient sensor data by verifying both the presence of voltage phasor sensors and the number of unique sensors available, ensuring that it can perform a reliable statistical state estimation even when some sensors are missing or unreliable.",
+      "answer": "Power-grid-model decides whether it has enough sensor data by checking two primary conditions based on the availability of voltage phasor sensors and the number of unique power or current sensors available. Here\u2019s a detailed breakdown:\n\n1. **Voltage Phasor Sensors**:\n   - The algorithm first checks if there are at least one voltage phasor sensor available (`n_voltage_sensor >= 1`).\n   - If no voltage phasor sensors are found, it implies that the system lacks sufficient data to perform state estimation.\n\n2. **Unique Power or Current Sensors**:\n   - If voltage phasor sensors are present but there is only one available (`n_unique_power_or_current_sensor >= n_bus - 1`), this indicates a potential issue with the configuration, such as a single sensor being reserved for reference.\n   - In this case, the algorithm proceeds to check if there are enough unique power or current sensors available across all buses (`n_unique_power_or_current_sensor >= n_bus - 1`).\n\n3. **Statistical Decision**:\n   - The decision is made based on a weighted average of these two conditions:\n     - If both `n_voltage_sensor >= 1` and `n_unique_power_or_current_sensor >= n_bus - 1` are true, the algorithm assumes sufficient data exists to perform state estimation.\n     - Otherwise, it indicates that there is insufficient data for reliable state estimation.\n\nIn summary, power-grid-model evaluates whether it has enough voltage phasor sensors and unique power/current sensors by combining these two conditions, using a weighted average to determine statistical adequacy for state estimation. This ensures the chosen algorithm can reliably estimate the grid's state given the available data constraints.",
       "contexts": [
         "## State Estimation Measurement Aggregation  \nThere can be multiple sensors measuring the same physical quantity.\nFor example, there can be multiple voltage sensors on the same bus.\nThe measurement data can be merged into one virtual measurement using a Kalman filter:  \n$$\nz = \\dfrac{\\sum_{k=1}^{N_{sensor}} z_k \\sigma_k^{-2}}{\\sum_{k=1}^{N_{sensor}} \\sigma_k^{-2}}\n$$  \nWhere $z_k$ and $\\sigma_k$ are the measured value and standard deviation of individual measurements.  \nMultiple appliance measurements (power measurements) on one bus are aggregated as the total injection at the bus:  \n$$\n\\begin{aligned}",
         "### State estimation algorithms\n\nWeighted least squares (WLS) state estimation can be performed with power-grid-model to evaluate the state variable with\nthe highest likelihood given (pseudo) measurement input.\n\nAt the moment, the following state estimation algorithms are implemented.\n\n| Algorithm | Default | Speed | Accuracy | Algorithm call |\n| --------- | ------- | ----- | -------- | -------------- |",
@@ -747,21 +747,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.9516830444335938,
-        "retrieval_time": 0.03328704833984375,
-        "generation_time": 0.9183759689331055,
+        "total_time": 1.1602771282196045,
+        "retrieval_time": 0.032614946365356445,
+        "generation_time": 1.1276397705078125,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.9517421722412109,
-      "ttft_s": 0.17193317413330078,
+      "elapsed": 1.1603410243988037,
+      "ttft_s": 0.1599740982055664,
       "prompt_tokens": 895
     },
     {
       "question": "What happens to a transformer's tap position when the controlled voltage drifts outside its target band during automatic regulation?",
-      "answer": "When the controlled voltage drifts outside the target band, the transformer's tap position changes. Specifically, it oscillates between two tap positions depending on the direction of measurement errors. If the control point is not within `tap_min` and `tap_max`, the tap position changes iteratively until it finds a new position that brings the voltage back into the specified band. This behavior is often described as oscillating between two points, hence the term \"saddle point.\"",
+      "answer": "When the controlled voltage $U_{\\text{control}}$ drifts outside the specified voltage band ($u_{band}$), it can cause the transformer to oscillate between two tap positions depending on the direction of measurement errors. This means that the transformer's tap position changes continuously, oscillating within a range defined by:\n\n$$\nU_{\\text{control}} \\in \\left[ U_{\\text{set}} - \\frac{U_{\\text{band}}}{2}, U_{\\text{set}} + \\frac{U_{\\text{band}}}{2} \\right]\n$$\n\nThis behavior is often considered an expected phenomenon in automatic tap changing algorithms, as it reflects the inherent variability and potential instability of transformer operation when dealing with voltage regulation. The algorithm may need to adjust its control logic or parameters to mitigate these oscillations and ensure stable voltage regulation.",
       "contexts": [
         "## Regulatable voltage range outside `u_band`  \nSince the regulated transformer has only a limited number of tap positions, it cannot always attain the target voltage\n(i.e., the controlled voltage $U_{\\text{control}}$ may remain outside the set band).\nThe possible scenarios are:  \n- For `tap_min`: When increasing the tap position from `tap_min` in successive power flow calculations, the voltage\nmight still be below the lower bound of the set band.\n- For `tap_max`: When decreasing the tap position from `tap_max` in successive power flow calculations, the voltage",
         "#### Power flow with automatic tap changing\n\nSome of the most important regulators in the grid affect the tap position of transformers.\nThese [Transformer Tap Regulator](../user_manual/components.md#transformer-tap-regulator)s try to regulate\na control voltage\n$U_{\\text{control}}$ such that it is within a specified voltage band.\nThe $U_{\\text{control}}$ may be compensated for the voltage drop during transport.\nPower flow calculations that take the behavior of these regulators into account may be toggled by providing one of the",
@@ -791,21 +791,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.4224820137023926,
-        "retrieval_time": 0.02360391616821289,
-        "generation_time": 0.3988533020019531,
+        "total_time": 0.6101858615875244,
+        "retrieval_time": 0.031999826431274414,
+        "generation_time": 0.5781629085540771,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.42252373695373535,
-      "ttft_s": 0.16791987419128418,
+      "elapsed": 0.6102571487426758,
+      "ttft_s": 0.16359710693359375,
       "prompt_tokens": 886
     },
     {
       "question": "Why does power-grid-model skip automatic checks on the physical realism of input data by default?",
-      "answer": "Power-grid-model skips automatic checks on the physical realism of input data for several reasons, primarily due to efficiency and performance considerations. Here's a detailed breakdown:\n\n### Efficiency and Performance\n1. **Avoiding Overhead**:\n   - **Computational Cost**: Checking every possible combination of input parameters can be computationally expensive, especially in large-scale models or real-time applications where performance is critical.\n   - **Resource Utilization**: By skipping invalid inputs early, the model avoids unnecessary computations and resource usage, which helps maintain efficiency.\n\n2. **Optimized Data Structures**:\n   - **Predefined States**: Power-grid models often use predefined states or configurations for different conditions (e.g., normal operation, fault detection). This allows the model to quickly determine if a given input is valid based on these predefined states.\n   - **Efficient Storage**: Precomputed and validated data can be stored efficiently in memory, reducing the need for dynamic checks during runtime.\n\n### Practical Considerations\n3. **Development Phase**:\n   - **User Workflow**: In many development scenarios, users are working with input data that is already sanitized or assumed to be correct. This reduces the burden on developers and speeds up the initial setup.\n   - **Error Handling**: While not ideal, some developers might prefer a more explicit error handling mechanism where invalid inputs trigger specific exceptions or warnings rather than skipping validation entirely.\n\n### Limitations\n4. **Validation Requirements**:\n   - **Complex Realism Checks**: For highly realistic and complex scenarios (e.g., fault detection in power grids), the model may still require exhaustive checks to ensure safety and reliability.\n   - **Dynamic Data**: In dynamic environments where data is continuously updated or validated, the default approach might not always be optimal.\n\n### Mitigation Strategies\n- **Hybrid Approaches**:\n  - **Conditional Validation**: Implement conditional validation that only runs if certain conditions are met (e.g., a minimum value for `u_rated`).\n  - **Fallback Mechanisms**: Provide fallback mechanisms or warnings when input data is invalid, rather than skipping the entire calculation.\n\n### Conclusion\nThe default approach to automatic checks on physical realism in power-grid models is designed to balance efficiency and performance by leveraging predefined states and optimized data structures. However, for more complex scenarios or strict validation requirements, developers can opt for a hybrid approach",
+      "answer": "Power-grid-model skips automatic checks on the physical realism of input data for several reasons, primarily due to performance considerations and the nature of real-world power systems. Here's a detailed breakdown:\n\n### Performance Considerations:\n1. **Efficiency**: In production environments, especially when dealing with large volumes of data or complex calculations, checking every single combination of input parameters can be computationally expensive. This can lead to significant performance degradation.\n2. **Resource Constraints**: Power grids are often used in real-time applications where latency is critical. The overhead of frequent and exhaustive checks on physical realism data can slow down the system's response time, which is undesirable in safety-critical systems like power grids.\n\n### Real-World Data Characteristics:\n1. **Incomplete or Inaccurate Inputs**: Physical reality often involves incomplete or inaccurate input data due to sensor errors, communication delays, or other factors. The model may not always have the full context needed for accurate calculations.\n2. **Dynamic Conditions**: Power grids are subject to dynamic changes such as sudden load variations, faults, and renewable energy fluctuations. These conditions can make it difficult to maintain a static model that perfectly reflects real-world scenarios without excessive checks.\n\n### Recommendation:\nTo mitigate these issues, the power grid model recommends always validating input data before constructing the `PowerGridModel` instance. This approach ensures that only valid and reasonable data is used for calculations, reducing unnecessary computational overhead and improving overall system efficiency.\n\nBy focusing on validation rather than automatic checks, the model can balance accuracy with performance, ensuring reliable and efficient operation even in complex and dynamic environments.",
       "contexts": [
         "## Validation (optional)\nFor efficiency reasons, most of the data is not explicitly validated in the power grid model. However, in most cases, a power flow calculation will fail/crash if the data is invalid. Often with a low level error message that is hard to relate to the original objects. Therfore, it is recommended to always validate your data before constructing a PowerGridModel instance.",
         "## Validation (optional)\nFor efficiency reasons, most of the data is not explicitly validated in the power grid model. However, in most cases, a power flow calculation will fail/crash if the data is invalid. Often with a low level error message that is hard to relate to the original objects. Therfore, it is recommended to always validate your data before constructing a PowerGridModel instance.",
@@ -835,21 +835,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.5158541202545166,
-        "retrieval_time": 0.029796123504638672,
-        "generation_time": 1.4860389232635498,
+        "total_time": 1.0213351249694824,
+        "retrieval_time": 0.03186202049255371,
+        "generation_time": 0.9894530773162842,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.5159211158752441,
-      "ttft_s": 0.15623712539672852,
+      "elapsed": 1.021399736404419,
+      "ttft_s": 0.14601874351501465,
       "prompt_tokens": 761
     },
     {
       "question": "What information does an object carry when input data fails validation, and how can a caller inspect it?",
-      "answer": "When input data fails validation, an object carrying the following information is stored:\n\n1. **Component**: The name of the component that failed validation (e.g., 'vehicle' in the given context).\n2. **Field**: The name of the field where the validation failed (e.g., 'direction' in the provided error message).\n3. **Ids**: A list or dictionary containing the IDs of all other validation errors related to that specific component and field.\n\nA caller can inspect this information by accessing the `errors` attribute, which is a list/dict of `ValidationError` objects. The `__str__` method in the `ValidationException` class provides a convenient way to convert these errors into a human-readable string format using the `errors_to_string` method:\n\n```python\ndef __str__(self):\n    return self.name_to_string(errors=self.errors)\n```\n\nThe `name_to_string` method takes the list of validation errors and converts them into a formatted string, making it easier to understand which component and field failed validation.",
+      "answer": "When input data fails validation, an object carrying the following information is stored:\n\n1. **Component**: The name of the component that failed validation (e.g., 'vehicle' in the given context).\n2. **Field**: The name of the field where the validation failed (e.g., 'direction' in the provided error message).\n3. **Ids**: A list or dictionary containing the IDs of all fields that were invalid, along with their corresponding component and field names.\n4. **Ref-Value**: An optional tuple representing the reference value for each field that was not validated (e.g., (-3.1416, 3.1416) in the provided error message).\n\nA caller can inspect this information by creating an instance of `ValidationException` with a list or dictionary containing these details and then printing it using the `__str__()` method:\n\n```python\nvalidation_exception = ValidationException(errors=errors, name=\"data\")\nprint(validation_exception)\n```\n\nThis will output:\n```\n[('vehicle', 'direction'), {'component': 'vehicle', 'field': 'direction'}, (-3.1416, 3.1416)]\n```\n\nThis allows the caller to see exactly what went wrong with the input data during validation.",
       "contexts": [
         "class ValidationError(ABC):\n    \"\"\"\n    The Validation Error is an abstract base class which should be extended by all validation errors. It supplies\n    three public member variables: component, field and ids; storing information about the origin of the validation\n    error. Error classes can extend the public members. For example:\n\n        NotBetweenError(ValidationError):\n            component = 'vehicle'\n            field = 'direction'\n            id = [3, 14, 15, 92, 65, 35]\n            ref_value = (-3.1416, 3.1416)",
         "assumed to be correct.\nBecause of this, assuring the\n[correctness of the input data is the users' responsibility](https://en.wikipedia.org/wiki/Garbage_in,_garbage_out).  \nHowever, most data errors of this kind can be found using the [data validator](../user_manual/data-validator.md).",
@@ -880,21 +880,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.7609858512878418,
-        "retrieval_time": 0.03152012825012207,
-        "generation_time": 0.7294440269470215,
+        "total_time": 0.8726351261138916,
+        "retrieval_time": 0.02555108070373535,
+        "generation_time": 0.8470611572265625,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.7610390186309814,
-      "ttft_s": 0.16292500495910645,
+      "elapsed": 0.8727052211761475,
+      "ttft_s": 0.14801311492919922,
       "prompt_tokens": 795
     },
     {
       "question": "How can an ideal transformer be represented in power-grid-model even though there is no dedicated ideal-transformer component?",
-      "answer": "An ideal transformer can still be modeled in power-grid-model by using a link between two different voltage levels. This link allows for the representation of the transformer's behavior as if it were an ideal transformer, despite not having a separate `ideal_transformer` component directly available. The concept is based on the idea that transformers inherently have some degree of impedance and can be modeled with a simplified form to reflect their real-world properties.\n\nHere\u2019s how this can be done:\n\n1. **Linking Voltage Levels**: By connecting two voltage levels, you create a relationship between them that resembles an ideal transformer's behavior. This connection is typically represented as a link in the `transformer` component of Power Grid Model.\n\n2. **Impedance Consideration**: The presence of small admittance (Yd) and high impedance (Z) at the source and load ends, respectively, can be modeled using these parameters. The transformer's output voltage will have a higher impedance than the input voltage due to the turns ratio and the combined effects of impedance in series with the load impedances.\n\n3. **Simplified Model**: In Power Grid Model, an ideal transformer component is often represented by a simple `branch` node that connects two nodes (source and load) with a specific impedance relationship. This simplification allows for easier numerical computation and avoids the complexity of modeling all these parameters explicitly in each step of the power flow calculation or state estimation process.\n\n4. **Example Representation**: A simplified representation might look like this:\n   ```plaintext\n   ## Transformer (Two-winding) with Impedance Considerations\n   transformer = {\n       'type': 'branch',\n       'source_node_impedance': 1000,  // Example impedance at source\n       'load_node_impedance': -500,  // Example impedance at load\n       'transformer_output_impedance': 12000 / (1 + (2 * Z_source * Z_load)**2),  // Impedance relationship\n   }\n   ```\n\n5. **Python API Reference**: For detailed documentation and to understand how this linkage is implemented, refer to the Python API reference provided in Document 3:\n   ```\n   ## Transformer Example\n   In this notebook, we demonstrate a one-time power flow calculation using an ideal transformer with impedance considerations.\n   Both two-winding transformers are covered. We will perform",
+      "answer": "In Power-Grid Model, an ideal transformer can be represented as a branch component that connects two nodes with potentially different voltage levels. This representation allows for modeling of transformers where the actual components are not ideal but still adhere to the principles described in the PGM model. The key aspect is that it explicitly allows placing a link between these two nodes, even though there isn't a dedicated `ideal-transformer` component.\n\nHere's how this can be achieved:\n\n1. **Branch Component Representation**:\n   - In Power-Grid Model, transformers are represented as branch components.\n   - An ideal transformer would have an equivalent impedance of 1 ohm at all voltage levels (typically zero for a purely resistive load).\n   - To model this with an ideal component, you can use the `branch` type in your Python API to represent such a scenario.\n\n2. **Linking Nodes**:\n   - You define two nodes in Power-Grid Model as inputs and outputs of the transformer.\n   - The link between these nodes represents the connection where the voltage levels differ (e.g., from 230V to 50V).\n\n3. **Implementation Example**:\n   ```python\n   # Define a branch component for an ideal transformer\n   from power_grid_model import BranchComponent\n\n   # Create a branch component representing an ideal transformer with impedance of 1 ohm at all voltage levels\n   ideal_transformer = BranchComponent(\n       name='ideal_transformer',\n       type='branch',  # Type: 'branch'\n       impedance=1.0,    # Impedance in ohms\n       source_voltage=0.0,  # Source voltage is zero for ideal transformer\n       target_voltage=-0.5  # Target voltage is -50V (adjust as needed)\n   )\n\n   # Connect the two nodes with a link where one node outputs to the other\n   transformer = BranchComponent(\n       name='transformer',\n       type='branch',  # Type: 'branch'\n       source_voltage=1.0,  # Source voltage for the ideal transformer\n       target_voltage=-0.5,  # Target voltage for the ideal transformer\n       link_to=ideal_transformer  # Link between nodes\n   )\n   ```\n\n4. **Usage in Python API**:\n   - When using this setup in your Python API, you can create instances of",
       "contexts": [
         "## Ideal transformer  \nAn ideal transformer can be modeled as a [link](./components.md#link). <!-- markdownlint-disable-line descriptive-link-text line-length -->\nTo this end, it is explicitly allowed to place a link between two different voltage levels.\nTrivially, no additional electrical parameters need to be specified.  \n```{note}\nThe [transformer](./components.md#transformer) component as provided by the PGM models a real transformer in the grid,\ni.e., with finite impedance.\nThis directly conflicts with the properties of an ideal transformer, so the PGM",
         "i.e., with finite impedance.\nThis directly conflicts with the properties of an ideal transformer, so the PGM\n[transformer](./components.md#transformer) cannot be used to model ideal transformers.\n```",
@@ -923,21 +923,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.5209338665008545,
-        "retrieval_time": 0.030810117721557617,
-        "generation_time": 1.4901020526885986,
+        "total_time": 1.5105397701263428,
+        "retrieval_time": 0.03499603271484375,
+        "generation_time": 1.4755237102508545,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.521003007888794,
-      "ttft_s": 0.15157389640808105,
+      "elapsed": 1.510610818862915,
+      "ttft_s": 0.14645695686340332,
       "prompt_tokens": 702
     },
     {
       "question": "How would you model a grounding or earthing transformer using power-grid-model's existing components?",
-      "answer": "To model a grounding or earthing transformer using Power Grid Model (PGM) with the given specifications, you can leverage the existing components and their properties as follows:\n\n### Components Used:\n1. **Shunt**: A grounding shunt (`shunt` component).\n2. **Reactance**: The reactance `x` is used to model the impedance of the shunt.\n3. **Zero-sequence Parameters**: These are set to zero, indicating that there's no net current flow in the direction of the shunt.\n4. **Positive-Sequence Parameters**:\n   - \\( b_1 \\) and \\( b_0 \\): These represent the voltage ratio between the primary and secondary windings (positive sequence impedance).\n   - The magnitude of these parameters is set to zero, indicating that there's no voltage drop across the shunt in the positive sequence.\n\n### Modeling Steps:\n1. **Initialize Shunt**:\n   - Create a shunt component with `r` resistance and `x` reactance.\n   - Set \\( b_1 \\) and \\( b_0 \\) to zero.\n\n2. **Add Ground Connection**:\n   - Connect the grounding shunt to one side of the transformer. This ensures that there's no net current flow in the direction of the ground connection, which is crucial for numerical stability.\n\n3. **Define Shunt Impedance**:\n   - The impedance \\( Z_{shunt} \\) can be calculated using Ohm's Law: \n     \\[\n     Z_{shunt} = \\frac{V_m - I}{R}\n     \\]\n     where \\( V_m \\) is the source voltage and \\( I \\) is the current through the shunt.\n\n4. **Adjust Reactive Parameters**:\n   - Ensure that the reactance \\( x \\) is appropriately set to zero for both positive and negative sequence currents, but since there's no net current in the ground connection, this step might not be strictly necessary unless you have specific requirements for phase angle or impedance matching.\n\n### Example Code Snippet:\n\n```python\nfrom power_grid_model import shunt, x  # Assuming these are defined elsewhere\n\n# Initialize shunt component with given parameters\nshunt_component = shunt(\n    r=1e-6,  # Resistance value (in ohms)\n    x=0.0   # Reactance in ohms\n)\n\n#",
+      "answer": "To model a grounding or earthing transformer using Power Grid Model (PGM) with the given specifications, you can leverage the existing components and their properties as follows:\n\n### Components Used:\n1. **Shunt**: A shunt with small admittance.\n2. **Reactance**: \\( x \\).\n3. **Zero-sequence Parameters**: Set to zero for simplicity.\n4. **Resistance**: \\( r \\) (grounding resistance).\n5. **Imaginary Component**: \\( b_0 = \\frac{1}{r + jx} \\).\n\n### Model Description:\nGiven the shunt configuration with a small admittance and grounding resistance, we can model it as follows:\n\n#### Step 1: Define the Shunt Parameters\n- **Reactance (\\( x \\))**: This is the imaginary part of the impedance. For simplicity, let's assume \\( x = 0 \\) (no reactance).\n- **Zero-Sequence Parameter**: Since we are modeling a grounding transformer, this parameter can be set to zero for clarity.\n\n#### Step 2: Impedance Calculation\nThe impedance \\( Z \\) of the shunt can be calculated using:\n\\[ Z = R + jX \\]\nwhere \\( X = \\frac{1}{r} \\). For a small admittance \\( x = 0 \\), we have:\n\\[ X = r \\]\nThus,\n\\[ Z = R + jr \\]\n\n#### Step 3: Zero-Sequence Parameter\nSince the zero-sequence parameter is set to zero, the imaginary component of the impedance simplifies to:\n\\[ b_0 = \\frac{1}{r} \\]\n\n### Python Implementation (Example):\nHere's a simple example in Python using PGM's `transformer` class to model this:\n\n```python\nfrom power_grid_model import transformer as pg_transformer  # Assuming the correct namespace and include necessary headers\n\n# Define parameters\nR = 1e9  # Represents the resistance (in ohms)\njx = 0.00001  # Small admittance value\n\n# Calculate impedance\nZ = R + j * jx\n\n# Print the impedance magnitude and phase angle\nprint(f\"Impedance: {Z.magnitude} Ohms\")\nprint(f\"Phase Angle: {Z.phase} degrees\")\n\n# Example usage for a shunt with",
       "contexts": [
         "## Grounding transformer  \nA grounding transformer (a.k.a. earthing transformer) can be modeled as a [shunt](./components.md#shunt) with only\nzero-sequence parameters (and positive-sequence parameters set to $0$).\nIn particular, a grounding transformer with resistance $r$ and reactance $x$ can be modeled as follows.  \n$$\n\\begin{aligned}\ng_1 &= 0 \\\\\nb_1 &= 0 \\\\\ng_0 &= \\Re\\left\\{\\frac{1}{r + j x}\\right\\} \\\\\nb_0 &= \\Im\\left\\{\\frac{1}{r + j x}\\right\\}\n\\end{aligned}\n$$",
         "Currently in power-grid-model, a shunt with small admittance is added only in transformer-related configurations\nwhere a grounding reference is missing. This shunt is connected to one side of the transformer.\nThis is intended to ensure numerical solvability in cases\nwhere the transformer topology introduces an ungrounded subsystem.",
@@ -966,21 +966,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.5491440296173096,
-        "retrieval_time": 0.03816699981689453,
-        "generation_time": 1.510956048965454,
+        "total_time": 1.523191213607788,
+        "retrieval_time": 0.0447230339050293,
+        "generation_time": 1.478445053100586,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.5492148399353027,
-      "ttft_s": 0.17515969276428223,
+      "elapsed": 1.5232656002044678,
+      "ttft_s": 0.17770862579345703,
       "prompt_tokens": 781
     },
     {
       "question": "What voltage scaling adjustment does power-grid-model apply during a short circuit calculation, and why?",
-      "answer": "Power-grid-model applies a voltage scaling factor of `c` to the voltage source during a short circuit calculation. This adjustment is made to account for different operational conditions such as varying fault currents, harmonic distortions, and the specific characteristics of rotating machines in power systems. The purpose of this scaling is to ensure accurate calculations by adjusting the voltage levels based on the current state of the grid and the specific requirements of the short circuit calculation algorithm being used.\n\nThe value `c` can be either `0` (minimum) or `1` (maximum), with `c=1` representing a maximum short circuit current, which is typically used when the fault current is very high and the system is under significant stress. This scaling helps in simplifying the calculations by reducing the complexity of the voltage transformation needed during the short circuit analysis.\n\nBy applying this scaling, the power-grid-model can more accurately represent the behavior of the grid under various fault conditions, ensuring reliable and precise short circuit calculations for power systems.",
+      "answer": "Power-grid-model applies a voltage scaling factor of `c` to the voltage source during a short circuit calculation. This adjustment is made because the calculations are assumed to be time-independent, and the nominal voltage of the node connected to the source is considered in the calculation. The pre-fault voltage is also included in the calculation based on grid parameters and topology.\n\nThe purpose of this scaling factor `c` is to account for the different operational conditions of a power-grid model, specifically:\n\n1. **Minimum Short Circuit Currents (`PGM_short_circuit_voltage_scaling_minimum`)**: This value represents the voltage at which the system would experience the smallest short circuit current under normal operating conditions. By scaling down this voltage, the calculations can more accurately reflect the minimum current that could occur during a fault condition.\n\n2. **Maximum Short Circuit Currents (`PGM_short_circuit_voltage_scaling_maximum`)**: This value represents the maximum short circuit current that the system might experience under normal operating conditions or potentially during a fault. Scaling this voltage down ensures that the calculations do not overestimate the potential current, which could lead to incorrect results in terms of power flow and stability analysis.\n\nBy applying these scaling factors, the `short_circuit_voltage_scaling` enumeration helps ensure that the short circuit calculations are both accurate and conservative, taking into account the varying operational conditions of the power grid model.",
       "contexts": [
         "(Excl. loads and generation)\n- The calculations are assumed to be time-independent.\n(Voltages are sine throughout with the fault occurring at a zero crossing of the voltage, the complexity of rotating\nmachines and harmonics are neglected, etc.)\n- To account for the different operational conditions, a voltage scaling factor of `c` is applied to the voltage source\nwhile running short circuit calculation function.\nThe factor `c` is determined by the nominal voltage of the node that the source is connected to and the API option to\ncalculate the `minimum` or `maximum` short circuit currents.",
         "## IEC 60909 short circuit calculation  \nAlgorithm call: {py:class}`CalculationMethod.iec60909 <power_grid_model.enum.CalculationMethod.iec60909>`  \nThe assumptions used for calculations in power-grid-model are aligned to the ones mentioned in\n[IEC 60909](https://webstore.iec.ch/publication/24100).  \n- The state of the grid with respect to loads and generations are ignored for the short circuit calculation.\n(Note: Shunt admittances are included in calculation.)\n- The pre-fault voltage is considered in the calculation and is calculated based on the grid parameters and topology.\n(Excl. loads and generation)",
@@ -1010,21 +1010,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.7133870124816895,
-        "retrieval_time": 0.03205680847167969,
-        "generation_time": 0.681304931640625,
+        "total_time": 0.9592947959899902,
+        "retrieval_time": 0.03381085395812988,
+        "generation_time": 0.9254589080810547,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.7134389877319336,
-      "ttft_s": 0.16238903999328613,
+      "elapsed": 0.9600729942321777,
+      "ttft_s": 0.15237998962402344,
       "prompt_tokens": 733
     },
     {
       "question": "What assumptions about loads and generation does power-grid-model make when computing a short circuit current?",
-      "answer": "Power-grid-model assumes that the state of the grid with respect to loads and generations is ignored for the short circuit calculation. Specifically, it considers only the pre-fault voltage and the topology of the grid without considering the dynamic behavior of loads and generation during a fault condition.",
+      "answer": "Power-grid-model assumes that the state of the grid with respect to loads and generations is ignored for the short circuit calculation. Specifically, it considers only the pre-fault voltage and the grid parameters and topology, excluding loads and generation. This simplification allows for a more straightforward and efficient calculation of short circuit currents by focusing on the fault conditions without considering the dynamic behavior influenced by load variations or generation changes.",
       "contexts": [
         "## IEC 60909 short circuit calculation  \nAlgorithm call: {py:class}`CalculationMethod.iec60909 <power_grid_model.enum.CalculationMethod.iec60909>`  \nThe assumptions used for calculations in power-grid-model are aligned to the ones mentioned in\n[IEC 60909](https://webstore.iec.ch/publication/24100).  \n- The state of the grid with respect to loads and generations are ignored for the short circuit calculation.\n(Note: Shunt admittances are included in calculation.)\n- The pre-fault voltage is considered in the calculation and is calculated based on the grid parameters and topology.\n(Excl. loads and generation)",
         "(Excl. loads and generation)\n- The calculations are assumed to be time-independent.\n(Voltages are sine throughout with the fault occurring at a zero crossing of the voltage, the complexity of rotating\nmachines and harmonics are neglected, etc.)\n- To account for the different operational conditions, a voltage scaling factor of `c` is applied to the voltage source\nwhile running short circuit calculation function.\nThe factor `c` is determined by the nominal voltage of the node that the source is connected to and the API option to\ncalculate the `minimum` or `maximum` short circuit currents.",
@@ -1054,21 +1054,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.3038349151611328,
-        "retrieval_time": 0.02599501609802246,
-        "generation_time": 0.2778167724609375,
+        "total_time": 0.37339210510253906,
+        "retrieval_time": 0.023688793182373047,
+        "generation_time": 0.34967803955078125,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.3038930892944336,
-      "ttft_s": 0.15608501434326172,
+      "elapsed": 0.37345075607299805,
+      "ttft_s": 0.15376996994018555,
       "prompt_tokens": 808
     },
     {
       "question": "Which bus is treated as the reference point with known voltage and angle in a power flow calculation, and what PGM component represents it?",
-      "answer": "In a power flow calculation, the **Slack Bus** is treated as the reference point with known voltage and angle. It's represented by the `PBG` (Power Balanced) component in the Power Grid Model (PGM). The context specifies that this bus has known voltage (`U_LN = U_{LL} / sqrt(3)`) and angle (`U_angle`), making it a crucial reference point for power flow analysis.",
+      "answer": "In the context provided, the **Slack bus** is treated as the reference point with known voltage and angle. It's represented by the `slack_bus` component within the Power Grid Model (PGM) documentation. The document specifies that this bus has a known voltage (`V`) and an angle (`\u03b8`).\n\nHere\u2019s a breakdown:\n\n- **Reference Point:** Slack bus\n  - **Purpose:** It provides a baseline reference point for power flow calculations, especially when dealing with unknown voltages or angles.\n  \n- **PGM Component Representation:** `slack_bus`\n  - **Voltage (`V`):** The known voltage of the bus.\n  - **Angle (`\u03b8`):** The angle at which the bus is connected to the grid, crucial for power flow calculations.\n\nThis setup allows for accurate power flow analysis by using the known voltage and angle as inputs to the PGM algorithm, simplifying the process of determining current phasors and other complex parameters like apparent power and phase angles.",
       "contexts": [
         "The following bus types can be present in the system:  \n- Slack bus: the reference bus with known voltage and angle; in power-grid-model referred to as the\n[source](../user_manual/components.md#source).\nSee also [selection of slack bus](../advanced_documentation/terminology.md#slack-bus-pgm-internal).\n- Load bus: a bus with known $P$ and $Q$.\n- Voltage controlled bus: a bus with known $P$ and $U$.\nNote: this bus is not supported by power-grid-model yet.  \n```{note}",
         "- Bus power injection: Similar as above, to translate the power flow to a complex current phasor, if the bus voltage is\nnot measured, the nominal voltage with zero angle will be used as an estimation.\nThe current phasor is calculated as follows:  \n$$\n\\underline{I} = (\\underline{S}/\\underline{U})^*\n$$  \nThe aggregated apparent power flow is considered as a single measurement, with variance\n$\\sigma_S^2 = \\sigma_P^2 + \\sigma_Q^2$.  \nThe assumption made in the linearization of measurements introduces a system error to the algorithm, because the phase",
@@ -1097,21 +1097,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.4319570064544678,
-        "retrieval_time": 0.02839803695678711,
-        "generation_time": 0.4035351276397705,
+        "total_time": 0.7528030872344971,
+        "retrieval_time": 0.031485795974731445,
+        "generation_time": 0.7212967872619629,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.4320042133331299,
-      "ttft_s": 0.18166017532348633,
+      "elapsed": 0.7528748512268066,
+      "ttft_s": 0.18138480186462402,
       "prompt_tokens": 916
     },
     {
       "question": "What extra requirement applies to asymmetric power flow calculations that doesn't apply to symmetric ones?",
-      "answer": "The extra requirement for asymmetric power flow calculations is that a line can be open on any one end, whereas in symmetric calculations, a line must be closed on both ends. This means that in asymmetric calculations, the line component needs to have a non-zero voltage drop across it at all points except possibly at the source and potentially at the load, which would require additional handling not present in symmetric calculations.",
+      "answer": "The extra requirement for asymmetric power flow calculations is that a line can be open on any one end, whereas in symmetric calculations, a line must be closed on both ends. This means that in asymmetric calculations, the node component needs to handle the possibility of having a line open at one end while still being connected to other nodes via other lines (asymmetrical loads).",
       "contexts": [
         "## Symmetry of Components and Calculation  \nIt should be emphasized that the symmetry of components and calculation are two independent concepts in the\npower-grid-model.\nFor instance, a model can consist of loads of both `sym_load` and `asym_load` types, which is symmetry on component\nlevel.\nMeanwhile, both symmetric and asymmetric calculations can be run on the same model:  \n* In symmetric calculation, an asymmetric loads will be treated as a symmetric load by averaging the specified power\nthrough three phases.",
         "#### Symmetric vs asymmetric calculations\n\nPower-grid-model can solve the grid either as a balanced single-phase equivalent (symmetric) or in full three-phase\ndetail (asymmetric).\nThe option affects which attributes are required and how results are exposed.\n\n- **Symmetric calculations (`symmetric=True`, default):** Assume a perfectly balanced three-phase system so every phase\nshares the same voltage and current.\nThe solver builds a positive-sequence network using `r1`, `x1`, `c1`, \u2026 parameters and collapses any asymmetric",
@@ -1140,21 +1140,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.36951303482055664,
-        "retrieval_time": 0.019373178482055664,
-        "generation_time": 0.3501150608062744,
+        "total_time": 0.35268211364746094,
+        "retrieval_time": 0.026937246322631836,
+        "generation_time": 0.3257160186767578,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.36957597732543945,
-      "ttft_s": 0.1556539535522461,
+      "elapsed": 0.35274672508239746,
+      "ttft_s": 0.1531519889831543,
       "prompt_tokens": 764
     },
     {
       "question": "How can memory usage be reduced when constructing input or update data for a use case that only touches a few optional attributes?",
-      "answer": "When constructing input or update data for a scenario where only a few optional attributes are present, reducing memory usage can be achieved by leveraging the `PGM_buffer_set_nan` function before setting those specific attributes. Here's how you can do it effectively:\n\n### Using `PGM_buffer_set_nan`\nThe `PGM_buffer_set_nan` function sets all attributes in a buffer to `NaN`. This is particularly useful when dealing with optional attributes that might not be updated frequently or have negligible effects on the overall model. Here's how you can integrate it into your code:\n\n1. **Check if Only Optional Attributes Are Needed**:\n   Before setting any attributes, determine if only a subset of optional attributes are needed by filtering out those that don't affect the update process.\n\n2. **Set Specific Attributes with `PGM_buffer_set_nan`**:\n   If you know which attributes to set and want to ensure they remain `NaN`, use `PGM_buffer_set_nan` before setting them. This avoids unnecessary memory allocation for attributes that are not required.\n\n### Example Implementation\nHere's a snippet illustrating how you might implement this:\n\n```cpp\nvoid update_components(ConstDataset const& update_data) {\n    // Step 1: Filter out optional attributes if necessary\n    bool only_values_in_data = false;\n    for (auto const& attribute : element_buffer.buffer->attributes) {\n        if (!check_nan(attribute, element_buffer.idx)) { // Assuming check_nan is defined elsewhere\n            if (only_values_in_data) {\n                // Only set the attributes that are not NaN\n                PGM_buffer_set_nan(element_buffer.meta_attribute->name);\n            }\n        }\n    }\n\n    // Step 2: Set specific attributes with PGM_buffer_set_nan\n    auto components_to_update = get_components_to_update(update_data);\n    for (auto& attribute : element_buffer.buffer->attributes) {\n        if (!check_nan(attribute, element_buffer.idx)) { // Assuming check_nan is defined elsewhere\n            PGM_buffer_set_nan(element_buffer.meta_attribute->name); // Set to NaN\n        }\n    }\n\n    // Continue with the rest of your update logic...\n}\n```\n\n### Key Points:\n- **Filtering**: Ensure that only attributes that are not `NaN` are set, optimizing memory usage.\n-",
+      "answer": "When constructing input or update data for a scenario where only a few optional attributes are present, reducing memory usage can be achieved by utilizing the `PGM_buffer_set_nan` function before setting those specific attributes. Here's how it works and why it helps:\n\n### Using `PGM_buffer_set_nan`\n- **Functionality**: The `PGM_buffer_set_nan` function sets all attributes in a buffer to `NaN`. This is particularly useful when you only want to update or set some attributes, leaving the rest of the data unchanged.\n- **Benefits for Memory Usage**:\n  - **Avoids Unnecessary Data**: By setting only the necessary attributes to `NaN`, you avoid storing all attributes in memory. This can significantly reduce memory usage, especially if your buffer is large and contains many attributes.\n  - **Efficient Updates**: Only update the specific attributes that are relevant for the update operation, which minimizes the amount of data processed and stored.\n\n### Example Scenario\nConsider a scenario where you have an input dataset with only a few optional attributes (`attr1`, `attr2`) and an output dataset with all other attributes set to `NaN`. If you were to manually set these attributes in memory, you would need to store the entire buffer, which could lead to high memory consumption.\n\n### Implementation\nHere's how you might implement this in your code:\n\n```cpp\nbool const only_values_in_data() {\n    std::ranges::none_of(component_byte_meta, [](auto const& x) { return x.has_map; });\n    \n    // Set NaN for the specific attributes that are not present in update_data\n    component_key_.set_value(component_key_, PGM_buffer_set_nan(component_byte_meta, &attr1, &attr2));\n    \n    msg_data_offsets_.push_back(std::move(component_byte_meta));\n    \n    // Enable attribute indications if possible\n    handler.enable_attribute_indications(component_key_);\n    \n    return true; // Indicate that the update is only for these attributes\n}\n```\n\n### Explanation:\n- **`PGM_buffer_set_nan`**: This function sets all non-mutable attributes in a buffer to `NaN`. By specifying which attributes (`attr1`, `attr2`) and their types (`component_key_`, `component_byte_meta`), you ensure that only the relevant",
       "contexts": [
         "uint32_t valid_attributes_count = 0;\n        for (auto const& attribute_buffer : element_buffer.buffer->attributes) {\n            valid_attributes_count += static_cast<uint32_t>(!check_nan(attribute_buffer, element_buffer.idx));\n        }\n        pack_map(valid_attributes_count);\n        for (auto const& attribute_buffer : element_buffer.buffer->attributes) {\n            if (!check_nan(attribute_buffer, element_buffer.idx)) {\n                packer_.pack(attribute_buffer.meta_attribute->name);\n                pack_attribute(attribute_buffer, element_buffer.idx);\n            }\n        }\n    }",
         "## Data format  \nThe data format of input, output and update data can have a big effect on memory and computational cost.",
@@ -1184,21 +1184,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.532693862915039,
-        "retrieval_time": 0.021760940551757812,
-        "generation_time": 1.510909080505371,
+        "total_time": 1.5116550922393799,
+        "retrieval_time": 0.02290797233581543,
+        "generation_time": 1.4887189865112305,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.5327601432800293,
-      "ttft_s": 0.16003918647766113,
+      "elapsed": 1.5117199420928955,
+      "ttft_s": 0.1498429775238037,
       "prompt_tokens": 845
     },
     {
       "question": "What two ways can component data be laid out in memory, and how do they differ?",
-      "answer": "Component data can be laid out in memory using two main types of buffers: row-based and columnar-based. Here's a breakdown of each:\n\n1. **Row-Based Buffers**:\n   - Attributes of the same component are stored contiguously before moving to the next component.\n   - This means that when accessing an attribute, it is accessed from the beginning of the corresponding row in memory.\n   - Example: In the provided context, attributes like `AttributeType.u_rated` are stored contiguously within a single row.\n\n2. **Columnar-Based Buffers**:\n   - Attributes of different components are stored separately and loaded into separate rows.\n   - This means that when accessing an attribute, it is accessed from the beginning of each corresponding column in memory.\n   - Example: In the provided context, attributes like `AttributeType.id` and `AttributeType.u_rated` are stored in separate columns within a row.\n\nThe key difference lies in how data is organized and accessed:\n- **Row-Based**: Data is contiguous within one row, making it easier to access specific components but potentially less efficient for operations that require accessing multiple attributes at once.\n- **Columnar-Based**: Data is stored in separate rows, which can be more memory-efficient for large datasets but may complicate operations that rely on contiguous data access.\n\nThis choice depends on the specific requirements of the application, such as performance needs and how frequently attribute accesses occur.",
+      "answer": "Component data can be laid out in memory using two main types of buffers: row-based and columnar-based. Here's a breakdown of each method and their differences:\n\n1. **Row-Based Buffering**:\n   - **Description**: In this approach, attributes of the same component are stored contiguously before moving to the next component.\n   - **Memory Ordering**: This method uses row-major memory ordering, where elements in consecutive rows are accessed as a single unit. It ensures that operations on adjacent components are predictable and consistent across different memory locations.\n   - **Use Case**: Suitable for scenarios where contiguous access is beneficial, such as when accessing related attributes of the same component sequentially.\n\n2. **Columnar-Based Buffering**:\n   - **Description**: Here, attributes are stored in columns rather than rows. This means each attribute is accessed independently from its row.\n   - **Memory Ordering**: Columnar-based buffers use page-major memory ordering, which allows for more flexible access patterns and can be beneficial when data is spread across multiple memory locations or when certain attributes need to be accessed in a specific order that isn't necessarily contiguous.\n   - **Use Case**: Ideal for scenarios where accessing different attributes of the same component separately from their row positions is necessary, such as in some machine learning operations or when dealing with large datasets.\n\nIn summary, the choice between row-based and columnar-based buffering depends on the specific access patterns required by your application and how efficiently you can manage memory access for your data structure.",
       "contexts": [
         "### Sparse  \nComponent data is stored as a flattened 1D buffer.  \nScenario boundaries are defined using an index pointer (`indptr`).\nThe `indptr` defines how the flattened buffer is segmented into per-scenario ranges.  \nSparse buffers may be either uniform or non-uniform.",
         "### Component buffers  \nThese buffers represent component data in a row-based format.\nI.e., all attributes of the same component are represented sequentially.\nThe individual components are represented in the buffer with a given size and alignment, which can be retrieved from the\nC API via the `PGM_meta_component_size` and `PGM_meta_component_alignment` functions.\nThe type (implying the size) and offset of each attribute can be found using the `PGM_meta_attribute_ctype` and\n`PGM_meta_attribute_offset`.  \nWhile we recommend users to create their own buffers using the `PGM_meta_component_size` and",
@@ -1228,21 +1228,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.9676170349121094,
-        "retrieval_time": 0.03387284278869629,
-        "generation_time": 0.9337222576141357,
+        "total_time": 1.0028960704803467,
+        "retrieval_time": 0.03539705276489258,
+        "generation_time": 0.967475175857544,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.9676859378814697,
-      "ttft_s": 0.16090083122253418,
+      "elapsed": 1.002967119216919,
+      "ttft_s": 0.14975285530090332,
       "prompt_tokens": 650
     },
     {
       "question": "How does power-grid-model represent batch data where different scenarios update different numbers of components?",
-      "answer": "Power-grid-model represents batch data with elements like `{py:class}` containing a `BatchDataset`, which stores the data for one or more scenarios. Each scenario in this dataset can have a specific number of components, such as `n_scenarios`. The topology caching mechanism is particularly useful here because it optimizes performance by reusing pre-built batches when there are no structural changes to the power grid itself (like statuses of branches and sources).\n\nHere's how it works:\n\n1. **Batch Dataset**: Each scenario in the batch dataset contains a `BatchDataset` object, which holds data for one or more components. This is structured as a numpy array where each element represents a component's state at a given time step.\n\n2. **Topology Caching**:\n   - **Status Changes**: The topology caches changes in the status of branches and sources. If none of these scenarios change (i.e., their `from_status`, `to_status`, or `status` attributes remain unchanged), the model reuses a pre-built batch dataset.\n   - **Component Counts**: For each scenario, the topology also tracks how many components are present in the current batch. This helps in determining whether to update the data based on the number of components or just the state (e.g., `from_status`, `to_status`).\n\n3. **Efficient Updates**:\n   - When a new batch is provided, the topology checks if any of the changes occur in the statuses of branches and sources.\n   - If no changes are detected, it reuses the pre-built batch dataset to avoid redundant computations.\n   - For scenarios where updates include more than one component (e.g., `n_scenarios` components), the topology caches these batches efficiently.\n\nThis approach ensures that the power-grid model can handle large batches of data with varying numbers of components in a memory-efficient manner, reducing computational overhead and improving performance during calculations.",
+      "answer": "Power-grid-model represents batch data with elements like `{py:class}` containing a `BatchDataset`, which stores the data for one or more scenarios. Each scenario in this dataset can have a specific number of components, such as `n_scenarios`. The topology caching mechanism is particularly useful here because it optimizes performance by reusing pre-built batches when there are no structural changes to the power grid itself (like statuses of branches and sources).\n\nHere's how it works:\n\n1. **Batch Dataset**: Each scenario in the batch dataset contains a `BatchDataset` object, which holds data for one or more components. This can be either dense or sparse, depending on the structure of the data. The `{py:class}` element specifies this dataset type.\n\n2. **Topology Caching**:\n   - **No Structural Changes**: If there are no changes to the statuses (`from_status`, `to_status`, `status`) of branches and sources within a batch, the topology is cached.\n   - **Reuse Pre-Built Batches**: When the model needs to update components in different scenarios but doesn't see structural changes (like updating a single source's status), it reuses the pre-built batches stored in the topology. This avoids redundant computations and saves computational resources.\n\n3. **Example Scenario**:\n   - Consider two scenarios, `ScenarioA` with 5 components and `ScenarioB` with 7 components.\n   - If only one scenario updates a single component (`source`), the topology will cache this batch because no structural changes are detected in the statuses of branches and sources for that specific scenario.\n\n4. **Performance Optimization**:\n   - By caching these batches, Power-grid-model can significantly reduce the computational overhead associated with updating components across multiple scenarios.\n   - This is particularly beneficial during large-scale simulations where each update might involve a substantial amount of data processing.\n\nIn summary, power-grid-model efficiently manages batch data by leveraging topology caching to optimize updates based on structural changes and component counts, ensuring both performance and resource efficiency.",
       "contexts": [
         "### Batch data set\n\nThe parameters of the individual scenarios within a batch can be done by providing deltas compared to the existing state\nof the model.\nThe values of unchanged attributes and components parameters within a scenario may be implicit (like a delta update) or\nexplicit (similarly to how one would provide a full state).\nIn the context of the power-grid-model, these are called **dependent** (implicit) and **independent** (explicit) batch\nupdates, respectively.\nIn both cases, all scenario updates are relative to the state of the model before the call of the calculation.",
         "essentially a dictionary with a data buffer and an index pointer.  \n`power-grid-model` can process many scenarios (e.g., time steps, switch states, etc.) at once, which we call a batch.\nThe batch size is the number of scenarios.  \n- **Scenario:** A single time step / switch state topology.  \n- **Batch:** The set of scenarios.\n(there is only one batch)  \n- **Batch size:** The total number of scenarios in the batch.  \n- **n_scenarios:** The total number of scenarios in the batch.\n(Same as Batch Size)",
@@ -1271,21 +1271,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.2751038074493408,
-        "retrieval_time": 0.03403782844543457,
-        "generation_time": 1.241044044494629,
+        "total_time": 1.3625216484069824,
+        "retrieval_time": 0.03332400321960449,
+        "generation_time": 1.329176902770996,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.2751669883728027,
-      "ttft_s": 0.1846461296081543,
+      "elapsed": 1.3625900745391846,
+      "ttft_s": 0.17005324363708496,
       "prompt_tokens": 925
     },
     {
       "question": "Why might running the full Cartesian product of two batch datasets not require allocating memory for every combined scenario?",
-      "answer": "Running a full Cartesian product of two batch datasets does not necessarily require allocating memory for every combined scenario because the output dimension is determined by the highest dimension among the two input dimensions. In this case, if `N1` and `N2` are both large enough (e.g., millions or billions), the Cartesian product will have a dimension of `min(N1, N2) * max(N1, N2)`. This means that only the first scenario's dimensions will be used as the basis for further combinations.\n\nHere\u2019s why this is beneficial:\n\n- **Memory Efficiency**: By using only the highest dimension, you avoid storing unnecessary data. For example, if `N1` has 10 million rows and `N2` has 100 million rows, the Cartesian product will have dimensions up to `100 * 10 = 1000`. This significantly reduces memory usage compared to storing all possible combinations of all row counts.\n  \n- **Performance**: With fewer dimensions to process, the computation becomes faster. The operations on these smaller dimensions are generally more efficient than those on larger ones.\n\nIn summary, when dealing with large datasets like those in a power grid model's contingency analysis or probabilistic data along with timeseries data, using only the highest dimension of the Cartesian product can lead to substantial memory savings and improved performance by reducing the overall complexity of the implementation.",
+      "answer": "Running the full Cartesian product of two batch datasets does not necessarily require allocating memory for every combined scenario because the output dimension is determined by the highest dimension among the scenarios. In this case, if `N1` and `N2` are both large enough (e.g., millions or billions), the resulting output will have a dimension of `scenarios * max(n1, n2)`. This means that only the first scenario's dimensions will be used to flatten the data into a single-dimensional array.\n\nHere\u2019s why this is beneficial:\n\n1. **Memory Efficiency**: By using only the highest dimension, you avoid storing unnecessary memory for scenarios with smaller dimensions. This can significantly reduce memory usage, especially when dealing with large datasets or high-dimensional Cartesian products.\n\n2. **Performance Optimization**: Since the output dimension is fixed and known at compile time (determined by `scenarios * max(n1, n2)`), you can optimize your code to directly work with this predefined dimension rather than dynamically allocating memory for each combination of scenarios. This can lead to better performance, particularly in computationally intensive tasks like those mentioned in the context guide (e.g., power flow analysis).\n\n3. **Scalability**: For very large datasets or when dealing with a wide range of `N1` and `N2`, this approach helps maintain scalability by avoiding the overhead associated with creating and managing intermediate arrays for each combination of scenarios.\n\nIn summary, using only the highest dimension from the Cartesian product simplifies memory management and can lead to more efficient and performant computations when working with large batches of datasets in a power grid model context.",
       "contexts": [
         "internally.\nHence there is no need to allocate memory for full `N1 * N2 * ...` scenarios for a Cartesian product of data sets with\nscenario size `N1, N2, ...`.\nFor more performance guidelines, see also [below](#multi-dimensional-batch-calculations).",
         "#### Cartesian product of batch datasets  \nIt is possible to conduct a batch calculation of multiple datasets in form of a cartesian product of their scenarios.\nAssume certain batch datasets with N1, N2, N3, ... scenarios.\nThis would give us $N1 * N2 * N3 * ...$ possible combinations via the cartesian product.\nThe resultant output data is in flat form and it has dimension of N1 * N2 * N3 with first dataset being the highest\ndimension.\nThis can be beneficial in reducing complexity of implementation of such batch calculation\nalong with keeping the size of such resultant update_data to a minimum.",
@@ -1315,21 +1315,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.9370501041412354,
-        "retrieval_time": 0.031101226806640625,
-        "generation_time": 0.9059250354766846,
+        "total_time": 1.0968811511993408,
+        "retrieval_time": 0.03419089317321777,
+        "generation_time": 1.0626630783081055,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.9371201992034912,
-      "ttft_s": 0.1682581901550293,
+      "elapsed": 1.0969491004943848,
+      "ttft_s": 0.17020392417907715,
       "prompt_tokens": 873
     },
     {
       "question": "What serialization formats does power-grid-model's serializer support?",
-      "answer": "Power-grid-model's serializer supports JSON and BSON (Binary JSON) as serialization formats. This is evident from the `Serializer` class definition which includes a constructor that accepts a `serialization_format` parameter, allowing it to create instances of `create<Serializer>` for different formats.\n\nHere's how you can see this in the provided code:\n\n```cpp\nSerializer serializer{handler, SerializationFormat::json}; // JSON format\n// or\nSerializer serializer{handler, SerializationFormat::bson64, get_meta_data()}; // BSON64 format\n```\n\nThis allows flexibility in how data is serialized and deserialized based on the specific needs of your application.",
+      "answer": "Power-grid-model's serializer supports JSON and BSON (Binary JSON) as serialization formats. This is evident from the `Serializer` class definition which includes a constructor that takes `serialization_format` as an argument, allowing it to create instances of `Serializer` for different formats.\n\nHere's how you can verify this in the context:\n\n```cpp\n// Serializer supports JSON and BSON serialization formats.\n#define PGM_Serializer_JSON  true\n#define PGM_Serializer_BSON  false // Assuming BSON is not supported by default\n\nint main() {\n    // Example usage of PGM_Serializer with JSON format\n    PowerGridSerializer* serializer = new PGM_Serializer();\n    auto json_data = \"{\\\"key\\\":\\\"value\\\"}\";\n    auto batch_dataset_dict = serialize_to_json(serializer, json_data);\n    \n    // Serialization and deserialization logic goes here\n\n    delete serializer;\n    return 0;\n}\n```\n\nIn this example:\n- `PGM_Serializer_JSON` is set to `true`, indicating that JSON should be used for serialization.\n- The `serialize_to_json` function creates a `Serializer` object with the specified format and returns it, which can then be deserialized using `deserialize_from_binary_buffer`.\n\nThis setup allows you to test different serialization formats within your application.",
       "contexts": [
         "# Serialization  \nThe power-grid-model provides tools for serialization and deserialization for datasets.  \nVisit the [Python API Reference](../api_reference/python-api-reference.md#utils) and\n[C API Reference](../api_reference/power-grid-model-c-api-reference.rst) for the full documentation of the serialization\ntools.",
         "PGM_Serializer* PGM_create_serializer(PGM_Handle* handle, PGM_ConstDataset const* dataset,\n                                      PGM_Idx serialization_format) noexcept {\n    return call_with_catch(\n        handle,\n        [dataset, serialization_format] {\n            return cast_to_c(\n                create<Serializer>(safe_ptr_get(cast_to_cpp(dataset)),\n                                   safe_enum<power_grid_model::SerializationFormat>(serialization_format)));\n        },\n        serialization_exception_handler);\n}",
@@ -1358,21 +1358,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.555304765701294,
-        "retrieval_time": 0.026032686233520508,
-        "generation_time": 0.5292470455169678,
+        "total_time": 0.9438529014587402,
+        "retrieval_time": 0.03707695007324219,
+        "generation_time": 0.9067492485046387,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.555368185043335,
-      "ttft_s": 0.15536832809448242,
+      "elapsed": 0.9439241886138916,
+      "ttft_s": 0.15698504447937012,
       "prompt_tokens": 723
     },
     {
       "question": "What is the minimum CMake version required to build power-grid-model?",
-      "answer": "The minimum CMake version required to build `power-grid-model` is **3.23**. This is specified in the `cmake.version` line within the provided context.\n\nHere's a breakdown of the relevant part:\n```cmake\ncmake.version = \">=3.23\"\n```\nThis ensures that the CMake toolchain used for building the project supports the version 3.23 or higher, which is compatible with the `ninja` generator and other build targets mentioned in the context.",
+      "answer": "The minimum CMake version required to build `power-grid-model` is **3.23**. This is specified in the `cmake.version` line within the provided context.\n\nHere's a breakdown of the relevant part:\n```cmake\ncmake.version = \">=3.23\"\n```\nThis ensures that the CMake toolchain used for building the project supports the version 3.23 or higher, which is necessary to compile and link the `power_grid_model` project as described in the context.",
       "contexts": [
         "### Developer build  \nIf you opt for a developer build of Power Grid Model,\nyou can use the pre-defined CMake presets to enable developer build, including all the tests, warnings, examples, and\nbenchmark.\nIn the presets the [Ninja](https://ninja-build.org/) generator is used.\nIn principle, you can use any C++ IDE with cmake and ninja support to develop the C++ project.\nIt is also possible to use the bare CMake CLI to set up the project.\nSupported presets for your development platform can be listed using `cmake --list-presets`.  \nIn the developer build the following build targets (directories) are enabled:",
         "\"${CMAKE_CURRENT_BINARY_DIR}/power_grid_model/power_grid_modelConfigVersion.cmake\"\n    DESTINATION \"lib/cmake/power_grid_model\"\n)",
@@ -1400,21 +1400,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.44957590103149414,
-        "retrieval_time": 0.024361848831176758,
-        "generation_time": 0.42519330978393555,
+        "total_time": 0.4358510971069336,
+        "retrieval_time": 0.023808002471923828,
+        "generation_time": 0.4120209217071533,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.44962310791015625,
-      "ttft_s": 0.16602396965026855,
+      "elapsed": 0.43592214584350586,
+      "ttft_s": 0.15603923797607422,
       "prompt_tokens": 733
     },
     {
       "question": "What interface layers does power-grid-model provide out of the box, from the rawest to the most feature-rich?",
-      "answer": "The Power Grid Model provides a header-only C++ interface library with several layers of abstraction. Here's a breakdown from the provided context:\n\n1. **Core Interface**:\n   - The `MainModel` is an engine that provides the basic interface for interacting with the power grid model.\n   - It includes logic for various aspects like calculations, data flow, and overall functionality.\n\n2. **API Layer**:\n   - This layer is abstracted from the core implementation using a dynamic/shared C API library.\n   - The `MainModel` itself can be deconstructed into an API part, which allows flexibility in how different parts of the system interact with it.\n\n3. **Dispatch Layer**:\n   - This layer provides higher-level abstractions for managing and executing calculations within the power grid model.\n   - It's designed to decouple the core logic from specific dispatch mechanisms or algorithms.\n\n4. **Grid Model Layer**:\n   - The actual implementation of the power grid model is wrapped in internal layers, following a similar pattern as the `MainModel`.\n   - These layers encapsulate the complexities and details of the power grid's structure and behavior.\n\n5. **Data Flow Layer**:\n   - This layer focuses on managing data flow between different components of the system.\n   - It abstracts away low-level details, providing a structured way to handle data exchange and processing.\n\n6. **Custom Interfaces (Optional)**:\n   - While not explicitly mentioned in the provided context, Power Grid Model supports custom interfaces through its design, allowing for flexibility in how different parts of the system interact with the core logic.\n\nIn summary, from the rawest layer to the most feature-rich, power-grid-model provides a header-only C++ interface that includes:\n- **Core Interface**: Provides basic functionality and data flow.\n- **API Layer**: Offers flexibility in how components interact.\n- **Dispatch Layer**: Manages higher-level operations and dispatch logic.\n- **Grid Model Layer**: Encapsulates the actual power grid structure and behavior.\n- **Data Flow Layer**: Handles data management and communication.\n\nThis layered approach ensures that Power Grid Model is both flexible and maintainable, catering to various use cases and programming languages.",
+      "answer": "The Power Grid Model provides a header-only C++ interface layer out of the box. This is followed by an internal wrapper for lower-level abstractions, which are designed to be more flexible and easier to use compared to directly interacting with the core engine. The layers of abstraction include:\n\n1. **API Layer**: This is the topmost layer that provides a high-level interface for users to interact with the Power Grid Model without needing to dive into its internal details.\n2. **MainModel**: An engine that encapsulates the logic and operations related to power grid calculations, abstracting away much of the low-level implementation.\n3. **Dispatch Layer**: Handles the dispatch and control aspects of the power grid, providing a more specialized layer for specific use cases.\n4. **Grid Model Layer**: This is an internal wrapper that provides access to the actual model data and operations, offering flexibility in how different parts of the system interact with it.\n\nThe exact nature of these layers can vary depending on the specific requirements and constraints of the application using this library. However, they collectively aim to provide a robust, flexible, and maintainable interface for power grid calculations.",
       "contexts": [
         "## Existing library interfaces  \nThe following library interfaces are currently included in the power-grid-model.  \n| Interface type | Status       | Layer              | Explanation                                                     | Supported by                                        |\n| -------------- | ------------ | ------------------ | --------------------------------------------------------------- | --------------------------------------------------- |",
         "## Detailed Power Grid Model core design  \nThe sheer size and complexity of the Power Grid Model core implementation makes it hard to generate an up-to-date and\ncomprehensive graph of its design.\nFor a full overview of the core, it is recommended to build and access the Power Grid Model core documentation by\nfollowing the steps in the [build guide](./build-guide.md#documentation).",
@@ -1444,21 +1444,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.3913450241088867,
-        "retrieval_time": 0.01967000961303711,
-        "generation_time": 1.3716239929199219,
+        "total_time": 0.774277925491333,
+        "retrieval_time": 0.0225369930267334,
+        "generation_time": 0.7517220973968506,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.3914108276367188,
-      "ttft_s": 0.14326763153076172,
+      "elapsed": 0.7743511199951172,
+      "ttft_s": 0.14466094970703125,
       "prompt_tokens": 726
     },
     {
       "question": "Where in the power-grid-model repository is the C++ calculation core located, and where is the input-data validation code located?",
-      "answer": "The C++ calculation core for the Power Grid Model is located within a `.cpp` file named `calculation-core.cpp` in the `power_grid_model` directory of the repository. The input-data validation code, which contains functions to validate input data, is also found in a separate `validation` folder under the same directory structure as the C++ calculation core.\n\nHere's how you can locate these files:\n\n1. Navigate to the `power-grid-model` directory:\n   ```sh\n   cd /Users/alexschiltmans/Developer/hobby/codebase-rag/data/repos/power-grid-model/\n   ```\n\n2. Within this directory, find the `validation` folder:\n   ```sh\n   cd power-grid_model/src/power_grid_model/validation/\n   ```\n\n3. Inside the `validation` folder, you'll find two files:\n   - `CppUnitTest.cpp`: This file contains test unit tests for the C++ calculation core.\n   - (Assuming there's another file named `main.cpp` in the same directory) or similar, depending on how your project is structured.\n\n4. The `calculation-core.cpp` file would be:\n   ```cpp\n   #include <vector>\n   #include <string>\n\n   struct ValidationTest {\n       std::vector<std::string> test_cases; // Example structure for validation tests\n   };\n\n   class PowerGridModelCore {\n   public:\n       void validate(const std::string& input_data) {\n           // Implement your validation logic here\n           // For demonstration, let's assume a simple check\n           if (input_data == \"invalid_input\") {\n               throw std::runtime_error(\"Input data is invalid\");\n           }\n       }\n\n   private:\n       std::vector<std::string> test_cases;\n   };\n   ```\n\n5. The input-data validation code, which contains functions to validate the input data, would typically be in a separate C++ file named `validation.cpp` or similar within the same directory structure as the calculation core. Here's an example of what that might look like:\n\n```cpp\n#include <vector>\n#include <string>\n\nstruct ValidationTest {\n    std::vector<std::string> test_cases; // Example structure for validation tests\n\n    void validate(const std::string& input_data) {\n        // Implement your validation",
+      "answer": "The C++ calculation core for the Power Grid Model is located within the `src/power_grid_model/calculation-core` directory. The input-data validation code is located in the `./tests/validation` folder, specifically under a subfolder named `Validation`.\n\nHere's a breakdown:\n\n- **C++ Calculation Core Location**:\n  - The calculation core itself is part of the `src/power_grid_model/calculation-core` directory.\n  - It provides the logic for power grid calculations.\n\n- **Input-Data Validation Code Location**:\n  - The input-data validation code resides in a subfolder named `Validation`.\n  - This folder contains Python interface files that interact with the C++ calculation core, facilitating unit testing and data validation.\n\nThis structure allows for modular organization of the codebase, separating concerns between the core logic and the test suite.",
       "contexts": [
         "- The C program example to use the C API is inside\n{{ \"[power_grid_model_c_example]({}/power_grid_model_c_example)\".format(gh_link_head_tree) }}.\n- The python interface code is in {{ \"[src/power_grid_model]({}/src/power_grid_model)\".format(gh_link_head_tree) }}\n- The code for validation of input data is in\n{{ \"[validation]({}/src/power_grid_model/validation)\".format(gh_link_head_tree) }} folder.\n- The {{ \"[tests]({}/tests)\".format(gh_link_head_tree) }} folder is divided in the following way:\n- `cpp_unit_tests` contains the tests for the C++ calculation core.",
         "# Design of the Power Grid Model core  \nThe Power Grid Model at its core is a header-only C++ interface library, wrapped by a dynamic/shared C API library.\nThe core itself is an engine called the `MainModel` that provides the C++ interface and exhibits logic for the various\naspects that play a role in power grid calculations.\nThe `MainModel` itself can be deconstructed into an API part, a dispatch part, the grid model and the actual\n[calculation logic](#calculation-logic-and-data-flow).",
@@ -1487,21 +1487,21 @@
       "category": "factual_lookup",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.554832935333252,
-        "retrieval_time": 0.03773808479309082,
-        "generation_time": 1.5170681476593018,
+        "total_time": 0.666208028793335,
+        "retrieval_time": 0.031373023986816406,
+        "generation_time": 0.6348111629486084,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.5549049377441406,
-      "ttft_s": 0.17901086807250977,
+      "elapsed": 0.6662781238555908,
+      "ttft_s": 0.1752150058746338,
       "prompt_tokens": 856
     },
     {
       "question": "Why does power-grid-model encourage users to build their own custom library or interface instead of providing a full feature-rich library for every programming language, and what pattern should a custom interface follow?",
-      "answer": "Power Grid Model encourages users to build their own custom libraries or interfaces primarily due to the complexity and variability in how different programming languages and use cases interact with its core implementation. By allowing users to separate the user interface from the underlying C API, Power Grid Model provides flexibility and extensibility, enabling developers to tailor the library to specific needs without being locked into a rigid structure. This approach is particularly beneficial for:\n\n1. **Dynamic Use Cases**: Different programming languages may have unique requirements or use cases that don't fit neatly into predefined interfaces. Customizing the interface allows users to adapt it to these specific needs.\n2. **Performance Optimization**: By isolating the user interface, Power Grid Model can optimize performance for each language's specific execution model and memory management techniques.\n3. **Maintainability and Scalability**: A well-defined custom interface helps in maintaining a clean codebase and makes it easier to scale and extend as new features are added or languages evolve.\n\nA pattern that Power Grid Model should follow is the **strict system boundary approach**, which separates the user interface from the core implementation. This means defining clear boundaries between these layers:\n\n- **Interface Layer**: Defines the public API for interacting with the library, including methods and properties that users can call.\n- **Implementation Layer**: Contains the actual C/C++/Java code that interacts with Power Grid Model's underlying system. This layer is responsible for handling low-level details like memory management, threading, and other system-specific operations.\n\nBy adhering to this pattern, Power Grid Model ensures that users can focus on their specific use cases without being constrained by a monolithic, feature-rich library that might not be optimized or compatible with all languages. This separation also facilitates easier maintenance and updates, as changes in the implementation layer do not necessarily ripple through the interface layer.\n\nIn summary, Power Grid Model's approach to building custom libraries or interfaces is driven by the need for flexibility, performance optimization, and maintainability across diverse programming environments. Following a strict system boundary ensures that each part of the library operates independently yet cohesively with the broader system.",
+      "answer": "Power Grid Model encourages users to build their own custom libraries or interfaces primarily due to the complexity and variability in how different programming languages and use cases handle interaction with Power Grid Model's core implementation. By allowing users to separate the user interface from the underlying C API, Power Grid Model provides flexibility and extensibility:\n\n1. **Complexity Management**: Different programming languages have varying levels of abstraction and performance characteristics. A full feature-rich library might introduce unnecessary complexity for some users while failing to meet the needs of others. Custom interfaces enable developers to tailor the interaction based on their specific requirements, thus avoiding this complexity.\n\n2. **Performance Optimization**: By isolating the user interface from the C API, Power Grid Model can optimize performance by only loading necessary components when needed. This is particularly beneficial for performance-critical applications or those with limited resources.\n\n3. **Ecosystem Growth and Interoperability**: A modular approach fosters a larger ecosystem of third-party libraries and tools that can be integrated into Power Grid Model projects, enhancing interoperability and allowing developers to leverage existing solutions without reinventing the wheel.\n\nA custom interface for Power Grid Model should follow a typical dynamic/shared library pattern with these key characteristics:\n\n- **Dynamic Behavior**: The interface should support runtime behavior changes based on the context (e.g., C API, native code, or even user-defined contexts). This allows for flexible and adaptable interfaces that can respond to different programming environments.\n\n- **Clear Interface Definition**: Each method within the interface should have a well-defined contract, including parameters, return types, and expected outcomes. This ensures that developers understand how to interact with the interface without needing extensive documentation or setup.\n\n- **Abstraction Layer**: The interface acts as an abstraction layer between the user's code and the underlying C API. It decouples the application logic from specific implementation details, making it easier to change or extend the library without affecting other parts of the codebase.\n\nIn summary, Power Grid Model encourages custom interfaces by providing a flexible, extensible, and performance-optimized way for users to interact with its core functionality, ensuring that the library can be tailored to meet diverse needs while maintaining compatibility across different programming environments.",
       "contexts": [
         "### Hosting a custom library or interface  \nThe Power Grid Model organization supports people creating and hosting custom libraries and interfaces.\nIf you are doing so and are willing to notify us, please create an item on our\n[discussion board](https://github.com/orgs/PowerGridModel/discussions) on GitHub.\nThe Power Grid Model organization will review your item and we may decide to mention your custom library on our project\nwebsite and documentation.",
         "# High-level design  \nThe power-grid-model follows a typical dynamic/shared library approach, in which the user interface is separated from\nthe core implementation using a strict system boundary.\nDepending on the use case and programming language used by the user to call the interface, the user can opt to interface\nwith the C API in different ways.",
@@ -1530,21 +1530,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.3508338928222656,
-        "retrieval_time": 0.038336992263793945,
-        "generation_time": 1.312474012374878,
+        "total_time": 1.3712246417999268,
+        "retrieval_time": 0.034120798110961914,
+        "generation_time": 1.3370780944824219,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.3509011268615723,
-      "ttft_s": 0.17860913276672363,
+      "elapsed": 1.3712940216064453,
+      "ttft_s": 0.16319584846496582,
       "prompt_tokens": 879
     },
     {
       "question": "What distinguishes a spurious edge case from a non-spurious one in power-grid-model's terminology?",
-      "answer": "In the context provided, a spurious edge case is distinguished from a non-spurious edge case based on whether the current behavior of the model is actually correct or not. Here\u2019s how they differ:\n\n### Spurious Edge Case:\n- **Definition**: A spurious edge case occurs when the program's behavior deviates significantly from its intended, expected outcome due to an error or miscalculation.\n- **Characteristics**:\n  - The current implementation produces incorrect results (e.g., NaN values).\n  - It may not be a genuine bug but rather a result of the model's inherent limitations or design flaws.\n  - These cases are often easy to identify and resolve, as they can usually be fixed by adjusting the code or understanding the underlying assumptions.\n\n### Non-Spurious Edge Case:\n- **Definition**: A non-spurious edge case is one where the current behavior of the power grid model accurately reflects its intended functionality.\n- **Characteristics**:\n  - The expected output matches the actual behavior as defined by the problem statement and model logic.\n  - It does not introduce errors or misleading results, even if it's a minor issue.\n\nIn summary, the key distinction lies in whether the current behavior is correct (spurious) or if it aligns with the intended functionality (non-spurious). Spurious edge cases are typically easier to identify and fix, while non-spurious ones might require more thorough investigation to understand their root cause.",
+      "answer": "In the context provided, a **spurious edge case** is distinguished from a **non-spurious edge case** based on whether the behavior of the model changes significantly when parameters are altered. Here\u2019s a breakdown:\n\n### Spurious Edge Case:\n- **Definition**: A spurious edge case occurs when the current behavior of the power grid model is actually correct, even though it might not be due to any actual bug.\n- **Characteristics**:\n  - The model's output or behavior remains consistent under small changes in parameters.\n  - It does not indicate a real issue with the implementation but rather an inherent property of the problem being modeled.\n\n### Non-Spurious Edge Case:\n- **Definition**: A non-spurious edge case is one where the current behavior of the power grid model accurately reflects what is expected or intended, even if it might not be due to any bugs.\n- **Characteristics**:\n  - The model's output or behavior changes significantly when parameters are altered.\n  - It could indicate a bug in the implementation, but it does not necessarily mean that the problem lies with the code itself.\n\nIn summary, the key distinction is that spurious edge cases highlight an inherent property of the system (correctness under small parameter changes), whereas non-spurious edge cases suggest a potential issue or bug in the model's behavior when parameters are varied.",
       "contexts": [
         "Other examples of non-spurious edge cases are:  \n* Cases in which the power grid model reports a `NotObservableError`;\n* Cases in which a `PowerGridError` is thrown that wraps a `bad_alloc` (running out of available contiguous memory).",
         "#### Spurious edge cases  \nSome edge cases are actual problems with the code.\nSome of them may be easy to solve, while others may be extremely difficult to find and/or resolve.\nOccasionally, even, more research is still needed before a satisfactory fix to the edge case can be found.\nAn example of the latter is shown in [this paper](https://doi.org/10.48550/arXiv.2504.11650), which was published as\ncollaboration between ICT for industy and power grid model.",
@@ -1573,21 +1573,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.9541501998901367,
-        "retrieval_time": 0.030610322952270508,
-        "generation_time": 0.9235148429870605,
+        "total_time": 0.8932740688323975,
+        "retrieval_time": 0.030570030212402344,
+        "generation_time": 0.8626809120178223,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.9542160034179688,
-      "ttft_s": 0.15799689292907715,
+      "elapsed": 0.8933439254760742,
+      "ttft_s": 0.152540922164917,
       "prompt_tokens": 762
     },
     {
       "question": "How does power-grid-model combine multiple voltage sensor measurements on the same bus during state estimation?",
-      "answer": "Power-grid-model combines multiple voltage sensor measurements on the same bus by first calculating a weighted average of each measurement across all buses, where the weights are determined by the standard deviations (\u03c3_k) of the individual measurements. This is done using the formula:\n\n\\[ z = \\frac{\\sum_{k=1}^{N_{sensor}} z_k \\sigma_k^{-2}}{\\sum_{k=1}^{N_{sensor}} \\sigma_k^{-2}} \\]\n\nWhere:\n- \\(z\\) is the measured value.\n- \\(N_{sensor}\\) is the number of sensors measuring that voltage.\n- \\(\\sigma_k\\) is the standard deviation of the \\(k\\)-th sensor measurement.\n- \\(z_k\\) is the weighted sum of all measurements, where each weight is \\(\\frac{1}{\\sigma_k^2}\\).\n\nThis weighted average effectively combines the individual measurements into a single value for each bus, which can then be used to estimate the state (e.g., voltage levels) in that bus. This process helps in reducing redundancy and improving estimation accuracy by leveraging the information from multiple sensors.",
+      "answer": "Power-grid-model combines multiple voltage sensor measurements on the same bus by first calculating a weighted average of each measurement across all buses, where the weights are determined by the standard deviations (\u03c3_k) of the individual measurements. This is done using the formula:\n\n\\[ z = \\frac{\\sum_{k=1}^{N_{sensor}} z_k \\sigma_k^{-2}}{\\sum_{k=1}^{N_{sensor}} \\sigma_k^{-2}} \\]\n\nWhere:\n- \\(z\\) is the measured value.\n- \\(N_{sensor}\\) is the number of sensors measuring this value.\n- \\(\\sigma_k\\) are the standard deviations of these measurements for each sensor.\n- \\(z_k\\) is the weighted average of these values, where the weights are inversely proportional to the squared standard deviations.\n\nThis weighted average effectively blends the individual measurements into a single total measurement (\\(z\\)), which is then used in the Kalman filter to estimate the state of the network (e.g., voltage levels at each bus). The process ensures that the influence of more precise measurements is given more weight, leading to improved estimation accuracy.",
       "contexts": [
         "## State Estimation Measurement Aggregation  \nThere can be multiple sensors measuring the same physical quantity.\nFor example, there can be multiple voltage sensors on the same bus.\nThe measurement data can be merged into one virtual measurement using a Kalman filter:  \n$$\nz = \\dfrac{\\sum_{k=1}^{N_{sensor}} z_k \\sigma_k^{-2}}{\\sum_{k=1}^{N_{sensor}} \\sigma_k^{-2}}\n$$  \nWhere $z_k$ and $\\sigma_k$ are the measured value and standard deviation of individual measurements.  \nMultiple appliance measurements (power measurements) on one bus are aggregated as the total injection at the bus:  \n$$\n\\begin{aligned}",
         "This function loops through all buses\n        For each bus all voltage sensor measurements are combined in a weighted average, which is appended to\n        voltage_main_value_. For each bus, for all connected components, all power sensor measurements (per component\n        (shunt, load_gen, source)) are combined in a weighted average, which is appended to power_main_value_ (for\n        shunt) or extra_value_ (for load_gen and source). E.g. a value in extra_value contains the weighted average of",
@@ -1616,21 +1616,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 0.7927820682525635,
-        "retrieval_time": 0.024454116821289062,
-        "generation_time": 0.7683029174804688,
+        "total_time": 0.7786068916320801,
+        "retrieval_time": 0.02668595314025879,
+        "generation_time": 0.7518970966339111,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 0.7928528785705566,
-      "ttft_s": 0.17719769477844238,
+      "elapsed": 0.778674840927124,
+      "ttft_s": 0.1687309741973877,
       "prompt_tokens": 967
     },
     {
       "question": "How does power-grid-model represent an unspecified value in an update dataset, and why is that different from an explicit default value?",
-      "answer": "In the context of a `PowerGridModel` dataset, an unspecified value (like a delta update) can be represented as an implicit parameter within the `update_data` argument. This means it's not explicitly set to a default value but is instead provided by the user when calling the `PowerGridModel.update()` method.\n\n### Representation of Unspecified Values:\n- **Implicit Representation:** The delta update (`delta_update`) represents an unspecified value because it doesn't have a predefined, default value that can be set directly in the model's configuration or during initialization. This is common when dealing with data where all values are unknown or need to be estimated based on available information.\n- **User-Driven Default:** In contrast, explicit default values (like `symmetric=False`) are explicitly provided by the user and can be set directly in the model's configuration.\n\n### Differences from Explicit Default Values:\n- **Flexibility vs. Stability:** Implicit representations offer flexibility because they allow for dynamic updates based on available data without requiring a predefined default. This is particularly useful in scenarios where initial values are uncertain or might change during training.\n- **Model Behavior:** The model's behavior can adapt to new information as it becomes available, whereas explicit defaults ensure consistency and predictability when the value is known at the start of the process.\n\n### Why It Matters:\nUnderstanding this distinction is crucial for effective data handling in machine learning workflows. Users need to decide whether they want to rely on an implicit default or explicitly set a default based on their specific requirements, ensuring that the model's behavior aligns with its intended use and data characteristics.",
+      "answer": "In the context of a `PowerGridModel` dataset, an unspecified value in an `update_data` (specifically, a batch) can be represented as a delta update. This means it's not explicitly set to a default value but is instead treated as a change from the model's current state before the calculation. The key difference between this unspecified value and an explicit default value lies in its context and usage:\n\n### Unspecified Value Representation\n- **Delta Update:** In the `update_data` for an unspecified batch, the attribute (e.g., `status`) might be represented as a delta update if it's not already set. This means that even though the actual status is unknown or missing at the time of the calculation, the model can still infer its current state based on the previous batch's data and any predefined rules or assumptions.\n- **Default Value:** An explicit default value would be used in such cases to ensure consistency and prevent errors when dealing with missing data. For example, if `status` is initially set to `None`, a default could be `0` (or another logical value indicating no status).\n\n### Why This Difference Matters\n1. **Consistency:** Using delta updates for unspecified values ensures that the model maintains consistency across different batches by treating missing or unknown data as part of the process, rather than as errors to be corrected.\n2. **Flexibility:** It allows the system to handle incomplete data gracefully without breaking calculations. This is crucial in power grid modeling where real-world data might be noisy or incomplete.\n3. **Predictive Accuracy:** By considering all possible states (including unspecified ones), the model can make more informed predictions and adjustments, leading to better performance in dynamic grid conditions.\n\n### Practical Implications\n- **Model Training:** During training, models are often trained with a mix of known and unknown data points. Delta updates help in learning these relationships without overfitting to missing data.\n- **Real-Time Adjustments:** In real-time applications like power grids, where conditions can change rapidly, the ability to handle unspecified values efficiently is crucial for maintaining system reliability and responsiveness.\n\nIn summary, representing an unspecified value as a delta update in `update_data` reflects a more flexible and robust approach to handling incomplete data, ensuring that the model remains adaptable and accurate even when faced with missing or uncertain information.",
       "contexts": [
         "### Batch data set\n\nThe parameters of the individual scenarios within a batch can be done by providing deltas compared to the existing state\nof the model.\nThe values of unchanged attributes and components parameters within a scenario may be implicit (like a delta update) or\nexplicit (similarly to how one would provide a full state).\nIn the context of the power-grid-model, these are called **dependent** (implicit) and **independent** (explicit) batch\nupdates, respectively.\nIn both cases, all scenario updates are relative to the state of the model before the call of the calculation.",
         "Args:\n        input_data: a power-grid-model input dataset\n        update_data: a power-grid-model update dataset (one or more batches)\n        calculation_type: Supply a calculation method, to allow missing values for unused fields\n        symmetric: A boolean to state whether input data will be used for a symmetric or asymmetric calculation",
@@ -1660,21 +1660,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.0879521369934082,
-        "retrieval_time": 0.031861066818237305,
-        "generation_time": 1.056067943572998,
+        "total_time": 1.4599628448486328,
+        "retrieval_time": 0.0332789421081543,
+        "generation_time": 1.4266600608825684,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.088019847869873,
-      "ttft_s": 0.16552281379699707,
+      "elapsed": 1.4600341320037842,
+      "ttft_s": 0.15691328048706055,
       "prompt_tokens": 819
     },
     {
       "question": "What is the difference between 'unsupported input' and 'unreasonable input' in power-grid-model's classification of bad input?",
-      "answer": "The context provided outlines two distinct classifications for bad input within PowerGridModel, distinguishing between unsupported input and unreasonable input based on their nature and implications. Here\u2019s a breakdown:\n\n### Unsupported Input:\n- **Definition**: This refers to inputs that violate the rules or assumptions made by the power grid model.\n- **Characteristics**:\n  - The model explicitly forbids certain combinations of values, such as negative ratings for nodes.\n  - It is documented in the documentation and cannot be considered valid input without explicit correction.\n  - Performance issues are expected due to the nature of these forbidden inputs.\n  \n### Unreasonable Input:\n- **Definition**: This classifies inputs that are not only invalid but also potentially problematic or inappropriate given typical use cases for a power grid model.\n- **Characteristics**:\n  - While the document does not explicitly list all unreasonable inputs, it implies they are outside the norm and could lead to incorrect calculations or behavior.\n  - These inputs might arise during development phases when performance is critical but should be carefully considered before deployment.\n\n### Key Differences:\n1. **Nature of Violation**:\n   - Unsupported input involves outright violations of model rules, leading to immediate validation issues.\n   - Unreasonable input involves inputs that are technically valid but potentially misleading or incorrect for practical use cases.\n\n2. **Implications**:\n   - Unsupported input is a direct violation of the model's design and can lead to performance degradation or unexpected behavior.\n   - Unreasonable input, while not strictly invalid, might introduce bugs or inconsistencies that are harder to diagnose and fix.\n\n3. **User Responsibility**:\n   - Users must be aware of these classifications to ensure inputs align with the model's intended use cases and avoid potential issues.\n   \nIn summary, unsupported input is a clear violation of model rules leading to immediate validation problems, whereas unreasonable input involves inputs that are technically valid but potentially problematic for practical applications. Both require users to exercise caution and correct their inputs accordingly.",
+      "answer": "The context provided outlines two distinct classifications for bad input within PowerGridModel, distinguishing between 'unsupported input' and 'unreasonable input':\n\n### Unsupported Input:\n- **Definition**: This refers to inputs that violate the rules or assumptions made by the model.\n- **Characteristics**:\n  - The model explicitly forbids certain combinations of input parameters.\n  - It is documented in the documentation, indicating it's not considered a bug but rather a limitation.\n  - In production environments, this type of input can lead to performance issues and incorrect calculations due to its exclusion from valid ranges or assumptions.\n\n### Unreasonable Input:\n- **Definition**: This category encompasses inputs that are mathematically possible but do not align with typical use cases or the model's design principles.\n- **Characteristics**:\n  - While mathematically valid, it doesn't make sense from an electrical engineering perspective (e.g., a negative `u_rated` on a node).\n  - It can lead to incorrect calculations and is often documented in user manuals as such.\n  - In production environments, this type of input might be problematic due to performance concerns or the need for correctness based on expert knowledge.\n\n### Summary:\n- **Unsupported Input**: Explicitly forbidden by the model's rules; it's a limitation rather than an error.\n- **Unreasonable Input**: Can lead to incorrect calculations and is often documented as such, even if mathematically valid, due to its deviation from typical use cases or expert knowledge.\n\nUnderstanding this distinction helps users and developers identify when inputs are not only problematic but also potentially misleading or erroneous in a practical context.",
       "contexts": [
         "### Bad input  \nThis is a problem with the input data.\nThey cannot be considered bugs in the power grid model and instead are the users' responsibility.  \nIn certain cases, the [data validator](../user_manual/data-validator.md) can catch data issues.\nHowever, it is not guaranteed to provide an exhaustive check.",
         "#### Unsupported input  \nThe power grid model explicitly forbids certain (combinations of) values.\nFor example, a negative `u_rated` on a node is not allowed.\nUnsupported input will always be documented in the power grid model documentation.  \nChecking every single combination of input parameters would come at a significant performance cost.\nIn addition, for most use cases, incorrect input data happens mostly during the development phase of a user workflow.\nIn production environments, when performance is usually important, the data is usually already sanitized and can be\nassumed to be correct.",
@@ -1703,21 +1703,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.2632567882537842,
-        "retrieval_time": 0.03094792366027832,
-        "generation_time": 1.232285976409912,
+        "total_time": 1.0869081020355225,
+        "retrieval_time": 0.04576587677001953,
+        "generation_time": 1.0411100387573242,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.2633249759674072,
-      "ttft_s": 0.1653273105621338,
+      "elapsed": 1.0869760513305664,
+      "ttft_s": 0.18246984481811523,
       "prompt_tokens": 867
     },
     {
       "question": "What are the permission differences between the C API's const, mutable, and writable dataset types, and who owns each one?",
-      "answer": "The C API distinguishes between different permissions for dataset types to ensure proper access control and data handling. Here\u2019s a breakdown of the permissions and ownership for each type:\n\n1. **const Dataset Type**:\n   - **Ownership**: The user is responsible for creating, destroying, and managing both the dataset itself and its buffers.\n   - **Permission**: This dataset type is completely user-owned by the developer who created it. It allows direct manipulation of the dataset's contents and metadata without needing to interact with external mechanisms like buffers or indices.\n\n2. **Mutable Dataset Type**:\n   - **Ownership**: The user can create, read, write, and modify the dataset's content directly.\n   - **Permission**: This type is writable by the developer but requires interaction with the underlying buffer structure (indptr) to access and manipulate data. It allows for dynamic updates and modifications of the dataset's state.\n\n3. **Writable Dataset Type**:\n   - **Ownership**: The user can create, read, write, and modify the buffers associated with the dataset.\n   - **Permission**: This type is also writable by the developer but operates on the data stored in the buffer structure (indptr). It provides a way to interact with the internal representation of the dataset's content.\n\nIn summary:\n- **const Dataset Type**: User owns the dataset and its buffers.\n- **Mutable Dataset Type**: Developer owns both the dataset and its buffers, allowing for direct manipulation.\n- **Writable Dataset Type**: Developer owns the data stored in the buffer structure but can interact with it through indices (indptr).\n\nThese permissions are crucial for managing different aspects of a Power Grid model dataset, ensuring that sensitive or critical data is handled securely and efficiently.",
+      "answer": "The C API distinguishes between three distinct datasets with varying permissions, each assigned to a specific type of data handling. Here\u2019s a detailed breakdown:\n\n### Const Dataset Types\n- **Ownership**: The `const` dataset is completely user-owned by the programmer who created it.\n  - Permissions:\n    - Can be read (`read`).\n    - Can be written (`write`).\n\n### Mutable Dataset Types\n- **Ownership**: The `mutable` dataset can be owned by both the programmer and others, but only through a specific mechanism.\n  - Permissions:\n    - Can be read (`read`) or written (`write`).\n    - Can also be updated (`mutate`).\n\n### Writable Dataset Types\n- **Ownership**: The `writable` dataset is writable by the programmer, but it can only be accessed through a specific interface.\n  - Permissions:\n    - Can be read (`read`) or written (`write`).\n    - Can also be updated (`mutate`).\n\n### Key Differences and Ownership\n- **Const vs Mutable**: The primary difference lies in the ownership model. `const` datasets are immutable, meaning their state cannot be changed after creation. They can only be read.\n  - Ownership: The programmer owns the dataset, while others might have access to update or mutate it.\n  \n- **Writable vs Mutable**: `writable` datasets are writable by the programmer but restricted in terms of how they interact with other datasets.\n  - Ownership: The programmer has full control over the dataset's state and can perform operations like writing, reading, updating, and mutating.\n\n### Summary\n- **Const Dataset**: User-owned, immutable, read/write permissions.\n- **Mutable Dataset**: Can be owned by both user and others (with `mutate`), read/write permissions, but limited to updates.\n- **Writable Dataset**: Writable only by the programmer with specific access methods (`read`, `write`, `mutate`).\n\nThis design ensures that data integrity is maintained while providing flexibility in how datasets can be interacted with.",
       "contexts": [
         "This dataset is suited for input and (batch) update datasets.  \nA mutable dataset is completely user-owned.\nThe user is responsible for creating and destroying both the dataset and its buffers.\nThis dataset is suited for (batch) output datasets.  \nA writable dataset, instead, cannot be created by the user, but will be provided by the deserializer.\nThe user can then provide buffers to which the deserializer can write its data (and `indptr`).\nThis allows the buffers to have lifetimes beyond the lifetime of the deserializer.",
         "| ------------------------ | ---------------------------- | ------------------- | --------------- |\n| `PGM_dataset_const_*`    | Read                         | Create, read, write | `const * const` |\n| `PGM_dataset_mutable_*`  | Read, write                  | Create, read, write | `* const`       |\n| `PGM_dataset_writable_*` | Read, write                  | Read                | `* const`       |  \nA constant dataset is completely user-owned.\nThe user is responsible for creating and destroying both the dataset and its buffers.\nThis dataset is suited for input and (batch) update datasets.",
@@ -1746,21 +1746,21 @@
       "category": "conceptual",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.199558973312378,
-        "retrieval_time": 0.02986907958984375,
-        "generation_time": 1.1696650981903076,
+        "total_time": 1.3859293460845947,
+        "retrieval_time": 0.021931171417236328,
+        "generation_time": 1.3639750480651855,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.199627161026001,
-      "ttft_s": 0.18296122550964355,
+      "elapsed": 1.386003017425537,
+      "ttft_s": 0.165147066116333,
       "prompt_tokens": 945
     },
     {
       "question": "Why can't power sensors and current sensors be mixed on the same terminal of the same component in power-grid-model?",
-      "answer": "The reason is due to the specific design constraints outlined in the context. The document specifies that mixing [power sensors](./components.md#generic-power-sensor) with [current sensors](./components.md#generic-current-sensor) on the same terminal of the same component is not possible because:\n\n1. **Terminal Type Restriction**: Power sensors and current sensors are typically designed to operate at different terminals within a power grid system. The context mentions that mixing them with global angle measurement type [global_angle_measurement_type](./components.md#generic-current-sensor) or local angle measurement type [local_angle_measurement_type](./components.md#generic-current-sensor) on the same terminal is prohibited, even if they are connected to different components.\n\n2. **Component-Specific Interactions**: The context indicates that while mixing these sensor types with global angle measurement type and local angle measurement type sensors is allowed as long as they are on different terminals, this interaction is restricted due to the inherent design of power grid systems where each type of sensor operates independently at its designated terminal.\n\n3. **Component Architecture**: Power grids often use a hierarchical structure where components (like nodes) can only interact with their immediate neighbors or specific types of sensors within that hierarchy. This architecture ensures that each component's functionality is optimized and does not interfere with others, maintaining the integrity and reliability of the power grid operation.\n\nIn summary, the design constraints in power-grid models ensure that mixing power sensors and current sensors on the same terminal would disrupt the operational integrity and efficiency of the system by violating established interaction rules between different types of sensors at their designated terminals.",
+      "answer": "The reason is due to the way the components are defined and how they interact with each other. The context specifies that mixing [power sensors](./components.md#generic-power-sensor) with [current sensors](./components.md#generic-current-sensor) on the same terminal of the same component is not possible because:\n\n1. **Different Terminals**: Power sensors and current sensors are typically connected to different terminals in a power grid setup. This separation ensures that each type of sensor operates independently, without interference or conflict from other types.\n\n2. **Component Object Model (COM) Interaction**: The `branch` node mentioned in the context is used to couple components together based on their current sensors' terminal types. When mixing these types, it's crucial to ensure that each branch type only interacts with its own set of terminals and does not mix with other branches or types.\n\n3. **Global Angle Measurement Type**: The document also mentions a specific `global-angle-current-sensor` type that cannot be mixed with `local-angle-current-sensors`. This restriction further reinforces the need for each sensor type to operate on its own terminal, preventing any unintended interactions or conflicts.\n\n4. **Node Configuration**: The node configuration (`branch 'to' current sensors`) ensures that only one branch type is active at a time, maintaining the integrity of the power grid's topology and ensuring accurate data processing for each sensor type.\n\nIn summary, mixing [power sensors](./components.md#generic-power-sensor) with [current sensors](./components.md#generic-current-sensor) on the same terminal of the same component is not possible due to the need for independent operation, proper node configuration, and adherence to specific interaction rules defined by COM (Component Object Model).",
       "contexts": [
         "link is a `branch`.\n```  \n```{note}\nIt is not possible to mix [power sensors](./components.md#generic-power-sensor) with\n[current sensors](./components.md#generic-current-sensor) on the same terminal of the same component.\nIt is also not possible to mix\n[current sensors with global angle measurement type](./components.md#generic-current-sensor) with\n[current sensors with local angle measurement type](./components.md#generic-current-sensor) on the same terminal of the\nsame component.\nHowever, such mixing of sensor types is allowed as long as they are on different terminals.\n```",
         "[current sensors](../user_manual/components.md#generic-current-sensor) on the same terminal of the same component.\nIt is also not possible to mix\n[current sensors with global angle measurement type](../user_manual/components.md#global-angle-current-sensors) with\n[current sensors with local angle measurement type](../user_manual/components.md#local-angle-current-sensors) on the same terminal\nof the same component.\nHowever, such mixing of sensor types is allowed as long as they are on different terminals.\n```",
@@ -1790,21 +1790,21 @@
       "category": "cross_file_reasoning",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.114649772644043,
-        "retrieval_time": 0.032518863677978516,
-        "generation_time": 1.082106113433838,
+        "total_time": 1.2060651779174805,
+        "retrieval_time": 0.04369091987609863,
+        "generation_time": 1.1623423099517822,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.1147220134735107,
-      "ttft_s": 0.1834549903869629,
+      "elapsed": 1.2061309814453125,
+      "ttft_s": 0.19835305213928223,
       "prompt_tokens": 928
     },
     {
       "question": "Why does power-grid-model treat a NotObservableError or a PowerGridError wrapping a bad_alloc as a non-spurious edge case rather than a bug?",
-      "answer": "Power-grid-model treats these specific exceptions as non-spurious edge cases because they represent distinct and potentially problematic scenarios that can arise from the model's internal state, especially when dealing with power grid data. Here\u2019s why:\n\n1. **Potential for Misunderstanding**: Users might not immediately recognize these exceptions as bugs unless explicitly flagged by a user manual or testing tools. The context of their input (e.g., bad data) can lead to confusion about whether the error is due to an incorrect model configuration, incorrect data, or other factors.\n\n2. **Impact on Model Integrity**: These edge cases could introduce subtle bugs that are difficult to trace back to a specific source. For instance, a `NotObservableError` might indicate a problem with how observables are handled within the grid model, while a `BadAlloc` exception could suggest an issue with memory management or resource allocation.\n\n3. **User Responsibility**: Users often rely on the model's output for critical operations like power distribution and control. A non-spurious edge case can lead to incorrect decisions or failures in these areas, which is why it\u2019s crucial to identify and report such issues promptly.\n\n4. **Testing and Validation**: The context of bad input data (e.g., `bad_input`) suggests that the model might be designed with specific validation checks in place. These checks are intended to catch potential bugs early in the development process, but they can sometimes miss edge cases if not thoroughly tested.\n\n5. **Communication and Reporting**: By treating these exceptions as non-spurious edge cases, Power-grid-model encourages users to report them clearly and provide detailed reasoning for their suspected issues. This helps maintainers and developers understand the root causes and implement appropriate fixes.\n\nIn summary, recognizing these specific edge cases as non-spurious issues rather than bugs helps in maintaining a robust and reliable power grid model by ensuring that potential problems are identified and addressed before they impact users or critical operations.",
+      "answer": "Power-grid-model treats these specific exceptions as non-spurious edge cases because they represent distinct and potentially problematic scenarios that can arise from the model's internal state, especially when dealing with power grid data. Here\u2019s why:\n\n1. **Potential for Misunderstanding**: Users might not immediately recognize these exceptions as bugs unless explicitly flagged by a user manual or testing framework like `data-validator.md`. This distinction is crucial because it helps maintainers and users understand the root cause of issues, ensuring that they are addressing the actual problems rather than misinterpreting them.\n\n2. **Specificity**: These exceptions highlight specific conditions under which the model behaves unexpectedly or violates its expected behavior. For instance, a `NotObservableError` might indicate an issue with the data being observed (like missing or incorrect values), while a `PowerGridError` could signal problems with memory allocation (e.g., running out of contiguous memory). By treating these as edge cases, Power-grid-model can more effectively isolate and diagnose issues.\n\n3. **Preventing False Positives**: If all exceptions were treated as bugs, it might lead to false positives where normal operations are incorrectly flagged as erroneous. This could result in unnecessary investigation or maintenance efforts, wasting resources. By recognizing these as non-spurious edge cases, Power-grid-model can focus on more critical issues that genuinely require attention.\n\n4. **User and Maintainer Responsibility**: Users are responsible for ensuring their input data adheres to expected formats and values. Treating these exceptions as non-spurious edge cases helps users understand the importance of validating their inputs, thereby reducing the likelihood of common errors slipping through undetected.\n\n5. **Documentation and Support**: Clear documentation that distinguishes between bugs and non-spurious edge cases aids in better support for users. Developers can use these distinctions to write more robust code and provide clearer error messages, improving overall system reliability.\n\nIn summary, treating NotObservableError or PowerGridError wrapping a bad_alloc as a non-spurious edge case helps Power-grid-model maintain a clear distinction between genuine bugs and potential issues that could be misinterpreted, thereby enhancing the model's robustness and user trust.",
       "contexts": [
         "#### Incorrect exceptions  \nSometimes, exceptions are raised when they should not be.\nFor example, a `NotObservableError` that is raised when the current scenario actually contains an observable grid, would\nbe a bug.\nThey can be a headache to users, because it is difficult to know whether the exception was caused by\n[bad data](#bad-input) or by a power grid model bug, even for the power grid model maintainers.  \nIf you find any such issues, please report the issue and explicitly mention that you suspect a bug in the power grid\nmodel, together with a reasoning as to why you think so.",
         "Other examples of non-spurious edge cases are:  \n* Cases in which the power grid model reports a `NotObservableError`;\n* Cases in which a `PowerGridError` is thrown that wraps a `bad_alloc` (running out of available contiguous memory).",
@@ -1836,21 +1836,21 @@
       "category": "cross_file_reasoning",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.2464430332183838,
-        "retrieval_time": 0.02161574363708496,
-        "generation_time": 1.2248058319091797,
+        "total_time": 1.4313840866088867,
+        "retrieval_time": 0.04920792579650879,
+        "generation_time": 1.3821513652801514,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.2465050220489502,
-      "ttft_s": 0.15495085716247559,
+      "elapsed": 1.4314477443695068,
+      "ttft_s": 0.1834716796875,
       "prompt_tokens": 807
     },
     {
       "question": "Why does power-grid-model implement its own custom sparse LU solver, and how does separating factorization from solving help with repeated time-series calculations?",
-      "answer": "Power grid models, like many complex systems such as power grids, often deal with large, sparse matrices representing the system's state over time. Separating the factorization process into two distinct components\u2014block-sparse LU solver and dense LU factorization\u2014offers several key advantages:\n\n### Efficient Handling of Sparse Matrices\n- **Block-Sparse LU Solver**: This component efficiently handles sparse matrices by only considering non-zero elements. It leverages the topological structure down to block-level factorization, which is crucial for managing the sparsity effectively.\n- **Dense LU Factorization**: While this solver can handle dense matrices, it's not as optimized for sparse data and may require more computational resources due to its need to consider all elements.\n\n### Repeated Time-Series Calculations\n- **Block Sparsity**: In power grid modeling, the system dynamics change over time in a block-wise manner (e.g., across different blocks). This allows the solver to focus on relevant parts of the matrix at each step, significantly reducing computational overhead.\n- **Dense LU Factorization**: Solving the entire matrix equation once and then reconstructing it using dense factorization can be computationally expensive, especially for large systems. The block-sparse approach minimizes redundant computations by only performing factorizations on blocks that are relevant to the current time step.\n\n### Optimized Performance\n- **Parallelism**: Separating these components allows for better parallelization, as each block can be processed independently or in parallel, further speeding up the overall computation.\n- **Memory Efficiency**: By focusing on sparse parts of the matrix and using efficient algorithms like LU decomposition tailored for sparse matrices, the solver can manage memory usage more effectively.\n\nIn summary, by isolating factorization into block-level operations and utilizing dense factorization only where necessary, power grid models achieve a balance between computational efficiency and performance, making it particularly well-suited to handle the complexities of large-scale time-series calculations in power systems.",
+      "answer": "Power grid models, like many complex systems such as power grids, often deal with large, sparse matrices representing the system's state over time. Separating the factorization process into two distinct components\u2014block-sparse LU solver and dense LU factorization\u2014offers several advantages for efficient repeated time-series calculations:\n\n### Efficient Block-Sparse Factorization\n- **Block Sparsity**: Power grids are inherently block-structured, meaning they can be divided into smaller blocks. This allows the factorization process to focus on these blocks rather than the entire matrix at once.\n- **Optimized Algorithms**: The block-sparse LU solver is specifically designed to handle this structure efficiently. It leverages algorithms that are optimized for sparse matrices, reducing computational overhead and memory usage compared to dense factorization methods.\n\n### Repeated Time-Series Calculations\n- **Concurrent Processing**: In a power grid model, repeated time-series calculations (e.g., forecasting future states based on historical data) can be highly beneficial when using block-sparse LU solvers. By processing blocks independently and then combining the results, computational resources are utilized more effectively.\n- **Reduced Memory Footprint**: Dense factorization methods require storing the entire matrix, which can become a bottleneck in large-scale simulations. Block-sparse approaches reduce memory usage by only keeping necessary parts of the matrix at any given time.\n\n### Efficiency and Performance\n- **Parallel Processing**: The separation allows for parallel processing of blocks, further enhancing computational efficiency. This is particularly useful in distributed computing environments where multiple processors can work on different blocks simultaneously.\n- **Scalability**: As power grid models grow in complexity and size, the ability to efficiently handle large sparse matrices becomes crucial. Custom solvers like the one described in Document 4 are better suited for this scale due to their optimized handling of block-structured data.\n\nIn summary, by implementing a custom sparse LU solver that separates factorization from solving, power grid models can achieve significant performance improvements through efficient block-sparse matrix operations and parallel processing capabilities, making them well-suited for repeated time-series calculations in dynamic systems like power grids.",
       "contexts": [
         "## Implementation  \nThe LU solver implemented in the power grid model consists of 3 components:  \n* A block-sparse LU solver that:\n* handles factorization using the topological structure down to block-level\n* solves the sparse matrix equation given the factorization\n* A dense LU factor that handles individual blocks within the matrix equation",
         "### Custom sparse LU solver  \nThe choice for a custom LU solver implementation comes from a number of considerations:  \n* [LU decomposition](https://en.wikipedia.org/wiki/LU_decomposition) is the best choice, because\n[QR decomposition](https://en.wikipedia.org/wiki/QR_decomposition) and\n[Cholesky decomposition](https://en.wikipedia.org/wiki/Cholesky_decomposition) cannot solve the power system equations\nefficiently as a consequence of the [power system equations' properties](#power-system-equations-properties), as the",
@@ -1880,38 +1880,38 @@
       "category": "how_does_it_work",
       "expected_failure": false,
       "metrics": {
-        "total_time": 1.3097121715545654,
-        "retrieval_time": 0.03911018371582031,
-        "generation_time": 1.2705810070037842,
+        "total_time": 1.3977010250091553,
+        "retrieval_time": 0.042910099029541016,
+        "generation_time": 1.354767084121704,
         "documents_retrieved": 5,
         "context_docs_dropped": 0,
         "history_messages_dropped": 0,
         "question_truncated_chars": 0
       },
-      "elapsed": 1.3097798824310303,
-      "ttft_s": 0.16821503639221191,
+      "elapsed": 1.3977651596069336,
+      "ttft_s": 0.1741490364074707,
       "prompt_tokens": 734
     }
   ],
   "custom_metrics": {
-    "avg_keyword_recall": 0.46794019933554815,
+    "avg_keyword_recall": 0.4785714285714286,
     "avg_source_precision": 0.3953488372093023,
     "avg_hit_rate": 0.8333333333333334,
     "avg_mrr": 0.7321428571428571,
     "questions_answered": 43,
     "questions_failed": 0,
-    "avg_latency_s": 0.8935956345048062,
-    "p95_latency_s": 1.5327601432800293,
+    "avg_latency_s": 0.8748094425644986,
+    "p95_latency_s": 1.510610818862915,
     "avg_prompt_tokens": 805.3488372093024,
-    "avg_ttft_s": 0.1659505478171415,
-    "p95_ttft_s": 0.18346905708312988,
+    "avg_ttft_s": 0.16109159380890603,
+    "p95_ttft_s": 0.18246984481811523,
     "efficiency_questions": 43
   },
-  "latency_probe_s": 0.8279,
+  "latency_probe_s": 1.7357,
   "ragas_scores": {
-    "faithfulness": 0.5056,
-    "answer_relevancy": 0.8224,
-    "context_recall": 0.5328
+    "faithfulness": 0.5148,
+    "answer_relevancy": 0.8559,
+    "context_recall": 0.524
   },
   "ragas_coverage": {
     "faithfulness": {
