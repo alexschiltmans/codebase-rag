@@ -706,6 +706,40 @@ class TestResolveJudgeTimeout:
         assert resolve_judge_timeout_s() == 600
 
 
+class TestWrittenReportWhitespace:
+    """Reports embed model answers verbatim, and model output can carry trailing whitespace;
+    the written report must be clean so the formatting hooks leave it untouched and the
+    commit succeeds on the first attempt. Driven through `publish_retriever_results` so a
+    regression at the write site (not just in the normalizer) is caught."""
+
+    def test_written_report_embeds_clean_answers(self, tmp_path: Path) -> None:
+        args = _publish_args(
+            ragas_coverage={"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}},
+            ragas_scores={"faithfulness": 0.95},
+        )
+        # Answers reach the report verbatim only in the Failure Cases section, so the
+        # result must be a failure for the dirty answer to be embedded at all.
+        args["results"] = [
+            {
+                "question": "q",
+                "answer": "line one  \n  \nline two",
+                "keywords": [],
+                "sources_expected": [],
+                "sources_actual": [],
+                "expected_failure": True,
+                "elapsed": 1.0,
+                "error": None,
+            }
+        ]
+
+        publish_retriever_results(tmp_path, "vector", **args)
+
+        md = (tmp_path / "results_vector.md").read_text()
+        assert all(line == line.rstrip() for line in md.split("\n"))
+        assert md.endswith("\n")
+        assert not md.endswith("\n\n")
+
+
 class TestPercentile:
     def test_empty_returns_zero(self) -> None:
         assert _percentile([], 0.95) == 0.0

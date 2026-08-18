@@ -230,7 +230,7 @@ def main() -> None:
                 "category_breakdown": after["category_breakdown"],
                 "per_question": after["per_question"],
             }
-            path.write_text(json.dumps(record, indent=2))
+            path.write_text(json.dumps(record, indent=2) + "\n")
             summary["written"].append(path.stem)
         summary["bench_results"][path.stem] = {
             "before": before,
@@ -269,7 +269,7 @@ def main() -> None:
                 k: after[k]
                 for k in ("questions_scored", "input_recall", "baseline_hit_rate", "baseline_mrr", "hit_rate", "mrr")
             }
-            path.write_text(json.dumps(record, indent=2))
+            path.write_text(json.dumps(record, indent=2) + "\n")
             summary["written"].append(path.stem)
         summary["rerank_results"][path.stem] = {
             "before": before,

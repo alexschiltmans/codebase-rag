@@ -147,6 +147,12 @@ else
 	$(PYTHON) scripts/ingest.py
 endif
 
+# EVAL_ARGS comes before the literal --judge-model: the flag resolver takes the
+# first match in argv, so a caller-supplied judge model must lead to win.
+.PHONY: eval
+eval: venv ## Run the judged retrieval eval (SLOW, ~2 h for the three arms, costs model time; ask before running)
+	$(PYTHON) evals/run_eval.py $(EVAL_ARGS) --judge-model qwen3.5:9b
+
 # ── Testing ──────────────────────────────────────────────────────────────────
 PYTEST_COV := --cov=src/codebase_rag --cov-report=term --cov-report=xml:coverage.xml
 

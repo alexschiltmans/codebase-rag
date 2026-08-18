@@ -894,6 +894,16 @@ def log_to_langfuse(
         logger.warning("Failed to log to Langfuse: %s", e)
 
 
+def _normalize_markdown(md: str) -> str:
+    """Strip end-of-line whitespace and end with exactly one newline.
+
+    Reports embed model answers verbatim, and model output can carry trailing whitespace, which the
+    repository's formatting hooks then strip on commit. Writing the normalized form means the file
+    the harness produces is the file that gets committed.
+    """
+    return "\n".join(line.rstrip() for line in md.split("\n")).rstrip("\n") + "\n"
+
+
 def generate_results_markdown(
     results: list[dict[str, Any]],
     custom_metrics: dict[str, Any],
@@ -907,7 +917,7 @@ def generate_results_markdown(
 ) -> str:
     """Generate a markdown report from the evaluation results."""
     lines = ["# Evaluation Results\n"]
-    lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
+    lines.append(f"**Generated:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(f"**Test set:** {len(results)} questions\n")
     lines.append(f"**Retrieval stages:** {describe_stages(stages)}\n")
     lines.append(
@@ -1022,7 +1032,7 @@ def generate_ablation_markdown(
     reasoning_count = len(testset) - conceptual_count - exact_term_count
 
     lines = ["# Retrieval Ablation\n"]
-    lines.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M')}\n")
+    lines.append(f"**Generated:** {time.strftime('%Y-%m-%d %H:%M')}\n")
     lines.append(f"**Retrieval stages:** {describe_stages(stages)} (every arm ran under this stack)\n")
     lines.append(
         "Same test set (`evals/testset.json`), same LLM, same top_k; only the retriever "
@@ -1169,7 +1179,7 @@ def publish_retriever_results(
     )
     md_path = evals_dir / f"results_{retriever_type}{stages['slug']}.md"
     with open(md_path, "w") as f:
-        f.write(md.rstrip("\n") + "\n")
+        f.write(_normalize_markdown(md))
     logger.info("Markdown report saved to %s", md_path)
 
 
@@ -1301,7 +1311,7 @@ def main() -> None:
     ablation_md = generate_ablation_markdown(all_custom_metrics, testset, repos, stages)
     ablation_path = EVALS_DIR / f"ablation{stages['slug']}.md"
     with open(ablation_path, "w") as f:
-        f.write(ablation_md.rstrip("\n") + "\n")
+        f.write(_normalize_markdown(ablation_md))
     logger.info("Ablation report saved to %s", ablation_path)
     print("\n" + ablation_md)
 

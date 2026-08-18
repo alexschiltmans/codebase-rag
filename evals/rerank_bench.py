@@ -351,6 +351,7 @@ def main() -> None:
     output = args.output or RESULTS_DIR / f"{arm}.json"
     with open(output, "w") as f:
         json.dump(result, f, indent=2)
+        f.write("\n")
 
     latency = result["latency_s"]
     logger.info(

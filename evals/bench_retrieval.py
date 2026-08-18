@@ -250,6 +250,7 @@ def save_candidate_lists(candidate_lists: list[dict[str, Any]], arm_name: str) -
     path = CANDIDATES_DIR / f"{arm_name}.json"
     with open(path, "w") as f:
         json.dump(candidate_lists, f, indent=2)
+        f.write("\n")
     return path
 
 
@@ -403,6 +404,7 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w") as f:
             json.dump(arm_record, f, indent=2)
+            f.write("\n")
 
         logger.info(
             "Arm %s: hit_rate=%.4f mrr=%.4f recall@%d=%.4f (written to %s)",
