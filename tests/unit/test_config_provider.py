@@ -132,3 +132,39 @@ class TestRetrieverValidation:
             pytest.raises(ValueError, match="RETRIEVER must be 'bm25' or 'hybrid'"),
         ):
             Config.get_instance()
+
+
+class TestRewriteMaxConcurrencyValidation:
+    """Test cases for REWRITE_MAX_CONCURRENCY configuration validation."""
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_default_is_one(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        env_copy = dict(os.environ)
+        env_copy.pop("REWRITE_MAX_CONCURRENCY", None)
+        with patch.dict(os.environ, env_copy, clear=True):
+            config = Config.get_instance()
+            assert config.rewrite_max_concurrency == 1
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_valid_value_is_accepted(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        with patch.dict(os.environ, {"REWRITE_MAX_CONCURRENCY": "2"}):
+            config = Config.get_instance()
+            assert config.rewrite_max_concurrency == 2
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_value_below_one_raises_naming_the_range(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        with (
+            patch.dict(os.environ, {"REWRITE_MAX_CONCURRENCY": "0"}),
+            pytest.raises(ValueError, match="REWRITE_MAX_CONCURRENCY must be an integer >= 1"),
+        ):
+            Config.get_instance()
+
+    @patch("codebase_rag.config.load_dotenv")
+    def test_empty_value_falls_back_to_default(self, mock_load_dotenv: MagicMock) -> None:
+        Config._instance = None
+        with patch.dict(os.environ, {"REWRITE_MAX_CONCURRENCY": ""}):
+            config = Config.get_instance()
+            assert config.rewrite_max_concurrency == 1

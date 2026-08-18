@@ -241,6 +241,7 @@ def _publish_args(
             "rerank_candidate_depth": None,
             "rewrite_enabled": False,
             "rewrite_timeout_s": None,
+            "rewrite_max_concurrency": None,
             "slug": "",
         },
     }
@@ -302,6 +303,7 @@ class TestPublishRetrieverResults:
             "rerank_candidate_depth": 50,
             "rewrite_enabled": False,
             "rewrite_timeout_s": None,
+            "rewrite_max_concurrency": None,
             "slug": "_rerank",
         }
 
@@ -338,12 +340,14 @@ class TestStageConfig:
             rerank_candidate_depth=50,
             rewrite_enabled=True,
             rewrite_timeout_s=5.0,
+            rewrite_max_concurrency=2,
         )
         stages = stage_config(config)
 
         assert stages["slug"] == "_rerank_rewrite"
         assert stages["rerank_model"] == "m"
         assert stages["rewrite_timeout_s"] == 5.0
+        assert stages["rewrite_max_concurrency"] == 2
 
 
 class TestWholesaleJudgeFailureGate:

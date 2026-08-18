@@ -150,6 +150,7 @@ def stage_config(config: Config) -> dict[str, Any]:
         "rerank_candidate_depth": config.rerank_candidate_depth if config.rerank_enabled else None,
         "rewrite_enabled": config.rewrite_enabled,
         "rewrite_timeout_s": config.rewrite_timeout_s if config.rewrite_enabled else None,
+        "rewrite_max_concurrency": config.rewrite_max_concurrency if config.rewrite_enabled else None,
         "slug": ("_" + "_".join(parts)) if parts else "",
     }
 

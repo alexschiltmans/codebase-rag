@@ -16,6 +16,7 @@ task, which is too slow for the shipped retrieval path.
 """
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any
@@ -30,6 +31,13 @@ logger = logging.getLogger(__name__)
 # retrieving on the original query. Kept short because this is on the critical
 # path before any retrieval happens; a slow rewrite is worse than none.
 DEFAULT_REWRITE_TIMEOUT_S = 5.0
+
+# How many expansions may run at once. One keeps load on the local model exactly
+# as a single query would produce it; a query that cannot get a slot skips the
+# expansion immediately rather than queueing behind another's and paying the
+# timeout to receive nothing. Higher values trade that prompt fallback for more
+# expansions, moving the contention into the model server rather than removing it.
+DEFAULT_REWRITE_MAX_CONCURRENCY = 1
 
 # Cap on how many terms the expansion may add. The model is asked for
 # identifiers, not prose, but nothing stops a chatty model returning a
@@ -58,6 +66,7 @@ class RewritingRetriever:
         retriever: RetrieverProtocol,
         llm: Any,
         timeout_s: float = DEFAULT_REWRITE_TIMEOUT_S,
+        max_concurrency: int = DEFAULT_REWRITE_MAX_CONCURRENCY,
     ) -> None:
         """Initialize the rewrite stage.
 
@@ -65,13 +74,31 @@ class RewritingRetriever:
             retriever: The retriever the expanded query feeds.
             llm: Local model client exposing `invoke(prompt) -> str`.
             timeout_s: Seconds to wait for an expansion before falling back.
+            max_concurrency: How many expansions this stage may run at once. The
+                admission semaphore and the worker pool are both sized from this one
+                value, so a slot always maps to a free worker and a query's timeout can
+                only be measuring the model, never the wait for a worker.
+
+        Raises:
+            ValueError: If `max_concurrency` is below 1. `Config.get_instance` rejects
+                that at load time, but a `Config` built directly bypasses it, and a
+                `ThreadPoolExecutor(max_workers=0)` would then fail with a generic error
+                that does not name the setting.
         """
+        if max_concurrency < 1:
+            raise ValueError(f"max_concurrency must be >= 1, got {max_concurrency}")
         self.retriever = retriever
         self.llm = llm
         self.timeout_s = timeout_s
-        # A single worker is enough: rewriting runs one expansion per query, and
-        # the executor exists only to bound that one call with a timeout.
-        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._max_concurrency = max_concurrency
+        # The admission gate and the worker pool are the same limit expressed twice, on this
+        # one instance. Each host composes a single instance in normal operation, so this is
+        # the host's bound; a rebuild swaps in a fresh one while an in-flight request still
+        # holds the old, whose pool is shut down and so only falls back rather than expanding.
+        # Bounded so an over-release (a third release path added by mistake) raises instead of
+        # silently admitting more than max_concurrency expansions.
+        self._slots = threading.BoundedSemaphore(max_concurrency)
+        self._executor = ThreadPoolExecutor(max_workers=max_concurrency)
 
     def _expand(self, query: str) -> str:
         """Return `query` plus model-suggested identifiers, or `query` on any failure.
@@ -79,20 +106,39 @@ class RewritingRetriever:
         The model call is run under a timeout; a timeout, an empty response, or
         any exception falls back to the original query and is logged, not raised.
         """
+        # Decide admission before submitting. A query that cannot get a slot skips the
+        # expansion immediately rather than queueing behind another query's expansion and
+        # paying the full timeout to receive nothing.
+        if not self._slots.acquire(blocking=False):
+            logger.info(
+                "Query rewrite skipped, %d expansion(s) already in flight; using original query",
+                self._max_concurrency,
+            )
+            return query
         try:
             future = self._executor.submit(self.llm.invoke, _REWRITE_PROMPT.format(query=query))
         except Exception as e:
             # Submitting fails once the pool is shut down, which happens when the stack is
-            # rebuilt after an ingest while a request still holds the old one.
+            # rebuilt after an ingest while a request still holds the old one. The slot was
+            # never handed to a worker, so release it here rather than in the done callback.
+            self._slots.release()
             logger.warning("Query rewrite unavailable (%s); using original query", e)
             return query
+
+        # The worker releases the slot when the call actually finishes, never the caller. A
+        # caller that timed out and released on its way out would hand the next query a slot
+        # while this worker is still blocked in llm.invoke, restoring the queue wait in a form
+        # that only appears under load. The callback fires on success, on a model error, and
+        # on a cancelled-but-still-queued call alike, so the slot is always released exactly once.
+        future.add_done_callback(lambda _future: self._slots.release())
 
         try:
             terms = str(future.result(timeout=self.timeout_s)).strip()
         except FutureTimeoutError:
-            # Cancel rather than abandon. The pool has one worker, so a still-queued expansion
-            # left in place would start its own clock late and time out in turn, and the queue
-            # would grow without bound while every query paid the full timeout.
+            # Cancel rather than abandon. A still-queued expansion left in place would start
+            # its own clock late and time out in turn, and the queue would grow without bound
+            # while every query paid the full timeout. The slot is released by the done
+            # callback when the call finishes, not here.
             future.cancel()
             logger.warning("Query rewrite timed out after %.1fs; using original query", self.timeout_s)
             return query

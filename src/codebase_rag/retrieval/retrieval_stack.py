@@ -87,7 +87,12 @@ def apply_stages(retriever: RetrieverProtocol, config: Config, llm: Any) -> Retr
     if config.rewrite_enabled:
         from .rewrite import RewritingRetriever
 
-        retriever = RewritingRetriever(retriever, llm, timeout_s=config.rewrite_timeout_s)
+        retriever = RewritingRetriever(
+            retriever,
+            llm,
+            timeout_s=config.rewrite_timeout_s,
+            max_concurrency=config.rewrite_max_concurrency,
+        )
     return retriever
 
 

@@ -32,6 +32,7 @@ fall, and time to first token regresses by 7x to 20x. What they buy is ordering 
 | `RERANK_CANDIDATE_DEPTH` | `50` | How many candidates are pulled from the first stage for rescoring. Deeper costs time and raises the ceiling on what reranking can recover. |
 | `REWRITE_ENABLED` | `false` | Expand a terse query with likely identifiers using the local model before retrieval. Expands, never replaces, and falls back to the original query on failure or timeout. |
 | `REWRITE_TIMEOUT_S` | `5.0` | Seconds to wait for the expansion before giving up and retrieving on the original query. |
+| `REWRITE_MAX_CONCURRENCY` | `1` | How many expansions may run at once. A query that cannot get a slot falls back to the original query immediately rather than queueing behind another's expansion and paying the full timeout. A slot is held until the model call finishes, not until the query gives up, so a timed-out expansion keeps its slot until that call drains and a query arriving in the gap also falls back. Expansions all run against one local model process, so raising this moves the contention into that server rather than removing it; the right value depends on the backend's own parallelism settings. |
 
 ## Generation settings (all backends)
 

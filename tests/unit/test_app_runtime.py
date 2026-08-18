@@ -20,6 +20,7 @@ def _config(**overrides: object) -> MagicMock:
     config.retriever = "bm25"
     config.rerank_enabled = False
     config.rewrite_enabled = False
+    config.rewrite_max_concurrency = 1
     for key, value in overrides.items():
         setattr(config, key, value)
     return config

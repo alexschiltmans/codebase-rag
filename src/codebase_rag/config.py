@@ -126,6 +126,11 @@ class Config:
     # and falls back to the original query on failure or timeout (see retrieval.rewrite).
     rewrite_enabled: bool = False
     rewrite_timeout_s: float = 5.0
+    # How many expansions the rewrite stage may run at once. A query that cannot get a slot
+    # falls back to the original query immediately rather than queueing behind another's and
+    # paying the timeout. One keeps load on the local model as a single query would produce it;
+    # raising it moves the contention into the model server rather than removing it.
+    rewrite_max_concurrency: int = 1
 
     # LLM settings
     provider: str = "ollama"
@@ -190,6 +195,12 @@ class Config:
                 # traceback rather than the same clear config-time error LLM_PROVIDER gets above.
                 raise ValueError("LLM_BASE_URL must be set when LLM_PROVIDER=openai-compat")
 
+            rewrite_max_concurrency = _env_int("REWRITE_MAX_CONCURRENCY", cls.rewrite_max_concurrency)
+            if rewrite_max_concurrency < 1:
+                # Silently clamping a 0 or negative to 1 would hide a typo; naming the accepted
+                # range at load time matches how LLM_PROVIDER and RETRIEVER reject bad values.
+                raise ValueError(f"REWRITE_MAX_CONCURRENCY must be an integer >= 1, got {rewrite_max_concurrency}")
+
             cls._instance = cls(
                 repo_urls=repo_urls,
                 repo_local_path=Path(_env("REPO_LOCAL_PATH", str(cls.repo_local_path))),
@@ -205,6 +216,7 @@ class Config:
                 rerank_candidate_depth=_env_int("RERANK_CANDIDATE_DEPTH", cls.rerank_candidate_depth),
                 rewrite_enabled=_env_bool("REWRITE_ENABLED", cls.rewrite_enabled),
                 rewrite_timeout_s=_env_float("REWRITE_TIMEOUT_S", cls.rewrite_timeout_s),
+                rewrite_max_concurrency=rewrite_max_concurrency,
                 ollama_base_url=_env("OLLAMA_BASE_URL", cls.ollama_base_url),
                 llm_base_url=llm_base_url,
                 llm_api_key=_env("LLM_API_KEY", cls.llm_api_key),
