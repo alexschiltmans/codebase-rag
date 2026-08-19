@@ -27,6 +27,7 @@ from evals.run_eval import (
     _install_schema_constrained_judging,
     _percentile,
     _SchemaConstrainedChatOllama,
+    attach_judge_scores_to_results,
     build_rag_chain,
     build_ragas_metrics,
     build_retriever,
@@ -47,20 +48,22 @@ class TestComputeRagasScoresAndCoverage:
     """5.1: coverage accounting against a synthetic DataFrame with a known NaN pattern."""
 
     def test_clean_metric_reports_full_coverage(self) -> None:
-        df = pd.DataFrame({"faithfulness": [1.0, 0.5, 0.75]})
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        df = pd.DataFrame({"user_input": ["q1", "q2", "q3"], "faithfulness": [1.0, 0.5, 0.75]})
+        scores, coverage, _ = compute_ragas_scores_and_coverage(df)
         assert scores["faithfulness"] == pytest.approx(0.75)
         assert coverage["faithfulness"] == {"attempted": 3, "completed": 3, "failed": 0}
 
     def test_partially_failed_metric_publishes_with_nonzero_failed(self) -> None:
-        df = pd.DataFrame({"context_recall": [1.0, float("nan"), 0.5, float("nan")]})
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        df = pd.DataFrame(
+            {"user_input": ["q1", "q2", "q3", "q4"], "context_recall": [1.0, float("nan"), 0.5, float("nan")]}
+        )
+        scores, coverage, _ = compute_ragas_scores_and_coverage(df)
         assert scores["context_recall"] == pytest.approx(0.75)
         assert coverage["context_recall"] == {"attempted": 4, "completed": 2, "failed": 2}
 
     def test_all_nan_metric_publishes_none(self) -> None:
-        df = pd.DataFrame({"answer_relevancy": [float("nan"), float("nan")]})
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        df = pd.DataFrame({"user_input": ["q1", "q2"], "answer_relevancy": [float("nan"), float("nan")]})
+        scores, coverage, _ = compute_ragas_scores_and_coverage(df)
         assert scores["answer_relevancy"] is None
         assert coverage["answer_relevancy"] == {"attempted": 2, "completed": 0, "failed": 2}
 
@@ -74,9 +77,103 @@ class TestComputeRagasScoresAndCoverage:
                 "faithfulness": [1.0, 1.0],
             }
         )
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        scores, coverage, _ = compute_ragas_scores_and_coverage(df)
         assert set(scores) == {"faithfulness"}
         assert set(coverage) == {"faithfulness"}
+
+    def test_per_sample_scores_are_unrounded_and_reproduce_the_aggregate(self) -> None:
+        # 4.1: every job succeeds; per-question values are kept at full precision
+        # and their mean reproduces the published (rounded) aggregate.
+        df = pd.DataFrame(
+            {
+                "user_input": ["q1", "q2", "q3"],
+                "faithfulness": [0.123456, 0.234567, 0.345678],
+                "context_recall": [0.987654, 0.876543, 0.765432],
+            }
+        )
+        scores, _, per_sample = compute_ragas_scores_and_coverage(df)
+        # Full precision per question, not rounded to the aggregate's four decimals.
+        assert per_sample == {
+            "q1": {"faithfulness": 0.123456, "context_recall": 0.987654},
+            "q2": {"faithfulness": 0.234567, "context_recall": 0.876543},
+            "q3": {"faithfulness": 0.345678, "context_recall": 0.765432},
+        }
+        # The mean of the per-question values reproduces the published aggregate.
+        for metric in ("faithfulness", "context_recall"):
+            values = [per_sample[q][metric] for q in per_sample]
+            assert all(v is not None for v in values)  # every job succeeded here
+            per_question_mean = sum(v for v in values if v is not None) / len(values)
+            assert scores[metric] == pytest.approx(round(per_question_mean, 4))
+
+    def test_failed_job_is_null_not_zero_and_excluded_from_aggregate(self) -> None:
+        # 4.2: one NaN in one metric column is an explicit null for that question
+        # and metric, is excluded from the aggregate, and never becomes zero.
+        df = pd.DataFrame(
+            {
+                "user_input": ["q1", "q2", "q3"],
+                "faithfulness": [1.0, float("nan"), 0.5],
+            }
+        )
+        scores, coverage, per_sample = compute_ragas_scores_and_coverage(df)
+        assert per_sample["q2"]["faithfulness"] is None
+        assert per_sample["q1"]["faithfulness"] == 1.0
+        assert per_sample["q3"]["faithfulness"] == 0.5
+        # Excluded from the aggregate: the mean is over the two questions that scored.
+        assert scores["faithfulness"] == pytest.approx(0.75)
+        assert coverage["faithfulness"] == {"attempted": 3, "completed": 2, "failed": 1}
+
+
+class TestAttachJudgeScoresToResults:
+    """3.1/3.2: judged scores are joined to results by question text, not by position."""
+
+    def test_errored_question_carries_no_scores_and_join_is_by_text(self) -> None:
+        # 4.3: one question errored during generation, so the judged batch is shorter
+        # than `results` and does not align positionally. A positional join would land
+        # q3's score on the errored q2; this test fails if the join is positional.
+        results: list[dict[str, Any]] = [
+            {"question": "q1", "answer": "a1", "error": None},
+            {"question": "q2", "answer": "ERROR: boom", "error": "boom"},
+            {"question": "q3", "answer": "a3", "error": None},
+        ]
+        per_sample_scores: dict[str, dict[str, float | None]] = {
+            "q1": {"faithfulness": 0.9},
+            "q3": {"faithfulness": 0.4},
+        }
+        assert attach_judge_scores_to_results(results, per_sample_scores) is None
+        # Every score lands on the question the judge actually scored.
+        assert results[0]["judge_scores"] == {"faithfulness": 0.9}
+        assert results[2]["judge_scores"] == {"faithfulness": 0.4}
+        # The errored question carries no judge scores at all (no key): not a null
+        # block, and not its neighbour's score.
+        assert "judge_scores" not in results[1]
+
+    def test_unmatched_judged_sample_is_reported_and_attaches_nothing(self) -> None:
+        # 4.4: a judged sample whose question text matches nothing is reported, not
+        # raised, so the run can publish the arm without the block and fail at the
+        # end rather than discarding the arm's other measurements.
+        results: list[dict[str, Any]] = [{"question": "q1", "answer": "a1", "error": None}]
+        per_sample_scores: dict[str, dict[str, float | None]] = {"the unmatched question text": {"faithfulness": 0.5}}
+        error = attach_judge_scores_to_results(results, per_sample_scores)
+        assert error is not None
+        assert "the unmatched question text" in error
+        # Nothing was attached: the arm is published without the per-question block.
+        assert "judge_scores" not in results[0]
+
+    def test_duplicate_question_is_reported_and_attaches_nothing(self) -> None:
+        # A duplicated question makes the join ambiguous: a last-write-wins map would
+        # silently drop one entry's scores and read as "never judged". Report it and
+        # attach nothing rather than guess which entry a score belongs to.
+        results: list[dict[str, Any]] = [
+            {"question": "q1", "answer": "a1", "error": None},
+            {"question": "q1", "answer": "a1-duplicate", "error": None},
+        ]
+        per_sample_scores: dict[str, dict[str, float | None]] = {"q1": {"faithfulness": 0.5}}
+        error = attach_judge_scores_to_results(results, per_sample_scores)
+        assert error is not None
+        assert "q1" in error
+        # Nothing was attached to either entry.
+        assert "judge_scores" not in results[0]
+        assert "judge_scores" not in results[1]
 
 
 class TestComputeRetrievalHitAndReciprocalRank:
@@ -235,6 +332,7 @@ def _publish_args(
         "is_self_judged": False,
         "min_coverage": 0.9,
         "repos": ["repo-a", "repo-b"],
+        "judge_join_error": None,
         "stages": {
             "rerank_enabled": False,
             "rerank_model": None,
@@ -315,6 +413,29 @@ class TestPublishRetrieverResults:
         assert payload["stages"]["rerank_candidate_depth"] == 50
         assert not (tmp_path / "results_bm25.json").exists()
         assert "bge-reranker-v2-m3" in (tmp_path / "results_bm25_rerank.md").read_text()
+
+    def test_clean_run_records_a_null_join_error(self, tmp_path: Path) -> None:
+        ragas_coverage = {"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}}
+
+        publish_retriever_results(tmp_path, "vector", **_publish_args(ragas_coverage, {"faithfulness": 0.95}))
+
+        payload = json.loads((tmp_path / "results_vector.json").read_text())
+        assert payload["judge_join_error"] is None
+
+    def test_join_failure_is_recorded_in_the_published_file(self, tmp_path: Path) -> None:
+        """Without this key, questions carrying no `judge_scores` read the same whether the join
+        failed or every generation errored, and only the run's log holds the difference."""
+        ragas_coverage = {"faithfulness": {"attempted": 10, "completed": 10, "failed": 0}}
+        args = _publish_args(ragas_coverage, {"faithfulness": 0.95})
+        args["judge_join_error"] = "Duplicate question text in the run's results breaks the judge-score join: ['q']"
+
+        publish_retriever_results(tmp_path, "vector", **args)
+
+        payload = json.loads((tmp_path / "results_vector.json").read_text())
+        assert "Duplicate question text" in payload["judge_join_error"]
+        # The arm's other measurements are published alongside it, not discarded.
+        assert payload["ragas_scores"] == {"faithfulness": 0.95}
+        assert payload["custom_metrics"]["avg_latency_s"] == 1.0
 
 
 class TestStageConfig:
@@ -412,15 +533,17 @@ class TestResolveSkipMetrics:
         # A skipped metric is filtered out of `metrics` before `evaluate()` runs
         # (see `run_ragas_evaluation`), so it never appears as a DataFrame column
         # in the first place; simulate that resulting frame directly.
-        df = pd.DataFrame({"faithfulness": [1.0, 1.0]})
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        df = pd.DataFrame({"user_input": ["q1", "q2"], "faithfulness": [1.0, 1.0]})
+        scores, coverage, _ = compute_ragas_scores_and_coverage(df)
         assert "context_recall" not in scores
         assert "context_recall" not in coverage
         assert check_coverage_gate(coverage, min_coverage=0.9) is None
 
     def test_enabled_but_empty_metric_still_fails_gate(self) -> None:
-        df = pd.DataFrame({"faithfulness": [1.0, 1.0], "context_recall": [float("nan"), float("nan")]})
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        df = pd.DataFrame(
+            {"user_input": ["q1", "q2"], "faithfulness": [1.0, 1.0], "context_recall": [float("nan"), float("nan")]}
+        )
+        scores, coverage, _ = compute_ragas_scores_and_coverage(df)
         assert scores["context_recall"] is None
         assert check_coverage_gate(coverage, min_coverage=0.9) == "context_recall"
 

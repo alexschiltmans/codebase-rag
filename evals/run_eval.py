@@ -677,8 +677,14 @@ def _percentile(values: list[float], q: float) -> float:
     return ordered[min(rank, len(ordered)) - 1]
 
 
-def compute_ragas_scores_and_coverage(df: Any) -> tuple[dict[str, float | None], dict[str, dict[str, int]]]:
-    """Derive per-metric scores and judge-job coverage from a ragas result DataFrame.
+def compute_ragas_scores_and_coverage(
+    df: Any,
+) -> tuple[
+    dict[str, float | None],
+    dict[str, dict[str, int]],
+    dict[str, dict[str, float | None]],
+]:
+    """Derive per-metric scores, judge-job coverage, and per-sample scores from a ragas result DataFrame.
 
     Args:
         df: `EvaluationResult.to_pandas()` output: one row per sample, judge
@@ -686,9 +692,11 @@ def compute_ragas_scores_and_coverage(df: Any) -> tuple[dict[str, float | None],
             `reference`, NaN in a metric's column for a failed judge job.
 
     Returns:
-        `(scores, coverage)`. `scores` maps metric -> rounded mean, or `None` if
-        every job for that metric failed. `coverage` maps metric ->
-        `{attempted, completed, failed}` job counts.
+        `(scores, coverage, per_sample)`. `scores` maps metric -> rounded mean,
+        or `None` if every job for that metric failed. `coverage` maps metric ->
+        `{attempted, completed, failed}` job counts. `per_sample` maps the row's
+        `user_input` (the question text) -> `{metric -> score}`, kept at full
+        precision with a failed job (`NaN`) as `None` rather than zero.
     """
     score_cols = [c for c in df.columns if c not in ("user_input", "response", "retrieved_contexts", "reference")]
     scores: dict[str, float | None] = {}
@@ -699,7 +707,14 @@ def compute_ragas_scores_and_coverage(df: Any) -> tuple[dict[str, float | None],
         completed = len(vals)
         coverage[col] = {"attempted": attempted, "completed": completed, "failed": attempted - completed}
         scores[col] = round(vals.mean(), 4) if not vals.empty else None
-    return scores, coverage
+    per_sample: dict[str, dict[str, float | None]] = {}
+    for _, row in df.iterrows():
+        entry: dict[str, float | None] = {}
+        for col in score_cols:
+            value = float(row[col])
+            entry[col] = None if math.isnan(value) else value
+        per_sample[row["user_input"]] = entry
+    return scores, coverage, per_sample
 
 
 def check_coverage_gate(
@@ -756,7 +771,11 @@ def run_ragas_evaluation(
         `{attempted, completed, failed}`), and `requested_metrics` (the metric
         names that weren't skipped: what this run was supposed to measure,
         used by `check_coverage_gate` to catch a wholesale judge-phase failure
-        that leaves `coverage` empty).
+        that leaves `coverage` empty). A successful judge phase also carries
+        `per_sample_scores` (question text -> `{metric -> score}`, full
+        precision, a failed job as `None`); the failure paths (no samples, all
+        metrics skipped, `ragas_error`) omit that key rather than returning an
+        empty mapping that would read as a judged run with no results.
 
     The judge LLM is built with `reasoning=False`. For a "thinking" model
     (e.g. `qwen3.5:9b`), Ollama's default is to emit a full chain-of-thought
@@ -832,13 +851,66 @@ def run_ragas_evaluation(
         )
         # `return_executor` was not passed, so this is always an EvaluationResult.
         df = cast(EvaluationResult, eval_result).to_pandas()
-        scores, coverage = compute_ragas_scores_and_coverage(df)
+        scores, coverage, per_sample_scores = compute_ragas_scores_and_coverage(df)
         logger.info("ragas scores: %s", scores)
         logger.info("ragas coverage: %s", coverage)
-        return {"scores": scores, "coverage": coverage, "requested_metrics": requested_metrics}
+        return {
+            "scores": scores,
+            "coverage": coverage,
+            "per_sample_scores": per_sample_scores,
+            "requested_metrics": requested_metrics,
+        }
     except Exception as e:
         logger.error("ragas evaluation failed: %s", e)
         return {"scores": {"ragas_error": str(e)}, "coverage": {}, "requested_metrics": requested_metrics}
+
+
+def attach_judge_scores_to_results(
+    results: list[dict[str, Any]],
+    per_sample_scores: dict[str, dict[str, float | None]] | None,
+) -> str | None:
+    """Attach each judged question's scores to its entry in `results`, in place.
+
+    Returns `None` on success, or a message describing why the scores could not
+    be attributed. On a message, nothing is attached, so the caller can publish
+    the run without the per-question block and fail it, rather than dropping the
+    arm's other measurements.
+
+    Matches a judged sample to a result by question text, not by position: the
+    judged batch omits questions whose generation errored, so it does not align
+    positionally with `results` and a positional join would attribute one
+    question's score to another on exactly the runs where something failed.
+
+    A question absent from the judged set (its generation errored, so it was
+    never submitted to the judge) gets no `judge_scores` key at all, which is
+    distinguishable from a question whose jobs were attempted and failed (an
+    explicit `None` per metric).
+
+    Attribution is impossible, and reported rather than guessed, in two cases:
+    a judged sample's question text matches no entry in `results` (the join key
+    is not what it is assumed to be), or `results` holds the same question text
+    twice (the join is ambiguous, and a last-write-wins map would silently drop
+    one entry's scores and read as "never judged").
+    """
+    if not per_sample_scores:
+        return None
+    seen: set[str] = set()
+    duplicated: set[str] = set()
+    for r in results:
+        question = r["question"]
+        if question in seen:
+            duplicated.add(question)
+        else:
+            seen.add(question)
+    if duplicated:
+        return f"Duplicate question text in the run's results breaks the judge-score join: {sorted(duplicated)!r}"
+    unmatched = sorted(set(per_sample_scores) - seen)
+    if unmatched:
+        return f"Judge returned scores for questions not present in the run's results: {unmatched!r}"
+    by_question = {r["question"]: r for r in results}
+    for question, scores in per_sample_scores.items():
+        by_question[question]["judge_scores"] = scores
+    return None
 
 
 def log_to_langfuse(
@@ -1109,6 +1181,7 @@ def publish_retriever_results(
     min_coverage: float,
     repos: list[str],
     stages: dict[str, Any],
+    judge_join_error: str | None,
 ) -> None:
     """Gate on judge coverage, then write the JSON and markdown reports for one retriever.
 
@@ -1117,6 +1190,11 @@ def publish_retriever_results(
     reason from `ragas_scores` if it doesn't) and exits the process non-zero
     without writing `results_<retriever_type>.{json,md}`, leaving whatever was
     previously published there untouched.
+
+    `judge_join_error` is written into the JSON as `judge_join_error`, null when
+    the judge scores were attributed cleanly. Without it a file whose questions
+    carry no `judge_scores` would read the same whether the join failed or every
+    generation errored, and the distinction would live only in the run's log.
     """
     failed_metric = check_coverage_gate(ragas_coverage, min_coverage, requested_metrics)
     if failed_metric:
@@ -1158,6 +1236,7 @@ def publish_retriever_results(
                 "ragas_coverage": ragas_coverage,
                 "ragas_judge_model": judge_model_name,
                 "ragas_self_judged": is_self_judged,
+                "judge_join_error": judge_join_error,
             },
             f,
             indent=2,
@@ -1236,6 +1315,10 @@ def main() -> None:
         logger.info("Using '%s' as a fixed RAGAS judge model", judge_model_name)
 
     all_custom_metrics: dict[str, dict[str, Any]] = {}
+    # Judge scores that could not be attributed to a question, per arm. Collected
+    # rather than raised so every arm's results (and the ablation) are still
+    # published; the run fails at the end instead of discarding the arm that hit it.
+    join_errors: list[str] = []
 
     for retriever_type in RETRIEVER_TYPES:
         logger.info("=== Retriever: %s ===", retriever_type)
@@ -1260,6 +1343,15 @@ def main() -> None:
         ragas_scores = ragas_result["scores"]
         ragas_coverage = ragas_result["coverage"]
         requested_metrics = ragas_result["requested_metrics"]
+        # Attach each judged question's scores to its results entry before the JSON is
+        # written. If they cannot be attributed (unmatched sample, or a duplicated
+        # question), nothing is attached: the arm is still published without the
+        # per-question block but with the reason recorded in it, and the run is failed
+        # after every arm has been written.
+        join_error = attach_judge_scores_to_results(results, ragas_result.get("per_sample_scores"))
+        if join_error:
+            logger.error("Cannot attribute judge scores for retriever=%s: %s", retriever_type, join_error)
+            join_errors.append(f"{retriever_type}: {join_error}")
 
         publish_retriever_results(
             EVALS_DIR,
@@ -1275,6 +1367,7 @@ def main() -> None:
             min_coverage,
             repos,
             stages,
+            join_error,
         )
 
         if use_langfuse:
@@ -1314,6 +1407,12 @@ def main() -> None:
         f.write(_normalize_markdown(ablation_md))
     logger.info("Ablation report saved to %s", ablation_path)
     print("\n" + ablation_md)
+
+    if join_errors:
+        # Every arm's results and the ablation are already written; fail now so the
+        # run is not accepted as fully judged, without having discarded the arms.
+        logger.error("Failing run: judge scores could not be attributed. %s", " | ".join(join_errors))
+        sys.exit(1)
 
 
 if __name__ == "__main__":
