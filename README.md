@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aschiltmansnavara/codebase-rag/actions/workflows/ci.yml"><img src="https://github.com/aschiltmansnavara/codebase-rag/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/coverage-89%25-brightgreen.svg" alt="Coverage: 89%">
+  <a href="https://github.com/alexschiltmans/codebase-rag/actions/workflows/ci.yml"><img src="https://github.com/alexschiltmans/codebase-rag/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/coverage-%E2%89%A580%25-brightgreen.svg" alt="Coverage: enforced floor"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT"></a>
