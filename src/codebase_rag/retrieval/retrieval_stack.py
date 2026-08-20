@@ -83,6 +83,7 @@ def apply_stages(retriever: RetrieverProtocol, config: Config, llm: Any) -> Retr
             retriever,
             model_name=config.rerank_model,
             candidate_depth=config.rerank_candidate_depth,
+            revision=config.rerank_model_revision or None,
         )
     if config.rewrite_enabled:
         from .rewrite import RewritingRetriever

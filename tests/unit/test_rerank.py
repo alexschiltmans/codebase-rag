@@ -98,6 +98,23 @@ class TestRerankingRetriever:
         assert first_stage.asked_k == 80
         assert len(ranked) == 80
 
+    def test_the_pinned_revision_reaches_the_cross_encoder(self) -> None:
+        """A model name alone resolves to the hub's default branch, so the weights behind a
+        published retrieval number can change with nothing in the diff to explain it."""
+        loaded: dict[str, Any] = {}
+
+        def record_load(model_name: str, device: str | None = None, revision: str | None = None) -> Any:
+            loaded["model_name"] = model_name
+            loaded["revision"] = revision
+            return _StubModel([0.5])
+
+        stage = RerankingRetriever(_StubRetriever([(_doc("a.py"), 1.0)]), revision="abc123")
+
+        with patch("sentence_transformers.CrossEncoder", record_load):
+            stage.search("q", k=1)
+
+        assert loaded["revision"] == "abc123"
+
     def test_the_model_is_loaded_once_under_concurrent_first_queries(self) -> None:
         """An unguarded check-then-set loads a ~2GB model once per racing thread."""
         import threading
@@ -105,7 +122,7 @@ class TestRerankingRetriever:
         loads = []
         stage = RerankingRetriever(_StubRetriever([(_doc("a.py"), 1.0)]))
 
-        def slow_load(model_name: str, device: str | None = None) -> Any:
+        def slow_load(model_name: str, device: str | None = None, revision: str | None = None) -> Any:
             loads.append(model_name)
             time.sleep(0.05)
             return _StubModel([0.5])

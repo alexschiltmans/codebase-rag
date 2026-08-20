@@ -128,6 +128,30 @@ class TestCliHonoursTheSetting:
         assert isinstance(selected, RerankingRetriever)
         assert rerank_init.call_args.args[0] is bm25
 
+    def test_the_configured_rerank_revision_reaches_the_stage(self) -> None:
+        """An unpinned reranker resolves to the hub's default branch, so the setting has to
+        arrive at the stage rather than stopping at Config."""
+        from codebase_rag.retrieval.retrieval_stack import apply_stages
+
+        config = replace(Config(), rerank_enabled=True, rerank_model_revision="abc123")
+
+        with patch("codebase_rag.retrieval.rerank.RerankingRetriever.__init__", return_value=None) as rerank_init:
+            apply_stages(BM25Retriever([]), config, llm=None)
+
+        assert rerank_init.call_args.kwargs["revision"] == "abc123"
+
+    def test_an_empty_rerank_revision_is_passed_as_none(self) -> None:
+        """Empty string is how Config spells "unset"; handing it to the hub as a revision would
+        look for a branch by that name instead of taking the default."""
+        from codebase_rag.retrieval.retrieval_stack import apply_stages
+
+        config = replace(Config(), rerank_enabled=True)
+
+        with patch("codebase_rag.retrieval.rerank.RerankingRetriever.__init__", return_value=None) as rerank_init:
+            apply_stages(BM25Retriever([]), config, llm=None)
+
+        assert rerank_init.call_args.kwargs["revision"] is None
+
     def test_no_model_client_is_built_when_rewrite_is_off(self) -> None:
         """Only the rewrite stage needs one, and `query` has no other use for it. Building one
         regardless would put a model handshake in front of a git hook."""

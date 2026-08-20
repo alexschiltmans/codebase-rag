@@ -1,0 +1,45 @@
+# Rules guarding the boundary repository content may not cross: which layers may open a network
+# connection at all, and whether the one layer that may is allowed to skip checking who answers.
+rules:
+  # The app is meant to answer questions about a codebase without any of it leaving the machine.
+  # Ingestion, retrieval, and the vector store are where that promise is kept or broken: everything
+  # they touch is repository content. HTTP clients are allowed in `llm/` (the Ollama and
+  # OpenAI-compatible clients are the deliberate egress point) and nowhere else in those layers.
+  # A type checker cannot see this: `requests.post` in a chunker is perfectly well-typed.
+  - id: no-network-in-indexing-path
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Network client used in the indexing, retrieval, or storage path. These layers handle
+      repository content and must stay local; route outbound calls through codebase_rag.llm
+      instead, which is the one layer allowed to leave the machine.
+    paths:
+      include:
+        - src/codebase_rag/data_ingestion/
+        - src/codebase_rag/retrieval/
+        - src/codebase_rag/database/
+    patterns:
+      - pattern-either:
+          - pattern: requests.$METHOD(...)
+          - pattern: httpx.$METHOD(...)
+          - pattern: urllib.request.$METHOD(...)
+          - pattern: http.client.$CLS(...)
+          - pattern: socket.socket(...)
+          - pattern: aiohttp.$ANY(...)
+
+  # TLS verification off in a project whose stated position is that data stays local is a
+  # contradiction worth failing on rather than explaining in a comment.
+  - id: no-disabled-tls-verification
+    languages: [python]
+    severity: ERROR
+    message: TLS verification disabled. Fix the certificate chain rather than turning the check off.
+    paths:
+      include:
+        - src/codebase_rag/
+        - evals/
+        - scripts/
+    patterns:
+      - pattern-either:
+          - pattern: requests.$FN(..., verify=False, ...)
+          - pattern: httpx.$CLS(..., verify=False, ...)
+          - pattern: ssl._create_unverified_context(...)

@@ -243,8 +243,12 @@ audit: venv ## Audit the locked dependency set for known vulnerabilities
 
 # The gate to run before review, commit, and push. Covers every tier that
 # works without live services, so it is safe to run anywhere and in a hook.
+# scan-strict is in here because it is a CI job: the static analysis job sat red
+# for four commits over one finding nobody could see locally, since no local
+# target failed on it. It needs the network only the first time, to fetch the
+# pinned Opengrep binary into .tools/.
 .PHONY: verify
-verify: lint format-check typecheck ## Full offline gate: check + performance/evaluation tiers + OpenSpec validation
+verify: lint format-check typecheck scan-strict ## Full offline gate: check + performance/evaluation tiers + SARIF scan + OpenSpec validation
 	$(PYTHON) scripts/check_tracked_imports.py
 	$(PYTEST) tests/unit/ tests/performance/ tests/evaluation/ $(PYTEST_COV)
 	openspec validate --changes

@@ -119,6 +119,10 @@ class Config:
     # measured winners (see retrieval.rerank). Enabling loads the model lazily on first query.
     rerank_enabled: bool = False
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    # Hub revision the reranker resolves to, for the same reason the embedding model has one:
+    # empty means the hub's default branch, so the cross-encoder that rescored a published
+    # measurement is not the one a later run loads under the same name.
+    rerank_model_revision: str = ""
     rerank_candidate_depth: int = 50
 
     # Query rewriting: an optional pre-retrieval stage where the local model expands a terse
@@ -213,6 +217,7 @@ class Config:
                 provider=provider,
                 rerank_enabled=_env_bool("RERANK_ENABLED", cls.rerank_enabled),
                 rerank_model=_env("RERANK_MODEL", cls.rerank_model),
+                rerank_model_revision=_env("RERANK_MODEL_REVISION", cls.rerank_model_revision),
                 rerank_candidate_depth=_env_int("RERANK_CANDIDATE_DEPTH", cls.rerank_candidate_depth),
                 rewrite_enabled=_env_bool("REWRITE_ENABLED", cls.rewrite_enabled),
                 rewrite_timeout_s=_env_float("REWRITE_TIMEOUT_S", cls.rewrite_timeout_s),

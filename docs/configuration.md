@@ -12,6 +12,7 @@ All settings are configured via environment variables or a `.env` file in the pr
 | `LLM_PROVIDER` | `ollama` | LLM backend: `ollama` or `openai-compat` (LM Studio, llama.cpp, vLLM, Jan) |
 | `LLM_MODEL_NAME` | `sam860/LFM2:350m` | Model name for generation |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | HuggingFace embedding model. Changing it re-cuts the corpus as well as re-embedding it: chunk size is derived from the model's token window, so an existing index is stale in both respects and has to be rebuilt. |
+| `EMBEDDING_MODEL_REVISION` | hub default branch | Commit sha or tag the embedding model name resolves to. Unset means whatever the branch points at on the day of the run, so two runs can embed with different weights under one name. Pin it before publishing a measurement. |
 | `EMBEDDING_QUERY_PROMPT` | model's own | Prefix applied to queries. Unset uses the prompts the model declares. |
 | `EMBEDDING_DOCUMENT_PROMPT` | model's own | Prefix applied to documents. Unset uses the prompts the model declares. |
 | `EMBEDDING_MAX_SEQ_LENGTH` | model's own | Token window override. Chunk size follows it at 1.6 characters per token, capped at 2000 characters: long-context embedders declare windows in the tens of thousands, and a chunk that size matches everything and locates nothing. |
@@ -29,6 +30,7 @@ fall, and time to first token regresses by 7x to 20x. What they buy is ordering 
 |---|---|---|
 | `RERANK_ENABLED` | `false` | Rescore the configured retriever's top candidates with a local cross-encoder. Enabling it loads the model lazily on the first query, roughly 2GB from the local cache, so the first question after startup pays for it. |
 | `RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` | Cross-encoder used when reranking is enabled. |
+| `RERANK_MODEL_REVISION` | hub default branch | Commit sha or tag the reranker model name resolves to. Same reasoning as `EMBEDDING_MODEL_REVISION`: unpinned weights move retrieval scores with nothing in the diff to explain it. |
 | `RERANK_CANDIDATE_DEPTH` | `50` | How many candidates are pulled from the first stage for rescoring. Deeper costs time and raises the ceiling on what reranking can recover. |
 | `REWRITE_ENABLED` | `false` | Expand a terse query with likely identifiers using the local model before retrieval. Expands, never replaces, and falls back to the original query on failure or timeout. |
 | `REWRITE_TIMEOUT_S` | `5.0` | Seconds to wait for the expansion before giving up and retrieving on the original query. |

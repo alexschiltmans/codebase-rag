@@ -1,0 +1,63 @@
+# Rules covering the ways an indexed repository, which is somebody else's code and untrusted by
+# definition here, turns from input into execution.
+rules:
+  # Every path this process deserialises has to be one it wrote itself, under the configured index
+  # directory. `pickle.load` runs arbitrary code from its input, so a second call site reading from
+  # anywhere else turns a downloaded or user-supplied file into code execution. The document cache
+  # is the single sanctioned case, and it is confined to one function so that the set of readable
+  # paths stays reviewable.
+  - id: no-pickle-load-outside-document-cache
+    languages: [python]
+    severity: ERROR
+    message: >-
+      pickle deserialisation outside load_documents_cache. pickle.load executes arbitrary code from
+      its input; the document cache under Config.cache_dir is the only sanctioned source. Use JSON
+      for anything else.
+    paths:
+      include:
+        - src/codebase_rag/
+    patterns:
+      - pattern-either:
+          - pattern: pickle.load(...)
+          - pattern: pickle.loads(...)
+      - pattern-not-inside: |
+          def load_documents_cache(...):
+            ...
+
+  # Same reasoning as pickle, and worth its own rule because there is no sanctioned call site at
+  # all: `torch.load` on a checkpoint is pickle deserialisation wearing a different name, and this
+  # project only ever loads models through sentence-transformers by name.
+  - id: no-torch-load
+    languages: [python]
+    severity: ERROR
+    message: >-
+      torch.load deserialises pickled data and executes code from it. Models here load through
+      SentenceTransformer by name; there is no reason to read a checkpoint file directly.
+    paths:
+      include:
+        - src/codebase_rag/
+        - evals/
+        - scripts/
+    patterns:
+      - pattern-either:
+          - pattern: torch.load(...)
+          - pattern: joblib.load(...)
+
+  # Ingestion walks a cloned repository and runs git against it. A shell string built from any of
+  # that content is injectable by the repository being indexed, which is untrusted input by
+  # definition here: the whole point is to point this at code somebody else wrote.
+  - id: no-shell-in-repo-handling
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Shell invocation in a path that handles cloned repository content. Repository contents are
+      untrusted input; pass an argument list instead of a shell string.
+    paths:
+      include:
+        - src/codebase_rag/
+        - scripts/
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FN(..., shell=True, ...)
+          - pattern: os.system(...)
+          - pattern: os.popen(...)

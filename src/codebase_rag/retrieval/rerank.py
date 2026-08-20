@@ -72,6 +72,7 @@ class RerankingRetriever:
         candidate_depth: int = DEFAULT_CANDIDATE_DEPTH,
         max_passage_chars: int = DEFAULT_MAX_PASSAGE_CHARS,
         device: str | None = None,
+        revision: str | None = None,
     ) -> None:
         """Initialize the rerank stage.
 
@@ -83,12 +84,16 @@ class RerankingRetriever:
             max_passage_chars: Passage truncation before scoring.
             device: Torch device for the cross-encoder. `None` lets
                 sentence-transformers pick (MPS/CUDA/CPU as available).
+            revision: Hub revision (commit sha or tag) the model name resolves
+                to. `None` takes the hub's default branch, whose weights can
+                change between runs under the same name.
         """
         self.retriever = retriever
         self.model_name = model_name
         self.candidate_depth = candidate_depth
         self.max_passage_chars = max_passage_chars
         self.device = device
+        self.revision = revision
         self._model: Any = None
         # Both hosts are multi-threaded: Starlette runs the sync /search endpoint in a
         # threadpool, and Streamlit gives each session its own thread over one shared runtime.
@@ -106,8 +111,17 @@ class RerankingRetriever:
                 if self._model is None:
                     from sentence_transformers import CrossEncoder
 
-                    logger.info("Loading reranker model '%s'", self.model_name)
-                    self._model = CrossEncoder(self.model_name, device=self.device)
+                    logger.info(
+                        "Loading reranker model '%s' (revision=%s)", self.model_name, self.revision or "unpinned"
+                    )
+                    if self.revision is None:
+                        logger.warning(
+                            "Reranker model '%s' is loading from the hub's default branch. Set "
+                            "RERANK_MODEL_REVISION to a commit sha before publishing any retrieval "
+                            "measurement, or the weights behind this name can change between runs.",
+                            self.model_name,
+                        )
+                    self._model = CrossEncoder(self.model_name, device=self.device, revision=self.revision)
         return self._model
 
     def search(self, query: str, k: int | None = None) -> list[tuple[Document, float]]:

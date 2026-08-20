@@ -1,0 +1,81 @@
+# Rules guarding assumptions the ranking rests on. Each of these fails by returning plausible results
+# rather than by raising, so nothing downstream can tell it happened.
+rules:
+  # The Qdrant host and port, the collection name, and the local index directory all belong to
+  # Config, which reads them from the environment. A literal that duplicates one of them creates a
+  # second source of truth that silently ignores the environment, and the failure mode is quiet:
+  # the process reads an empty index from a directory nobody configured and answers from nothing.
+  - id: no-hardcoded-index-path
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Hardcoded index or service location. Resolve it from Config (cache_dir, repo_local_path,
+      qdrant_host, qdrant_port, collection_name) so the environment stays in control of where the
+      index lives.
+    paths:
+      include:
+        - src/codebase_rag/
+      exclude:
+        - src/codebase_rag/config.py
+    patterns:
+      - pattern-either:
+          - pattern: |
+              "=~/^\\.?\\/?data\\/(cache|repos)/"
+          - pattern: Path("=~/^\\.?\\/?data\\//")
+
+  # A model name without a revision resolves to whatever the hub's default branch points at today.
+  # Two runs weeks apart then embed with different weights under the same label, which moves every
+  # published retrieval number without anything in the diff to explain it, and invalidates a
+  # collection built with the earlier weights while the model-name binding check still passes.
+  - id: embedding-model-needs-pinned-revision
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Embedding or reranker model loaded without a pinned revision. Pass revision=<commit sha> so
+      the weights behind a model name cannot change between runs and quietly move retrieval scores.
+    paths:
+      include:
+        - src/codebase_rag/
+        - evals/
+    patterns:
+      - pattern-either:
+          - pattern: SentenceTransformer(...)
+          - pattern: CrossEncoder(...)
+          - pattern: $CLS.from_pretrained(...)
+      - pattern-not: SentenceTransformer(..., revision=..., ...)
+      - pattern-not: CrossEncoder(..., revision=..., ...)
+      - pattern-not: $CLS.from_pretrained(..., revision=..., ...)
+
+  # The collection is created with cosine distance and the encoder normalises, so scores are
+  # comparable and the fusion weights in hybrid search were tuned against that. Creating a
+  # collection under a different metric does not fail: it returns plausible-looking scores on a
+  # different scale, and the ranking degrades rather than erroring.
+  - id: vector-store-assumes-cosine
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Qdrant collection created with a distance other than COSINE. Embeddings here are L2
+      normalised and the retrieval scores and fusion weights assume cosine; another metric returns
+      plausible numbers on a different scale rather than failing.
+    paths:
+      include:
+        - src/codebase_rag/
+    patterns:
+      - pattern: VectorParams(..., distance=$D, ...)
+      - pattern-not: VectorParams(..., distance=Distance.COSINE, ...)
+
+  # Cosine over unnormalised vectors is dominated by magnitude rather than direction, so long
+  # chunks outrank relevant ones. Nothing raises; the results just get worse. The encoder is the
+  # only place normalisation can be established, so it is required at every encode call.
+  - id: embeddings-must-be-normalised
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Encoding without normalize_embeddings=True. The store compares with cosine, which over
+      unnormalised vectors ranks by magnitude and silently degrades retrieval instead of failing.
+    paths:
+      include:
+        - src/codebase_rag/database/
+    patterns:
+      - pattern: $MODEL.encode(...)
+      - pattern-not: $MODEL.encode(..., normalize_embeddings=True, ...)
