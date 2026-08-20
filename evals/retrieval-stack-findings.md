@@ -873,7 +873,9 @@ for all three, and `null` is not evidence that it matches an arm that records a 
 model at two chunk sizes used to be identical in every saved field, so the second overwrote the first,
 which is how a tracked result was lost while producing the re-measurement at the top of this document.
 `fusion_bound.py` now gates on chunking as it does on the test set, and refuses an arm that records it
-against one that does not.
+against one that does not. 40 of the 71 arm records still carry no chunking, deliberately: for those,
+`fusion_bound.py` reports a missing chunking rather than refusing, because refusing would break the
+comparisons among them.
 
 The frozen candidate lists are written to `evals/bench_candidates/`, which is not tracked:
 they run to 24MB because each one carries the full text of every candidate chunk, and re-running the
@@ -891,12 +893,11 @@ two or more saved arms at matched depth, through the same metric code as every o
 prints each component's recall, the union's, and the headroom between them. It refuses arms scored
 against different test sets, at different candidate depths, over different repositories or under
 different ground truth, and it refuses the same arm given twice: `bench_results/` holds arms from more
-than one test set under filenames that say nothing about the questions. Chunking it cannot refuse.
-Arm records do not save the chunk configuration their index was built with, and two arms of the same
-model over different chunkings agree in every field that is saved, so the report prints that gate as
-missing and matching it is the caller's job. When two components tie for best, both are named with
-the questions the union gains over each, since the headroom is the same number against either and the
-questions supplying it are not. This is what produced the ensemble table above:
+than one test set under filenames that say nothing about the questions. Chunking it gates on as it
+does on the test set: it refuses an arm that records a chunking against one that does not, and when
+no arm records one it prints the gate as missing with a warning. When two components tie for best,
+both are named with the questions the union gains over each, since the headroom is the same number
+against either and the questions supplying it are not. This is what produced the ensemble table above:
 
 ```
 python evals/fusion_bound.py \

@@ -234,3 +234,6 @@ docs/*-review.md
 docs/review-*.md
 docs/*-audit.md
 docs/audit-*.md
+
+# Working handoff note for the eval work, not a point-in-time review
+codebase-rag-eval-handoff.md

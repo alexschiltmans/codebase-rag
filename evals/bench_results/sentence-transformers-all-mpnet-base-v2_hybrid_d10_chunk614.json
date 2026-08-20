@@ -7,6 +7,13 @@
   "dtype": "float32",
   "query_prompt": "",
   "document_prompt": "",
+  "chunk_size": 614,
+  "chunk_overlap": 122,
+  "chunk_max_seq_length": 384,
+  "chunking_provenance": {
+    "recovered": true,
+    "evidence": "chunk_size 614 and chunk_overlap 122 were recovered in this backfill; the record entered the tree at commit e64bf48, which sized chunks from the embedding model's token window. The same-configuration twin sentence-transformers-all-mpnet-base-v2_hybrid_d10_chunk614_on-bench_sentence-transformers-all-mpnet-base-v2_768_chunk614.json, written at 926f286, records chunk_size 614 and chunk_overlap 122 and reproduces this record's hit_rate 0.9047619047619048 and mrr 0.7559523809523809 to full precision; its per_question actual_sources are relative paths where this record's are absolute, so the records are not byte-identical. evals/retrieval-stack-findings.md states the 19637-chunk corpus was cut at 614 with 122 overlap derived from all-mpnet-base-v2's 384-token window, which is why chunk_max_seq_length is 384; chunk_overlap 122 also follows from OVERLAP_RATIO 0.2 in src/codebase_rag/data_ingestion/chunking.py, int(614 * 0.2) = 122. The corpus sidecar on disk, data/cache/bm25_corpus_chunk614/_meta/chunking.json, reads the same 614 and 122 but is untracked and was written by the 926f286 sweep rebuild, which chose the size explicitly; it corroborates the values, and its null chunk_max_seq_length describes that rebuild rather than this run."
+  },
   "retriever_type": "hybrid",
   "candidate_depth": 10,
   "applied_threshold": null,

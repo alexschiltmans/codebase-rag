@@ -7,6 +7,13 @@
   "dtype": "float16",
   "query_prompt": "",
   "document_prompt": "",
+  "chunk_size": 614,
+  "chunk_overlap": 122,
+  "chunk_max_seq_length": 384,
+  "chunking_provenance": {
+    "recovered": true,
+    "evidence": "chunk_size 614 and chunk_overlap 122 were recovered in this backfill; the arm was produced at commit 9578a3c, whose message records that it was scored over the current 19637-chunk corpus after the chunk size dropped to 614, with the chunk614 name applied by hand because the harness did not carry chunk size in the arm name. That corpus was cut at e64bf48, which derived 614 from all-mpnet-base-v2's 384-token window with 122 overlap, as evals/retrieval-stack-findings.md states; that window is why chunk_max_seq_length is 384, and chunk_overlap 122 also follows from OVERLAP_RATIO 0.2 in src/codebase_rag/data_ingestion/chunking.py, int(614 * 0.2) = 122. The same-configuration twin baai-bge-m3_hybrid_d10_float16_seq768_chunk614_on-bench_baai-bge-m3_1024_float16_seq768_chunk614.json, written at 926f286, records the same 614 and 122, so it corroborates the chunking; its results differ (hit_rate 0.8809523809523809 and mrr 0.7448412698412699 versus this record's 0.8571428571428571 and 0.7166666666666667), which is the measured float16 non-reproduction and says nothing about the corpus. The corpus sidecar on disk, data/cache/bm25_corpus_chunk614/_meta/chunking.json, reads the same 614 and 122 but is untracked and was written by the 926f286 sweep rebuild, which chose the size explicitly; it corroborates the values, and its null chunk_max_seq_length describes that rebuild rather than this run."
+  },
   "retriever_type": "hybrid",
   "candidate_depth": 10,
   "applied_threshold": null,
