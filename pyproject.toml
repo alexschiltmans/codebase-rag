@@ -41,6 +41,7 @@ dev = [
     "types-requests>=2.33",
     "pre-commit>=4.6",
     "pip-audit>=2.10,<3",
+    "numpy>=2.0,<3",
 ]
 
 [build-system]
