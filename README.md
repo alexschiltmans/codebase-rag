@@ -124,6 +124,13 @@ Docker Model Runner, LM Studio, llama.cpp server, vLLM, and Jan are also support
 
 Use `codebase-rag` to query and explore codebases from shell scripts, git hooks, and CI pipelines. All output goes to stdout (clean for piping), while diagnostics go to stderr.
 
+Only warnings and errors are logged by default. Add `-v` to see the per-stage progress lines
+(index load, retrieval, timings) on stderr, or `-vv` for debug detail:
+
+```bash
+codebase-rag -v ask "explain the ingestion pipeline"
+```
+
 ### Query Command
 
 Search for code snippets:
@@ -132,14 +139,18 @@ Search for code snippets:
 codebase-rag query "where is error handling implemented?"
 ```
 
-Output in compact format (path, score, snippet):
+Output in compact format, one numbered block per result (file, score, repo-relative path, snippet):
 
 ```
-src/app/handlers.py (0.95)
+[1] handlers.py  (0.950)
+    my-repo/src/app/handlers.py
+────────────────────────────────
 def handle_error(error):
     logger.error("Error occurred: %s", error)
     return {"status": "error", "message": str(error)}
 ```
+
+`--format json` keeps the full absolute path for scripts.
 
 Output as JSON for programmatic use:
 

@@ -28,11 +28,18 @@ logger = logging.getLogger(__name__)
 # that case (and gives tests a fixture data dir to point at).
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# Rule under each result header. Capped so a long path does not draw a rule across a wide terminal.
+_RULE_MAX_WIDTH = 80
 
-def _setup_logging() -> None:
+
+# Quiet by default: piped output and git hooks do not want per-stage INFO lines around the result.
+_VERBOSITY_LEVELS = {0: logging.WARNING, 1: logging.INFO}
+
+
+def _setup_logging(verbosity: int = 0) -> None:
     """Route all logging to stderr, keeping stdout clean for results."""
     logging.basicConfig(
-        level=logging.INFO,
+        level=_VERBOSITY_LEVELS.get(verbosity, logging.DEBUG),
         format="%(name)s: %(message)s",
         stream=sys.stderr,
     )
@@ -106,14 +113,30 @@ def _build_retriever(config: Config, repos: list[str] | None = None, llm: Any = 
     return apply_stages(base, config, llm)
 
 
+def _repo_relative(path: str, repo: Any) -> str:
+    """Path as it reads inside its repo checkout, or unchanged when the checkout root is not in it."""
+    if not repo:
+        return path
+    _, separator, tail = path.partition(f"/{repo}/")
+    return f"{repo}/{tail}" if separator and tail else path
+
+
 def _format_compact(results: list[tuple[Any, ...]]) -> str:
-    """Format search results in compact text form: path (score)\\nsnippet."""
-    lines = []
-    for path, score, snippet, *_ in results:
-        header = f"{path} ({score:.3f})"
-        lines.append(header)
-        lines.append(snippet)
-    return "\n".join(lines)
+    """Format search results as a numbered header, the repo-relative path, a rule, then the snippet."""
+    headers = []
+    for index, (path, score, _snippet, *rest) in enumerate(results, start=1):
+        location = _repo_relative(str(path), rest[0] if rest else None)
+        headers.append((f"[{index}] {location.rsplit('/', 1)[-1]}  ({score:.3f})", f"    {location}"))
+
+    # One rule width for the whole output rather than per result, so the blocks line up as a list.
+    width = min(max((len(line) for pair in headers for line in pair), default=0), _RULE_MAX_WIDTH)
+
+    blocks = []
+    for (title, location_line), (_path, _score, snippet, *_rest) in zip(headers, results, strict=True):
+        # Trim blank lines off each end, newline-only at the front so the first line keeps its indent.
+        body = str(snippet).lstrip("\n").rstrip()
+        blocks.append("\n".join([title, location_line, "\u2500" * width, body]))
+    return "\n\n".join(blocks)
 
 
 def _format_json(results: list[tuple[Any, ...]]) -> str:
@@ -176,10 +199,11 @@ def query_command(args: argparse.Namespace) -> int:
 
         search_results = retriever.search(args.question, k=args.k)
         if not search_results:
+            # Warning, not info: with the default level quiet, info leaves exit 2 as the only signal.
             if args.repo:
-                logger.info("No results found for repo '%s'", args.repo)
+                logger.warning("No results found for repo '%s'", args.repo)
             else:
-                logger.info("No results found for query")
+                logger.warning("No results found for query")
             return 2
 
         # Convert LangChain Document tuples to our format for formatting
@@ -245,14 +269,21 @@ def ask_command(args: argparse.Namespace) -> int:
                 return 1
             print(answer_text)
 
-        # Print sources from last result to stderr. RAGChain._format_sources yields plain
-        # dicts, not Documents, so these are subscripts rather than .metadata lookups.
+        # Sources go to stderr. RAGChain._format_sources yields plain dicts, so these are subscripts.
         if rag_chain.last_result:
             sources = rag_chain.last_result.get("sources", [])
-            if sources:
+            # One line per file: several retrieved chunks usually come from the same file, so the list repeats paths.
+            seen: set[str] = set()
+            paths = []
+            for source in sources:
+                path = source.get("file_path", "unknown")
+                if path not in seen:
+                    seen.add(path)
+                    paths.append(path)
+
+            if paths:
                 print("\nSources:", file=sys.stderr)
-                for source in sources:
-                    path = source.get("file_path", "unknown")
+                for path in paths:
                     print(f"  {path}", file=sys.stderr)
 
         return 0
@@ -267,17 +298,26 @@ def ask_command(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """Main CLI entry point."""
-    _setup_logging()
+    # SUPPRESS, not 0: the flag sits on every subparser too, and a real default there would clobber it.
+    verbosity_parser = argparse.ArgumentParser(add_help=False)
+    verbosity_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=argparse.SUPPRESS,
+        help="Show progress logging on stderr (-vv for debug)",
+    )
 
     parser = argparse.ArgumentParser(
         description="Query and explore codebases using retrieval-augmented generation",
         prog="codebase-rag",
+        parents=[verbosity_parser],
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Query subcommand
-    query_parser = subparsers.add_parser("query", help="Search for code snippets")
+    query_parser = subparsers.add_parser("query", help="Search for code snippets", parents=[verbosity_parser])
     query_parser.add_argument("question", help="Search query")
     query_parser.add_argument("--repo", default=None, help="Filter results to a specific repository")
     query_parser.add_argument("--k", type=int, default=5, help="Number of results to return (default: 5)")
@@ -296,11 +336,14 @@ def main() -> int:
     query_parser.set_defaults(func=query_command)
 
     # Ask subcommand
-    ask_parser = subparsers.add_parser("ask", help="Ask a question and get a generated answer")
+    ask_parser = subparsers.add_parser(
+        "ask", help="Ask a question and get a generated answer", parents=[verbosity_parser]
+    )
     ask_parser.add_argument("question", help="Question to ask about the codebase")
     ask_parser.set_defaults(func=ask_command)
 
     args = parser.parse_args()
+    _setup_logging(getattr(args, "verbose", 0))
 
     if not hasattr(args, "func"):
         parser.print_help()

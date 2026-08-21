@@ -1,6 +1,7 @@
 """Tests for the CLI module."""
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -12,9 +13,11 @@ import pytest
 from langchain_core.documents import Document
 
 from codebase_rag.cli import (
+    _VERBOSITY_LEVELS,
     _format_compact,
     _format_json,
     _load_bm25_retriever,
+    _setup_logging,
     _trim_results_by_budget,
     ask_command,
     main,
@@ -30,20 +33,47 @@ class TestFormatCompact:
         """Compact format with one result."""
         results = [("src/app.py", 0.95, "def foo():\n    pass")]
         output = _format_compact(results)
-        assert "src/app.py (0.950)" in output
+        assert "[1] app.py  (0.950)" in output
+        assert "    src/app.py" in output
         assert "def foo():" in output
 
     def test_format_compact_multiple_results(self) -> None:
-        """Compact format with multiple results."""
+        """Compact format numbers each result in order."""
         results = [
             ("src/app.py", 0.95, "snippet1"),
             ("src/lib.py", 0.85, "snippet2"),
         ]
         output = _format_compact(results)
-        assert "src/app.py (0.950)" in output
+        assert "[1] app.py  (0.950)" in output
         assert "snippet1" in output
-        assert "src/lib.py (0.850)" in output
+        assert "[2] lib.py  (0.850)" in output
         assert "snippet2" in output
+
+    def test_format_compact_uses_repo_relative_path(self) -> None:
+        """A known repo turns the absolute checkout path into repo/path-within-repo."""
+        results = [("/data/repos/my-repo/src/app.py", 0.95, "body", "my-repo")]
+        output = _format_compact(results)
+        assert "    my-repo/src/app.py" in output
+        assert "/data/repos/" not in output
+
+    def test_format_compact_keeps_path_when_repo_root_absent(self) -> None:
+        """A path that does not sit under its repo name is left alone rather than mangled."""
+        results = [("/elsewhere/app.py", 0.95, "body", "my-repo")]
+        output = _format_compact(results)
+        assert "    /elsewhere/app.py" in output
+
+    def test_format_compact_separates_results(self) -> None:
+        """Blocks are separated by a blank line, and an indented first line keeps its indent."""
+        results = [
+            ("src/app.py", 0.95, "line one\n\nline two\n\n"),
+            ("src/lib.py", 0.85, "\n  other\n"),
+        ]
+        output = _format_compact(results)
+        rule = "\u2500" * len("[1] app.py  (0.950)")
+        assert output == (
+            f"[1] app.py  (0.950)\n    src/app.py\n{rule}\nline one\n\nline two"
+            f"\n\n[2] lib.py  (0.850)\n    src/lib.py\n{rule}\n  other"
+        )
 
     def test_format_compact_empty(self) -> None:
         """Compact format with no results."""
@@ -99,16 +129,19 @@ class TestQueryCommand:
         assert result == 1
 
     @patch("codebase_rag.cli._load_bm25_retriever")
-    def test_query_no_results(self, mock_load_bm25: MagicMock) -> None:
-        """Query exits 2 (not 1) and prints no stdout when no results are found."""
+    def test_query_no_results(self, mock_load_bm25: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        """Query exits 2 (not 1), says so at warning level, and prints no stdout."""
         mock_bm25_instance = MagicMock()
         mock_bm25_instance.search.return_value = []
         mock_load_bm25.return_value = mock_bm25_instance
 
         args = MagicMock(question="nonexistent", k=5, format="compact", repo=None, budget=2000)
-        result = query_command(args)
+        with caplog.at_level(logging.WARNING, logger="codebase_rag.cli"):
+            result = query_command(args)
 
         assert result == 2
+        # At the default quiet level, exit 2 would otherwise be the only sign the query ran.
+        assert "No results found" in caplog.text
 
     @patch("codebase_rag.cli._load_bm25_retriever")
     def test_query_with_results_compact(self, mock_load_bm25: MagicMock) -> None:
@@ -197,6 +230,40 @@ class TestAskCommand:
 
         assert result == 0
         mock_rag_chain_instance.stream.assert_called_once_with("explain the architecture")
+
+    @patch("codebase_rag.cli._build_retriever")
+    @patch("codebase_rag.cli.Config.get_instance")
+    @patch("codebase_rag.cli.create_llm_client")
+    @patch("codebase_rag.cli.RAGChain")
+    def test_ask_deduplicates_source_paths(
+        self,
+        mock_rag_chain_class: MagicMock,
+        mock_create_llm: MagicMock,
+        mock_config: MagicMock,
+        mock_build: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Repeated chunks from one file print that path once, in first-seen order."""
+        mock_build.return_value = MagicMock()
+        mock_create_llm.return_value = MagicMock()
+
+        mock_rag_chain_instance = MagicMock()
+        mock_rag_chain_instance.stream.return_value = iter(["answer"])
+        mock_rag_chain_instance.last_result = {
+            "sources": [
+                {"id": "1", "file_path": "/repo/a.cpp"},
+                {"id": "2", "file_path": "/repo/a.cpp"},
+                {"id": "3", "file_path": "/repo/b.py"},
+                {"id": "4", "file_path": "/repo/a.cpp"},
+                {"id": "5", "file_path": "/repo/b.py"},
+            ]
+        }
+        mock_rag_chain_class.return_value = mock_rag_chain_instance
+
+        assert ask_command(MagicMock(question="q")) == 0
+
+        source_lines = [line for line in capsys.readouterr().err.splitlines() if line.startswith("  ")]
+        assert source_lines == ["  /repo/a.cpp", "  /repo/b.py"]
 
     @patch("codebase_rag.cli._build_retriever")
     @patch("codebase_rag.cli.Config.get_instance")
@@ -307,6 +374,44 @@ class TestMain:
             assert result == 0
 
 
+class TestVerbosity:
+    """Tests for the CLI's logging verbosity flag."""
+
+    @pytest.mark.parametrize(
+        ("argv", "expected"),
+        [
+            (["codebase-rag", "query", "q"], logging.WARNING),
+            (["codebase-rag", "-v", "query", "q"], logging.INFO),
+            (["codebase-rag", "query", "q", "-v"], logging.INFO),
+            (["codebase-rag", "-vv", "query", "q"], logging.DEBUG),
+            (["codebase-rag", "query", "q", "-vv"], logging.DEBUG),
+        ],
+    )
+    @patch("codebase_rag.cli._setup_logging")
+    @patch("codebase_rag.cli.query_command")
+    def test_verbosity_maps_to_level(
+        self, mock_query: MagicMock, mock_setup: MagicMock, argv: list[str], expected: int
+    ) -> None:
+        """Default is quiet; -v and -vv raise the level from either side of the subcommand."""
+        mock_query.return_value = 0
+        with patch("sys.argv", argv):
+            assert main() == 0
+        (verbosity,) = mock_setup.call_args.args
+        assert _VERBOSITY_LEVELS.get(verbosity, logging.DEBUG) == expected
+
+    def test_setup_logging_default_silences_info(self) -> None:
+        """A default _setup_logging() leaves the module loggers below INFO."""
+        root = logging.getLogger()
+        saved_level, saved_handlers = root.level, root.handlers[:]
+        try:
+            root.handlers.clear()
+            _setup_logging()
+            assert not logging.getLogger("codebase_rag.cli").isEnabledFor(logging.INFO)
+        finally:
+            root.handlers[:] = saved_handlers
+            root.setLevel(saved_level)
+
+
 class TestBudgetTrimming:
     """Tests for budget-based result trimming."""
 
@@ -322,7 +427,7 @@ class TestBudgetTrimming:
             ("src/app.py", 0.95, "a" * 30),
             ("src/lib.py", 0.85, "b" * 100),
         ]
-        trimmed = _trim_results_by_budget(results, 60, "compact")
+        trimmed = _trim_results_by_budget(results, 100, "compact")
         assert len(trimmed) == 1
         assert trimmed[0][0] == "src/app.py"
 
