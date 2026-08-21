@@ -38,6 +38,44 @@ def _backend_line(runtime: AppRuntime) -> str:
     return f"{line} at `{endpoint}`{_PLACEMENT_TEXT.get(placement, '')}"
 
 
+def _retrieval_lines(runtime: AppRuntime) -> list[str]:
+    """The About block's retrieval bullets, read from config: the fixed list claimed hybrid, the default is BM25."""
+    config = runtime.config
+    if config.retriever == "hybrid":
+        lines = [
+            "- Hybrid search, fusing vector similarity with BM25",
+            "- Qdrant vector database, holding the embedded chunks",
+        ]
+    else:
+        lines = [
+            "- Keyword search over the indexed chunks (BM25)",
+            "- Qdrant vector database, where ingestion stores the embedded chunks",
+        ]
+    if config.rerank_enabled:
+        lines.append(f"- Cross-encoder reranking of the top candidates (**{config.rerank_model}**)")
+    if config.rewrite_enabled:
+        lines.append("- Query rewriting, expanding the question with likely identifiers before retrieval")
+    return lines
+
+
+def _about_text(runtime: AppRuntime) -> str:
+    """The whole About body, assembled here so no line depends on a literal's indentation."""
+    return "\n".join(
+        [
+            (
+                "Codebase RAG is a Retrieval-Augmented Generation application for exploring and "
+                "understanding codebases locally."
+            ),
+            "",
+            "It helps users understand code by providing answers based on ingested documentation and source code.",
+            "",
+            "This application uses:",
+            _backend_line(runtime),
+            *_retrieval_lines(runtime),
+        ]
+    )
+
+
 def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
     """Render the full sidebar: logo, about, repos, and chat history."""
     try:
@@ -46,18 +84,7 @@ def display_sidebar(runtime: AppRuntime, state: SessionState) -> None:
         logger.debug("Skipping sidebar logo due to %s", e)
 
     st.sidebar.title("About")
-    st.sidebar.markdown(
-        f"""
-        Codebase RAG is a Retrieval-Augmented Generation application for exploring and understanding codebases locally.
-
-        It helps users understand code by providing answers based on ingested documentation and source code.
-
-        This application uses:
-        {_backend_line(runtime)}
-        - Hybrid search combining vector and BM25
-        - Qdrant vector database
-        """
-    )
+    st.sidebar.markdown(_about_text(runtime))
 
     if runtime.health:
         _display_model_health(runtime)

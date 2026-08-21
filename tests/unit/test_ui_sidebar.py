@@ -1,10 +1,12 @@
 """Unit tests for app/ui_sidebar.py, with Streamlit mocked out."""
 
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from codebase_rag.app.state import SessionState
 from codebase_rag.app.ui_sidebar import (
+    _about_text,
     _delete_chat,
     _display_chat_history_list,
     _display_github_tab,
@@ -17,6 +19,7 @@ from codebase_rag.app.ui_sidebar import (
     _ingestion_progress_fragment,
     _ordered_chats,
     _preview_local_folder,
+    _retrieval_lines,
     display_sidebar,
 )
 
@@ -423,6 +426,59 @@ class TestDisplayChatHistoryList:
 
         mock_st.sidebar.subheader.assert_called_once_with("Chat History")
         assert col1.button.call_args[0][0].startswith("➤")
+
+
+class TestAboutText:
+    """Tests for the About block, which reports the configured stack."""
+
+    @staticmethod
+    def _runtime(**overrides: Any) -> MagicMock:
+        runtime = MagicMock()
+        settings: dict[str, Any] = {
+            "provider": "ollama",
+            "llm_model_name": "test-model",
+            "retriever": "bm25",
+            "rerank_enabled": False,
+            "rerank_model": "a-reranker",
+            "rewrite_enabled": False,
+        }
+        settings.update(overrides)
+        runtime.config = SimpleNamespace(**settings)
+        runtime.health = {}
+        return runtime
+
+    def test_bm25_does_not_claim_hybrid_search(self) -> None:
+        """The default retriever is BM25, so the block must not advertise vector search."""
+        lines = _retrieval_lines(self._runtime())
+        assert any("BM25" in line for line in lines)
+        assert not any("Hybrid" in line for line in lines)
+
+    def test_hybrid_names_both_halves(self) -> None:
+        """Under hybrid, the vector store is queried rather than only written to."""
+        lines = _retrieval_lines(self._runtime(retriever="hybrid"))
+        assert "- Hybrid search, fusing vector similarity with BM25" in lines
+        assert "- Qdrant vector database, holding the embedded chunks" in lines
+
+    def test_optional_stages_appear_only_when_enabled(self) -> None:
+        """Rerank and rewrite are off by default and listed once turned on."""
+        off = _retrieval_lines(self._runtime())
+        assert not any("rerank" in line.lower() or "rewriting" in line.lower() for line in off)
+
+        on = _retrieval_lines(self._runtime(rerank_enabled=True, rewrite_enabled=True))
+        assert any("a-reranker" in line for line in on)
+        assert any("Query rewriting" in line for line in on)
+
+    def test_paragraphs_stay_on_one_line_each(self) -> None:
+        """Markdown folds a single newline into a space, so a wrapped paragraph would reflow oddly."""
+        body, _, bullets = _about_text(self._runtime()).partition("This application uses:")
+        assert [line for line in body.splitlines() if line] == [
+            (
+                "Codebase RAG is a Retrieval-Augmented Generation application for exploring and "
+                "understanding codebases locally."
+            ),
+            "It helps users understand code by providing answers based on ingested documentation and source code.",
+        ]
+        assert all(line.startswith("- ") for line in bullets.splitlines() if line)
 
 
 class TestDisplaySidebar:
